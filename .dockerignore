@@ -1,0 +1,13 @@
+.git
+.env
+.env.*
+target
+uploads
+.tools
+.m2
+.idea
+.vscode
+*.pem
+*.key
+*.p12
+*.jks
