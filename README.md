@@ -6,6 +6,8 @@ Implemented: application startup wiring, environment configuration, private-by-d
 
 ## Prerequisites
 
+For a clear first-time setup on Linux or Windows, see the [development setup guide](docs/setup.md).
+
 - For local Maven builds: JDK 21 and internet access to Maven Central on first use. A global Maven install is not required.
 - For Compose or integration tests: Docker Desktop running Linux containers with Docker Compose v2. PostgreSQL is supplied by Docker; alternatively use a local PostgreSQL 17 server for local application runs.
 - PowerShell commands below run from this repository. Installation of system tools is not performed by this project.
