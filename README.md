@@ -114,6 +114,7 @@ PostgreSQL lives in the named `postgres_data` volume across container recreation
 ## Project guidance
 
 - [Architecture and boundaries](docs/architecture.md)
+- [Database design and security](docs/database.md)
 - [Source conflicts, choices and open decisions](docs/decisions.md)
 - [Requirements traceability and acceptance backlog](docs/backlog.md)
 - [Verification record](docs/verification.md)
