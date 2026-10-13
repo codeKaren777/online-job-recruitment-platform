@@ -39,6 +39,7 @@ public class SecurityConfig {
                 .logout(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/users/register").permitAll()
                         // Open routes deliberately as each feature gains authorization tests.
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(resourceServer -> resourceServer.jwt(jwt -> {}))
