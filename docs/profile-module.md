@@ -96,6 +96,13 @@ queries or application-service authorization.
 
 ## MinIO local setup
 
+Follow the [simple team MinIO setup guide](minio-setup.md) for template variables,
+local startup, bucket creation, restricted credentials and tests without auth.
+Each local instance uses its own private **recruitment-documents** bucket; a shared
+server needs only one bucket. The reduced browser UI may not expose administration;
+the guide includes mc commands. Keep anonymous access **none**, not public.
+
+
 Copy new variables from .env.example into your existing .env manually; do not
 replace existing secrets. Use unique random root and application credentials.
 Storage is disabled by default until configured. `docker compose up --build -d minio`
@@ -110,7 +117,7 @@ Create a distinct application identity with this identity policy (placeholders):
 
 ```json
 {"Version":"2012-10-17","Statement":[
- {"Effect":"Allow","Action":["s3:GetBucketPolicy","s3:GetBucketAcl"],"Resource":["arn:aws:s3:::recruitment-documents"]},
+ {"Effect":"Allow","Action":["s3:GetBucketPolicy","s3:GetBucketAcl","s3:GetBucketLocation"],"Resource":["arn:aws:s3:::recruitment-documents"]},
  {"Effect":"Allow","Action":["s3:GetObject","s3:PutObject","s3:DeleteObject"],"Resource":["arn:aws:s3:::recruitment-documents/documents/*"]}
 ]}
 ```
@@ -142,3 +149,18 @@ curl -X PUT -H 'Authorization: Bearer <JOB_SEEKER_TOKEN>' -H 'Content-Type: appl
 curl -H 'Authorization: Bearer <JOB_SEEKER_TOKEN>' -F 'file=@cv.pdf;type=application/pdf' \
   http://localhost:8080/api/profile/documents
 ```
+
+## Testing uploads before authentication is integrated
+
+Use the [testing walkthrough](minio-setup.md#7-test-while-authentication-is-being-developed).
+Unit tests cover validation and service behavior; isolated MinIO and PostgreSQL
+integration tests cover storage and real RLS separately. Manual mc upload/signed
+link/deletion checks can confirm local storage credentials, but do not create
+application metadata or verify the authenticated API workflow. Keep HTTP routes
+closed until the identity, application and runtime RLS integration is complete.
+
+For exact provider/consumer expectations and integration acceptance cases, see
+[Profile contract testing](profile-contract-testing.md).
+
+For the actual HTTP routes, Postman setup, curl requests and response/error
+contracts, see [Profile and document endpoints](profile-endpoints.md).

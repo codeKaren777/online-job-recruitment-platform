@@ -16,6 +16,7 @@ spring:
           time_zone: UTC
   flyway:
     enabled: true
+    default-schema: public
     locations: classpath:db/migration
     clean-disabled: true
     validate-on-migrate: true

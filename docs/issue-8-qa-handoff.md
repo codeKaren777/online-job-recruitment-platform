@@ -52,3 +52,6 @@ Known consistency limits: no automatic durable cleanup queue; inventory reconcil
 is needed after process death, UNKNOWN commit outcome or logged compensation
 failure. A failed database commit after object deletion leaves metadata requiring
 an idempotent owner retry. Confirm these limits are acceptable before deployment.
+
+For exact provider/consumer expectations and integration acceptance cases, see
+[Profile contract testing](profile-contract-testing.md).

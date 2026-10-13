@@ -41,6 +41,7 @@ class FoundationIT {
 
     @Test
     void bootsAgainstPostgresAndAppliesMigrationOnlyOnce() throws Exception {
+        assertThat(flyway.getConfiguration().getDefaultSchema()).isEqualTo("public");
         assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("3");
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
         assertThat(flyway.migrate().migrationsExecuted).isZero();

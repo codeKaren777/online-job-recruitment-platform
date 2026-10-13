@@ -156,6 +156,10 @@ docker ps
 
 These checks help you avoid starting duplicate services or accidentally interfering with another project.
 
+For private PDF storage, follow the [local MinIO and document-upload guide](minio-setup.md).
+It explains each teammate's bucket, credentials, the reduced browser interface
+and what can be tested while authentication is being developed.
+
 ## 4. Configure the Environment Variables
 
 The application requires environment variables for PostgreSQL and JWT configuration.

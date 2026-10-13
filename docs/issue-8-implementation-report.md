@@ -51,7 +51,7 @@ mean blocked HTTP integration or independent Antigravity acceptance has passed.
 | Transaction-local user isolation | PASS (PostgreSQL) | commit clears self visibility; different users/employers tested |
 | Real authentication-to-RLS integration | BLOCKED | no verified JWT identity adapter on base |
 | Unit/full Maven verification | PASS | 28 unit/security + 4 real integration tests; zero failures/errors/skips |
-| Existing .env Compose validation | BLOCKED | new MINIO_ROOT_USER/MINIO_ROOT_PASSWORD missing; preserved .env |
+| Existing .env Compose validation | PASS (local bootstrap) | missing MinIO root values generated privately; existing secrets preserved |
 | Example-environment Compose validation | PASS | docker compose --env-file .env.example config --quiet |
 | Documentation and independent handoff | PASS | module guide, setup/policy/examples, handoff and this report |
 | Independent Antigravity acceptance | NOT RUN | separate reviewer must execute own checks |
@@ -85,6 +85,18 @@ HTTP integration tests before opening routes. No automatic cleanup queue exists;
 operator inventory reconciliation handles process death, UNKNOWN commits or failed
 compensation. DB failure after object deletion requires an idempotent owner retry.
 
-No production or existing development containers were redeployed. Independently
-started Testcontainers supply the test evidence; the running developer backend
-and database are not evidence that this feature was deployed.
+Local follow-up: MinIO admin credentials were bootstrapped privately in the ignored
+.env, without replacing database/JWT secrets. Compose rebuilt MinIO/backend and
+verified backend health UP and MinIO readiness HTTP 200. A startup defect was
+fixed by explicitly keeping Flyway history in public: PostgreSQL's default
+"$user",public search path selected recruitment after that schema existed.
+No baseline, history rewrite or volume reset was used. FoundationIT asserts the
+explicit history schema. The follow-up verify also passed 28 unit/security plus
+4 real integration tests with zero failures/errors/skips; its log is
+/tmp/issue8-bootstrap-verify.log. Later changes are documentation/template only.
+
+See minio-setup.md, profile-endpoints.md and profile-contract-testing.md for team
+setup, concrete HTTP requests and contract acceptance checks. MinIO root/admin
+readiness is separate from restricted application-account provisioning; storage
+remains disabled locally pending that setup. Testcontainers evidence covers the
+isolated components; local health does not prove full Profile HTTP integration.

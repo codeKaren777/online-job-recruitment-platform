@@ -129,4 +129,5 @@ The implementation and integration gates are documented in
 validated identity, application authorization and restricted runtime RLS contracts
 are integrated. MinIO is built from pinned community source with a persistent
 volume; configure the additional `.env.example` variables without replacing your
-existing `.env`. See [independent QA handoff](docs/issue-8-qa-handoff.md).
+existing `.env`. See [local MinIO setup and testing without auth](docs/minio-setup.md) and
+[independent QA handoff](docs/issue-8-qa-handoff.md).

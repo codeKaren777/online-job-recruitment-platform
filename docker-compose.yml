@@ -35,6 +35,8 @@ services:
   backend:
     build: .
     environment:
+      # Keep Flyway history in the original bootstrap schema across restarts.
+      SPRING_FLYWAY_DEFAULT_SCHEMA: public
       DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:?Set POSTGRES_DB in .env}
       POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
