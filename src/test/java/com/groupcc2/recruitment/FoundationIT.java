@@ -55,13 +55,14 @@ class FoundationIT {
 
     @Test
     void healthIsTheOnlyPublicRouteAndFeaturesRemainClosed() throws Exception {
-        for (String path : new String[] {"/api/auth/register", "/api/auth/login", "/api/jobs",
+        for (String path : new String[] {"/api/auth/login", "/api/users/register", "/api/jobs",
                 "/api/profiles/me", "/api/applications", "/api/admin/users", "/actuator/env"}) {
             mvc.perform(get(path)).andExpect(status().isUnauthorized());
             mvc.perform(get(path).with(jwt())).andExpect(status().isForbidden());
         }
-        mvc.perform(post("/api/auth/register").contentType("application/json")
-                .content("{\"role\":\"ADMIN\"}")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/users/register").contentType("application/json")
+                .content("{\"email\":\"admin@example.com\",\"password\":\"correct horse battery\",\"role\":\"ADMIN\"}"))
+                .andExpect(status().isForbidden());
         mvc.perform(get("/api/jobs").header("Authorization", "Bearer invalid"))
                 .andExpect(status().isUnauthorized());
     }
