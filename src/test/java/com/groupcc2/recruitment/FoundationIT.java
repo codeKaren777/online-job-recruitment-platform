@@ -41,7 +41,7 @@ class FoundationIT {
 
     @Test
     void bootsAgainstPostgresAndAppliesMigrationOnlyOnce() throws Exception {
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("1");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("3");
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
         try (var connection = dataSource.getConnection(); var statement = connection.createStatement();

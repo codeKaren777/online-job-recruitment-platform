@@ -121,3 +121,12 @@ PostgreSQL lives in the named `postgres_data` volume across container recreation
 - [Future contributor/agent conventions](AGENTS.md)
 
 Next milestone: identity and access (AUTH-1/2/3), after agreeing JWT logout/revocation, controlled administrator provisioning and verification/removal policies. Email, SMS, notifications and interviews are out of scope.
+
+## Profile and private documents (Issue #8)
+
+The implementation and integration gates are documented in
+[Profile module](docs/profile-module.md). Its HTTP adapters remain closed until
+validated identity, application authorization and restricted runtime RLS contracts
+are integrated. MinIO is built from pinned community source with a persistent
+volume; configure the additional `.env.example` variables without replacing your
+existing `.env`. See [independent QA handoff](docs/issue-8-qa-handoff.md).

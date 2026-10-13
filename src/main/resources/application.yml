@@ -22,6 +22,8 @@ spring:
   servlet:
     multipart:
       enabled: false
+      max-file-size: 5MB
+      max-request-size: 6MB
 server:
   port: 8080
   error:
@@ -43,3 +45,15 @@ app:
       secret-base64: ${JWT_SECRET_BASE64}
       issuer: ${JWT_ISSUER:groupcc2-recruitment}
       audience: ${JWT_AUDIENCE:groupcc2-api}
+
+  profile:
+    download-seconds: ${PROFILE_DOWNLOAD_SECONDS:120}
+    storage:
+      enabled: ${PROFILE_STORAGE_ENABLED:false}
+      endpoint: ${PROFILE_STORAGE_ENDPOINT:http://localhost:9000}
+      public-endpoint: ${PROFILE_STORAGE_PUBLIC_ENDPOINT:http://localhost:9000}
+      region: ${PROFILE_STORAGE_REGION:us-east-1}
+      bucket: ${PROFILE_STORAGE_BUCKET:recruitment-documents}
+      access-key: ${PROFILE_STORAGE_ACCESS_KEY:}
+      secret-key: ${PROFILE_STORAGE_SECRET_KEY:}
+      path-style: true
