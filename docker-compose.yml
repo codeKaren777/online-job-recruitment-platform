@@ -14,13 +14,41 @@ services:
       interval: 5s
       timeout: 5s
       retries: 12
+  minio:
+    build:
+      context: .
+      dockerfile: docker/minio.Dockerfile
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
   backend:
     build: .
     environment:
+      # Keep Flyway history in the original bootstrap schema across restarts.
+      SPRING_FLYWAY_DEFAULT_SCHEMA: public
       DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:?Set POSTGRES_DB in .env}
       POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       JWT_SECRET_BASE64: ${JWT_SECRET_BASE64:?Set JWT_SECRET_BASE64 in .env}
+      PROFILE_STORAGE_ENABLED: ${PROFILE_STORAGE_ENABLED:-false}
+      PROFILE_STORAGE_ENDPOINT: http://minio:9000
+      PROFILE_STORAGE_PUBLIC_ENDPOINT: ${PROFILE_STORAGE_PUBLIC_ENDPOINT:-http://localhost:9000}
+      PROFILE_STORAGE_REGION: ${PROFILE_STORAGE_REGION:-us-east-1}
+      PROFILE_STORAGE_BUCKET: ${PROFILE_STORAGE_BUCKET:-recruitment-documents}
+      PROFILE_STORAGE_ACCESS_KEY: ${PROFILE_STORAGE_ACCESS_KEY:-}
+      PROFILE_STORAGE_SECRET_KEY: ${PROFILE_STORAGE_SECRET_KEY:-}
+      PROFILE_DOWNLOAD_SECONDS: ${PROFILE_DOWNLOAD_SECONDS:-120}
       JWT_ISSUER: ${JWT_ISSUER:-groupcc2-recruitment}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-groupcc2-api}
     ports:
@@ -37,3 +65,4 @@ services:
       - ALL
 volumes:
   postgres_data:
+  minio_data:
