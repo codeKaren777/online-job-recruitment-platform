@@ -23,6 +23,7 @@ services:
       JWT_SECRET_BASE64: ${JWT_SECRET_BASE64:?Set JWT_SECRET_BASE64 in .env}
       JWT_ISSUER: ${JWT_ISSUER:-groupcc2-recruitment}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-groupcc2-api}
+      SPRING_PROFILES_ACTIVE: local
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:

@@ -102,15 +102,22 @@ Controllers handle HTTP concerns. Services enforce role and ownership rules. Rep
 
 - JWT bearer tokens are validated by shared Spring Security infrastructure.
 - Passwords are stored as hashes, never as plain text.
-- Routes remain private unless deliberately opened with role and ownership tests.
+- Registration, login, forgot-password, and reset-password are deliberate
+  public authentication entry points. Current-user, logout, and change-password
+  require a valid JWT. Other feature routes remain private unless deliberately
+  opened with role and ownership tests.
+- JWTs carry the server-issued user UUID, application role, and account token
+  version. Spring Security validates signature, issuer, audience, expiry,
+  account status, role, and current version before accepting a token.
 - Employers can access only applications belonging to their own job postings.
 - Database row-level security is enabled for application tables; its connection settings must be derived from verified authentication, never from client input.
 
 ## Deployment
 
-Docker Compose runs two services:
+The local Docker Compose setup uses the existing `POSTGRES_USER` account for
+both the backend and Flyway. If that account is a PostgreSQL superuser, it
+bypasses RLS; this is explicitly a local-development compromise, not a
+production database security model. See [database.md](database.md) for details.
 
-- `db`: PostgreSQL 17 with a persistent `postgres_data` volume.
-- `backend`: the Spring Boot application, which waits for the database and runs Flyway migrations at startup.
-
-For database tables, enums, indexes, constraints, expiry handling, and RLS details, see [database.md](database.md). For local commands, see [setup.md](setup.md).
+For database tables, enums, indexes, constraints, expiry handling, and RLS
+details, see [database.md](database.md). For local commands, see [setup.md](setup.md).

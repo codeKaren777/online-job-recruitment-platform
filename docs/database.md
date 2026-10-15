@@ -12,7 +12,7 @@ The model is in third normal form:
 - `jobs` stores employer-owned job postings and due dates.
 - `applications` links one job seeker to one job and stores the application status.
 
-Applications have a database-enforced `UNIQUE (job_id, job_seeker_id)` constraint, so a job seeker cannot apply to the same job twice. New applications default to `PENDING`. Employers can change applications for their own jobs to `SHORTLISTED` or `REJECTED`; the application service must enforce the allowed transition rules.
+Applications have a database-enforced `UNIQUE (job_id, job_seeker_id)` constraint, so a job seeker cannot apply to the same job twice. New applications default to `PENDING`. Employers can change applications for their own jobs to `SHORTLISTED` or `REJECTED`; the application service must enforce the allowed transition rules. Migration V3 separates application SELECT and UPDATE policies so applicants can read their own submissions but cannot update review status.
 
 ## Enums and expiry
 
@@ -24,14 +24,14 @@ Indexes cover employer job lookups, due-date listing, active jobs, application l
 
 ## Row-level security integration
 
-Row-level security is enabled and forced on all application tables. Every authenticated database connection must set these transaction-local settings before querying:
+Row-level security is enabled and forced on all application tables. Every authenticated database transaction must set these transaction-local settings after obtaining its connection and before querying:
 
 ```sql
 SELECT set_config('app.user_id', '<authenticated-user-uuid>', true);
 SELECT set_config('app.role', 'JOB_SEEKER', true);
 ```
 
-Use `EMPLOYER` or `ADMIN` as appropriate. The application must set these values after obtaining a connection and clear them at transaction end. Do not accept these values from an HTTP request. The API authentication layer must derive them from the verified JWT or server-side session.
+Use `EMPLOYER` or `ADMIN` as appropriate. Use `set_config(..., true)` or `SET LOCAL` inside the same database transaction as the protected queries. Do not use session-scoped `SET` with a connection pool: the connection can be reused for a different request. Transaction-local settings reset at transaction end. The application must derive identity and role from verified server-side authentication, never from HTTP input. Missing settings result in no rows passing the policies; an invalid identity does not authorize another user's rows.
 
 The policies enforce that:
 
@@ -41,6 +41,57 @@ The policies enforce that:
 - Administrators can access the protected records through the `ADMIN` policy path.
 
 RLS does not replace service-layer authorization. The Java services must still validate roles, ownership, job expiry, and application status transitions.
+
+Flyway's history table is pinned to `public`, where the existing V1/V2
+history is stored. This avoids choosing `recruitment` as Flyway's default
+history schema when the PostgreSQL runtime user has a same-named schema and
+therefore changes `current_schema()`.
+
+The authentication module applies `app.user_id` and `app.role` transaction
+locally from a signature-verified JWT before reading the current user. JWT
+validation also checks that the account remains `ACTIVE`, its role is unchanged,
+and the JWT's `tokenVersion` matches the database value. Other feature services
+must set the same transaction-local context before touching RLS-protected data.
+
+### Local database account and RLS boundary
+
+To preserve the existing local database and avoid creating more accounts,
+Compose uses the same `POSTGRES_USER` and `POSTGRES_PASSWORD` for Spring Boot
+and Flyway. The currently running development database was inspected read-only:
+the connected account is `recruitment`, it is a superuser with `BYPASSRLS`, and
+Flyway history is at V3. Therefore, **RLS policies remain enabled but do not
+isolate data from this application connection**. The test suite verifies RLS
+policy behavior only through its isolated temporary policy-test role; it does
+not prove that the local runtime is protected by RLS. A least-privilege role
+model is required before claiming that RLS protects production data.
+
+Migration V4 defines `SECURITY INVOKER` authentication functions and grants
+execution to the current migration account; it no longer creates or depends on
+additional database accounts. V5 adds a monotonically increasing account token
+version plus a hashed, expiring password-reset token on `recruitment.users`.
+Reset completion is an atomic update, so expired or reused tokens cannot reset
+the password. The existing `users_self_or_admin` and other RLS policies are not
+removed or weakened.
+
+These invoker functions and the direct password-reset/password-change queries
+are **not** an RLS-compatible pre-authentication design for a future
+non-superuser runtime. Under the existing forced `users_self_or_admin` policy,
+anonymous login/reset lookups have no trusted `app.user_id` context, and this
+single-account setup grants no separate pre-authentication access path. A
+restricted runtime would therefore fail those flows until the database team
+approves and tests a narrowly scoped access design. Do not replace the local
+superuser connection with a non-superuser and assume authentication will work.
+
+The current development credentials are `POSTGRES_DB`, `POSTGRES_USER`, and
+`POSTGRES_PASSWORD`; `DB_URL` is overridden inside Compose to use the `db`
+service, and JWT configuration uses `JWT_SECRET_BASE64` with optional
+`JWT_ISSUER` and `JWT_AUDIENCE`. Do not display or commit `.env` values.
+
+The existing database has V1-V3 applied and has not been changed by this work.
+Before starting the updated backend, make a protected backup. Startup will run
+the pending V4 and V5 Flyway migrations using the existing account. V5 adds
+columns and an index; it does not delete application data. Do not use
+`docker compose down -v`.
 
 ## Local database
 
@@ -52,7 +103,9 @@ docker compose up -d db
 
 The detached flag belongs after `up`. If Docker socket permissions require elevated access, use `sudo docker compose up -d db` temporarily. The preferred permanent fix is to add your Linux user to the `docker` group and start a new login session.
 
-Flyway applies `V1__initialize_schema.sql` and `V2__create_recruitment_data_model.sql` automatically when the Spring Boot application starts. Do not edit an applied migration; add a new versioned migration for future changes.
+Compose starts PostgreSQL and then Spring Boot; Flyway runs V4 and V5 during
+application startup using the same `recruitment` database account. No role
+provisioner or extra database account is used by this local development setup.
 
 ## Database commands
 
@@ -66,13 +119,16 @@ Start only PostgreSQL:
 docker compose up -d db
 ```
 
-Start PostgreSQL and the backend. The backend waits for PostgreSQL to become healthy, then Flyway applies the migrations:
+Start PostgreSQL, Flyway migrations, and the backend. This requires the existing
+database variables and JWT secret in `.env`. Back up the database before this
+command because it applies pending V4 and V5 migrations:
 
 ```bash
 docker compose up --build -d
 ```
 
-Check container status and database readiness:
+Check container status and database readiness. Do not print rendered Compose
+configuration or service environments because they contain credentials:
 
 ```bash
 docker compose ps
@@ -141,10 +197,10 @@ Check row-level security:
 docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT relname, relrowsecurity, relforcerowsecurity FROM pg_class WHERE relnamespace = '\''recruitment'\''::regnamespace AND relkind = '\''r'\'' ORDER BY relname;"'
 ```
 
-Check Flyway migrations:
+Check Flyway migrations in the preserved `public` history schema:
 
 ```bash
-docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT installed_rank, version, description, success FROM recruitment.flyway_schema_history ORDER BY installed_rank;"'
+docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT installed_rank, version, description, success FROM public.flyway_schema_history ORDER BY installed_rank;"'
 ```
 
 The Flyway history table may not exist until the backend has started successfully.
