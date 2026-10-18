@@ -184,6 +184,11 @@ JWT_AUDIENCE=groupcc2-api
 
 Replace the example password and secret with appropriate local values. Do not use the example values as production credentials.
 
+This development Compose setup reuses the existing `POSTGRES_USER` account
+for both the backend and Flyway; it does not provision separate migration or
+runtime accounts. The current local `recruitment` account is a PostgreSQL
+superuser and bypasses RLS. This is not a production database isolation model.
+
 ### What each variable means
 
 | Variable | Purpose |
@@ -244,6 +249,18 @@ Starting the full stack allows Docker Compose to start the database and backend 
 
 First, check your existing containers and volumes as described in Section 3.
 
+The current database has V4, V5, and V6 pending. Before starting the updated
+backend, make a protected backup outside the repository:
+
+```bash
+backup="$HOME/recruitment-before-auth-$(date +%Y%m%d-%H%M%S).dump"
+docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom' > "$backup"
+test -s "$backup" || { echo "Database backup failed"; exit 1; }
+```
+
+The dump contains database data. Keep it private and verify the file is
+non-empty before continuing.
+
 Then run:
 
 ```bash
@@ -255,6 +272,15 @@ What this command does:
 - `up` creates and starts the required services.
 - `--build` builds or rebuilds images when necessary.
 - `-d` runs the containers in the background.
+
+This runs pending Flyway migrations V4, V5, and V6. They add authentication
+functions, token-version and password-reset fields/indexes; they do not delete
+existing rows. The named `postgres_data` volume is preserved. Never use
+`docker compose down -v` for this update.
+
+Compose enables the `local` Spring profile so the forgot-password endpoint can
+return a reset token in Postman for local testing. Do not use this profile for
+deployment; no email delivery provider is configured.
 
 Wait for the services to start. The first build may take several minutes.
 
@@ -372,6 +398,7 @@ Bash does not automatically load variables from `.env`. From the repository root
 set -a
 . ./.env
 set +a
+export SPRING_PROFILES_ACTIVE=local
 ```
 
 This loads the variables into the current Bash session so the application can read them.

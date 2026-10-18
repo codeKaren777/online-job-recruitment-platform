@@ -17,6 +17,8 @@ spring:
   flyway:
     enabled: true
     default-schema: public
+    user: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
     locations: classpath:db/migration
     clean-disabled: true
     validate-on-migrate: true

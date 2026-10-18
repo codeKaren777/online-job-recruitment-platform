@@ -42,6 +42,15 @@ public class User {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Column(name = "token_version", nullable = false)
+    private int tokenVersion;
+
+    @Column(name = "password_reset_token_hash")
+    private String passwordResetTokenHash;
+
+    @Column(name = "password_reset_expires_at")
+    private Instant passwordResetExpiresAt;
+
     protected User() {
     }
 
@@ -91,6 +100,10 @@ public class User {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public int getTokenVersion() {
+        return tokenVersion;
     }
 
     public void suspend() {

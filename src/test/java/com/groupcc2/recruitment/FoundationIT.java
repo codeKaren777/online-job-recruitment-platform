@@ -1,18 +1,32 @@
 package com.groupcc2.recruitment;
 
 import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.Statement;
+import java.util.UUID;
 
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.AfterAll;
+import com.groupcc2.recruitment.auth.dto.CurrentUserResponse;
+import com.groupcc2.recruitment.users.entity.AccountStatus;
+import com.groupcc2.recruitment.users.entity.UserRole;
+import com.groupcc2.recruitment.auth.service.AuthService;
+import com.groupcc2.recruitment.auth.service.PasswordHashingService;
+import com.groupcc2.recruitment.auth.service.PasswordResetTokenService;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.http.MediaType;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -22,27 +36,42 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@Testcontainers
+@ActiveProfiles("local")
 class FoundationIT {
-    @Container
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17");
+
+    static {
+        POSTGRES.start();
+    }
+
+    @AfterAll
+    static void stopPostgres() {
+        POSTGRES.stop();
+    }
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
+        registry.add("spring.flyway.url", POSTGRES::getJdbcUrl);
+        registry.add("spring.flyway.user", POSTGRES::getUsername);
+        registry.add("spring.flyway.password", POSTGRES::getPassword);
         registry.add("app.security.jwt.secret-base64", () -> "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");
     }
 
     @Autowired MockMvc mvc;
     @Autowired Flyway flyway;
     @Autowired DataSource dataSource;
+    @Autowired AuthService authService;
+    @Autowired PlatformTransactionManager transactionManager;
+    @Autowired PasswordHashingService passwordHashingService;
+    @Autowired PasswordResetTokenService passwordResetTokenService;
 
     @Test
     void bootsAgainstPostgresAndAppliesMigrationOnlyOnce() throws Exception {
         assertThat(flyway.getConfiguration().getDefaultSchema()).isEqualTo("public");
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("3");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("6");
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
         try (var connection = dataSource.getConnection(); var statement = connection.createStatement();
@@ -50,12 +79,525 @@ class FoundationIT {
             assertThat(result.next()).isTrue();
             assertThat(result.getString(1)).isEqualTo("recruitment");
         }
+        try (Connection connection = dataSource.getConnection(); var statement = connection.createStatement();
+             var result = statement.executeQuery("""
+                     SELECT current_user, rolsuper, rolbypassrls
+                     FROM pg_roles WHERE rolname = current_user
+                     """)) {
+            assertThat(result.next()).isTrue();
+            assertThat(result.getString("current_user")).isEqualTo(POSTGRES.getUsername());
+            assertThat(result.getBoolean("rolsuper")).isTrue();
+            assertThat(result.getBoolean("rolbypassrls")).isTrue();
+        }
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+             var statement = connection.createStatement();
+             var result = statement.executeQuery("""
+                     SELECT installed_by FROM public.flyway_schema_history
+                     WHERE version = '6'
+                     """)) {
+            assertThat(result.next()).isTrue();
+            assertThat(result.getString(1)).isEqualTo(POSTGRES.getUsername());
+            try (var ownership = statement.executeQuery("""
+                    SELECT pg_get_userbyid(relowner)
+                    FROM pg_class WHERE oid = 'recruitment.users'::regclass
+                    """)) {
+                assertThat(ownership.next()).isTrue();
+                assertThat(ownership.getString(1)).isEqualTo(POSTGRES.getUsername());
+            }
+        }
         mvc.perform(get("/actuator/health")).andExpect(status().isOk())
                 .andExpect(content().json("{\"status\":\"UP\"}", true));
     }
 
     @Test
-    void healthIsTheOnlyPublicRouteAndFeaturesRemainClosed() throws Exception {
+    void applicationRlsRestrictsRowsAndPreventsApplicantsFromChangingReviewStatus() throws Exception {
+        UUID employerId = UUID.randomUUID();
+        UUID applicantId = UUID.randomUUID();
+        UUID otherApplicantId = UUID.randomUUID();
+        UUID jobId = UUID.randomUUID();
+        UUID applicationId = UUID.randomUUID();
+        UUID otherApplicationId = UUID.randomUUID();
+
+        try (Connection connection = adminConnection(); Statement statement = connection.createStatement()) {
+            statement.execute("""
+                    CREATE ROLE recruitment_rls_test NOLOGIN
+                    """);
+            statement.execute("""
+                    GRANT USAGE ON SCHEMA recruitment TO recruitment_rls_test
+                    """);
+            statement.execute("""
+                    GRANT SELECT ON recruitment.users, recruitment.jobs, recruitment.applications
+                    TO recruitment_rls_test
+                    """);
+            statement.execute("""
+                    GRANT INSERT, UPDATE ON recruitment.applications TO recruitment_rls_test
+                    """);
+            statement.execute("""
+                    INSERT INTO recruitment.users (id, email, password_hash, role)
+                    VALUES
+                      ('%s', 'rls-employer@example.com', 'test-hash', 'EMPLOYER'),
+                      ('%s', 'rls-applicant@example.com', 'test-hash', 'JOB_SEEKER'),
+                      ('%s', 'rls-other-applicant@example.com', 'test-hash', 'JOB_SEEKER')
+                    """.formatted(employerId, applicantId, otherApplicantId));
+            statement.execute("""
+                    INSERT INTO recruitment.jobs (id, employer_id, title, description, due_date)
+                    VALUES ('%s', '%s', 'RLS test job', 'RLS test description', CURRENT_DATE + 1)
+                    """.formatted(jobId, employerId));
+            statement.execute("""
+                    INSERT INTO recruitment.applications (id, job_id, job_seeker_id)
+                    VALUES
+                      ('%s', '%s', '%s'),
+                      ('%s', '%s', '%s')
+                    """.formatted(applicationId, jobId, applicantId,
+                    otherApplicationId, jobId, otherApplicantId));
+        }
+
+        try (Connection connection = adminConnection()) {
+            connection.setAutoCommit(false);
+            setRlsTestRole(connection);
+
+            setRlsIdentity(connection, applicantId, "JOB_SEEKER");
+            assertThat(countApplication(connection, applicationId)).isEqualTo(1);
+            assertThat(countApplication(connection, otherApplicationId)).isZero();
+
+            try (Statement statement = connection.createStatement()) {
+                assertThat(statement.executeUpdate("""
+                        UPDATE recruitment.applications SET status = 'REJECTED' WHERE id = '%s'
+                        """.formatted(applicationId))).isZero();
+            }
+            connection.commit();
+
+            setRlsTestRole(connection);
+            setRlsIdentity(connection, employerId, "EMPLOYER");
+            try (Statement statement = connection.createStatement()) {
+                assertThat(statement.executeUpdate("""
+                        UPDATE recruitment.applications SET status = 'SHORTLISTED' WHERE id = '%s'
+                        """.formatted(applicationId))).isEqualTo(1);
+            }
+            connection.commit();
+
+            assertThat(countApplicationWithoutRlsIdentity(connection, applicationId)).isZero();
+            connection.commit();
+
+            setRlsTestRole(connection);
+            setRlsUserId(connection, applicantId);
+            assertThat(countApplication(connection, applicationId)).isZero();
+            connection.commit();
+
+            setRlsTestRole(connection);
+            setRlsIdentity(connection, applicantId, "INVALID_ROLE");
+            assertThat(countApplication(connection, applicationId)).isZero();
+            connection.commit();
+
+            setRlsTestRole(connection);
+            setRlsIdentity(connection, UUID.randomUUID(), "JOB_SEEKER");
+            assertThat(countApplication(connection, applicationId)).isZero();
+            connection.rollback();
+        }
+
+        try (Connection connection = adminConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT status::TEXT FROM recruitment.applications WHERE id = ?")) {
+            statement.setObject(1, applicationId);
+            try (var result = statement.executeQuery()) {
+                assertThat(result.next()).isTrue();
+                assertThat(result.getString(1)).isEqualTo("SHORTLISTED");
+            }
+        }
+    }
+
+    @Test
+    void currentUserLookupWorksAndDocumentsSuperuserRlsBypass() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UUID otherUserId = UUID.randomUUID();
+        try (Connection connection = adminConnection(); Statement statement = connection.createStatement()) {
+            statement.execute("""
+                    INSERT INTO recruitment.users (id, email, password_hash, role)
+                    VALUES
+                      ('%s', 'auth-rls-test@example.com', 'not-returned-hash', 'JOB_SEEKER'),
+                      ('%s', 'auth-rls-other@example.com', 'not-returned-hash', 'JOB_SEEKER')
+                    """.formatted(userId, otherUserId));
+        }
+
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        CurrentUserResponse response = transaction.execute(status -> {
+            return authService.currentUser(userId.toString(), UserRole.JOB_SEEKER.name());
+        });
+
+        assertThat(response).isEqualTo(new CurrentUserResponse(
+                userId, "auth-rls-test@example.com", UserRole.JOB_SEEKER, AccountStatus.ACTIVE));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> transaction.execute(status -> {
+                    return authService.currentUser(UUID.randomUUID().toString(), UserRole.JOB_SEEKER.name());
+                }))
+                .isInstanceOf(org.springframework.security.authentication.BadCredentialsException.class);
+
+        try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement()) {
+            try (var result = statement.executeQuery(
+                    "SELECT current_user, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")) {
+                assertThat(result.next()).isTrue();
+                assertThat(result.getString(1)).isEqualTo(POSTGRES.getUsername());
+                assertThat(result.getBoolean(2)).isTrue();
+                assertThat(result.getBoolean(3)).isTrue();
+            }
+            try (var result = statement.executeQuery("SELECT count(id) FROM recruitment.users")) {
+                assertThat(result.next()).isTrue();
+                assertThat(result.getLong(1)).isGreaterThanOrEqualTo(2);
+            }
+            try (var result = statement.executeQuery("""
+                    SELECT has_function_privilege(
+                        current_user, 'recruitment.auth_lookup_user(text)', 'EXECUTE'),
+                           has_function_privilege(
+                        current_user, 'recruitment.auth_register_user(text,text,text)', 'EXECUTE'),
+                           rolsuper, rolbypassrls,
+                           NOT EXISTS (
+                               SELECT 1
+                               FROM aclexplode(COALESCE(
+                                   (SELECT proacl FROM pg_proc
+                                    WHERE oid = 'recruitment.auth_lookup_user(text)'::regprocedure),
+                                   acldefault('f', (SELECT proowner FROM pg_proc
+                                    WHERE oid = 'recruitment.auth_lookup_user(text)'::regprocedure))))
+                               WHERE grantee = 0 AND privilege_type = 'EXECUTE')
+                    FROM pg_roles WHERE rolname = current_user
+                    """)) {
+                assertThat(result.next()).isTrue();
+                assertThat(result.getBoolean(1)).isTrue();
+                assertThat(result.getBoolean(2)).isTrue();
+                assertThat(result.getBoolean(3)).isTrue();
+                assertThat(result.getBoolean(4)).isTrue();
+                assertThat(result.getBoolean(5)).isTrue();
+            }
+            try (var result = statement.executeQuery("""
+                    SELECT pg_get_userbyid(relowner) = current_user
+                    FROM pg_class WHERE oid = 'recruitment.users'::regclass
+                    """)) {
+                assertThat(result.next()).isTrue();
+                assertThat(result.getBoolean(1)).isTrue();
+            }
+        }
+
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+             Statement statement = connection.createStatement()) {
+            statement.execute("CREATE ROLE recruitment_unauthorized_test NOLOGIN");
+            statement.execute("GRANT USAGE ON SCHEMA recruitment TO recruitment_unauthorized_test");
+        }
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+             Statement statement = connection.createStatement()) {
+            statement.execute("SET ROLE recruitment_unauthorized_test");
+            try {
+                statement.execute("SELECT recruitment.auth_lookup_user('auth-rls-test@example.com')");
+                throw new AssertionError("Unauthorized role must not execute the auth function");
+            } catch (java.sql.SQLException exception) {
+                assertThat(exception.getSQLState()).isEqualTo("42501");
+            }
+        }
+    }
+
+    @Test
+    void registrationLoginAndCurrentUserWorkThroughExistingDatabaseAccount() throws Exception {
+        String email = "auth-flow-" + UUID.randomUUID() + "@example.com";
+        String password = "StrongPassword123!";
+
+        var registration = mvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"%s","role":"JOB_SEEKER"}
+                                """.formatted(email, password)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.email").value(email))
+                .andExpect(jsonPath("$.role").value("JOB_SEEKER"))
+                .andExpect(jsonPath("$.passwordHash").doesNotExist())
+                .andReturn();
+        UUID userId = UUID.fromString(
+                com.jayway.jsonpath.JsonPath.read(registration.getResponse().getContentAsString(), "$.id"));
+
+        mvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"%s","role":"JOB_SEEKER"}
+                                """.formatted(email, password)))
+                .andExpect(status().isConflict());
+
+        mvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"admin-%s@example.com","password":"%s","role":"ADMIN"}
+                                """.formatted(UUID.randomUUID(), password)))
+                .andExpect(status().isBadRequest());
+
+        var login = mvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"%s"}
+                                """.formatted(email, password)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.expiresIn").value(1800))
+                .andReturn();
+        String token = com.jayway.jsonpath.JsonPath.read(
+                login.getResponse().getContentAsString(), "$.accessToken");
+
+        mvc.perform(get("/api/auth/me"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(userId.toString()))
+                .andExpect(jsonPath("$.email").value(email))
+                .andExpect(jsonPath("$.passwordHash").doesNotExist());
+        mvc.perform(get("/api/auth/me?userId=" + UUID.randomUUID())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(userId.toString()));
+
+        mvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"incorrect-password"}
+                                """.formatted(email)))
+                .andExpect(status().isUnauthorized());
+
+        String employerEmail = "employer-" + UUID.randomUUID() + "@example.com";
+        mvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"EmployerPassword123!","role":"EMPLOYER"}
+                                """.formatted(employerEmail)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.role").value("EMPLOYER"));
+        String employerToken = loginAndGetToken(employerEmail, "EmployerPassword123!");
+        mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + employerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("EMPLOYER"));
+    }
+
+    @Test
+    void suspendedAndRemovedAccountsCannotLogIn() throws Exception {
+        for (AccountStatus accountStatus : new AccountStatus[] {
+                AccountStatus.SUSPENDED, AccountStatus.REMOVED}) {
+            String email = accountStatus.name().toLowerCase() + "-" + UUID.randomUUID() + "@example.com";
+            try (Connection connection = adminConnection();
+                 PreparedStatement statement = connection.prepareStatement("""
+                         INSERT INTO recruitment.users (email, password_hash, role, status)
+                         VALUES (?, ?, 'JOB_SEEKER', ?::recruitment.account_status)
+                         """)) {
+                statement.setString(1, email);
+                statement.setString(2, passwordHashingService.hash("StrongPassword123!"));
+                statement.setString(3, accountStatus.name());
+                statement.executeUpdate();
+            }
+
+            mvc.perform(post("/api/auth/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"email":"%s","password":"StrongPassword123!"}
+                                    """.formatted(email)))
+                    .andExpect(status().isUnauthorized());
+        }
+    }
+
+    @Test
+    void jwtIsRejectedWhenAccountBecomesSuspendedOrChangesRole() throws Exception {
+        String email = "status-change-" + UUID.randomUUID() + "@example.com";
+        mvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"StatusPassword123!","role":"JOB_SEEKER"}
+                                """.formatted(email)))
+                .andExpect(status().isCreated());
+        String token = loginAndGetToken(email, "StatusPassword123!");
+
+        try (Connection connection = adminConnection();
+             PreparedStatement statement = connection.prepareStatement("""
+                     UPDATE recruitment.users
+                     SET status = 'SUSPENDED'
+                     WHERE email = ?
+                     """)) {
+            statement.setString(1, email);
+            assertThat(statement.executeUpdate()).isEqualTo(1);
+        }
+        mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void resetChangeAndLogoutInvalidateSessionsAndResetTokensAreSingleUse() throws Exception {
+        String email = "recovery-" + UUID.randomUUID() + "@example.com";
+        String originalPassword = "OriginalPassword123!";
+        String resetPassword = "ResetPassword123!";
+        String changedPassword = "ChangedPassword123!";
+        mvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"%s","role":"JOB_SEEKER"}
+                                """.formatted(email, originalPassword)))
+                .andExpect(status().isCreated());
+
+        var knownResponse = mvc.perform(post("/api/auth/forgot-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s"}
+                                """.formatted(email)))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.message").value(
+                        "If the account exists, the reset request has been accepted."))
+                .andReturn();
+        String resetToken = com.jayway.jsonpath.JsonPath.read(
+                knownResponse.getResponse().getContentAsString(), "$.resetToken");
+
+        mvc.perform(post("/api/auth/forgot-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"missing-%s@example.com"}
+                                """.formatted(UUID.randomUUID())))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.message").value(
+                        "If the account exists, the reset request has been accepted."))
+                .andExpect(jsonPath("$.resetToken").doesNotExist());
+
+        String storedTokenHash;
+        try (Connection connection = adminConnection();
+             PreparedStatement statement = connection.prepareStatement("""
+                     SELECT password_reset_token_hash
+                     FROM recruitment.users WHERE email = ?
+                     """)) {
+            statement.setString(1, email);
+            try (var result = statement.executeQuery()) {
+                assertThat(result.next()).isTrue();
+                storedTokenHash = result.getString(1);
+            }
+        }
+        assertThat(storedTokenHash).isEqualTo(passwordResetTokenService.hashToken(resetToken));
+        assertThat(storedTokenHash).isNotEqualTo(resetToken);
+
+        mvc.perform(post("/api/auth/reset-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"resetToken":"%s","newPassword":"%s"}
+                                """.formatted(resetToken, resetPassword)))
+                .andExpect(status().isNoContent());
+        mvc.perform(post("/api/auth/reset-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"resetToken":"%s","newPassword":"%s"}
+                                """.formatted(resetToken, changedPassword)))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"%s"}
+                                """.formatted(email, originalPassword)))
+                .andExpect(status().isUnauthorized());
+
+        String resetSession = loginAndGetToken(email, resetPassword);
+        mvc.perform(post("/api/auth/change-password")
+                        .header("Authorization", "Bearer " + resetSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"currentPassword":"wrong-password","newPassword":"%s"}
+                                """.formatted(changedPassword)))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/auth/change-password")
+                        .header("Authorization", "Bearer " + resetSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"currentPassword":"%s","newPassword":"%s"}
+                                """.formatted(resetPassword, changedPassword)))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + resetSession))
+                .andExpect(status().isUnauthorized());
+
+        String logoutSession = loginAndGetToken(email, changedPassword);
+        mvc.perform(post("/api/auth/logout").header("Authorization", "Bearer " + logoutSession))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + logoutSession))
+                .andExpect(status().isUnauthorized());
+
+        var expiredResponse = mvc.perform(post("/api/auth/forgot-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s"}
+                                """.formatted(email)))
+                .andExpect(status().isAccepted())
+                .andReturn();
+        String expiredResetToken = com.jayway.jsonpath.JsonPath.read(
+                expiredResponse.getResponse().getContentAsString(), "$.resetToken");
+        try (Connection connection = adminConnection();
+             PreparedStatement statement = connection.prepareStatement("""
+                     UPDATE recruitment.users
+                     SET password_reset_expires_at = CURRENT_TIMESTAMP - INTERVAL '1 second'
+                     WHERE password_reset_token_hash = ?
+                     """)) {
+            statement.setString(1, passwordResetTokenService.hashToken(expiredResetToken));
+            assertThat(statement.executeUpdate()).isEqualTo(1);
+        }
+        mvc.perform(post("/api/auth/reset-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"resetToken":"%s","newPassword":"AnotherPassword123!"}
+                                """.formatted(expiredResetToken)))
+                .andExpect(status().isBadRequest());
+    }
+
+    private String loginAndGetToken(String email, String password) throws Exception {
+        var response = mvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"%s"}
+                                """.formatted(email, password)))
+                .andExpect(status().isOk())
+                .andReturn();
+        return com.jayway.jsonpath.JsonPath.read(
+                response.getResponse().getContentAsString(), "$.accessToken");
+    }
+
+    private Connection adminConnection() throws Exception {
+        return DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+    }
+
+    private void setRlsTestRole(Connection connection) throws Exception {
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("SET LOCAL ROLE recruitment_rls_test");
+        }
+    }
+
+    private void setRlsIdentity(Connection connection, UUID userId, String role) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT set_config('app.user_id', ?, true), set_config('app.role', ?, true)")) {
+            statement.setString(1, userId.toString());
+            statement.setString(2, role);
+            statement.execute();
+        }
+    }
+
+    private void setRlsUserId(Connection connection, UUID userId) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT set_config('app.user_id', ?, true)")) {
+            statement.setString(1, userId.toString());
+            statement.execute();
+        }
+    }
+
+    private int countApplication(Connection connection, UUID applicationId) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT count(*) FROM recruitment.applications WHERE id = ?")) {
+            statement.setObject(1, applicationId);
+            try (var result = statement.executeQuery()) {
+                result.next();
+                return result.getInt(1);
+            }
+        }
+    }
+
+    private int countApplicationWithoutRlsIdentity(Connection connection, UUID applicationId) throws Exception {
+        setRlsTestRole(connection);
+        return countApplication(connection, applicationId);
+    }
+
+    @Test
+    void featureRoutesRemainClosedAndAuthenticationDoesNotExposeAdminRegistration() throws Exception {
         for (String path : new String[] {"/api/auth/login", "/api/users/register", "/api/jobs",
                 "/api/profiles/me", "/api/applications", "/api/admin/users", "/actuator/env"}) {
             mvc.perform(get(path)).andExpect(status().isUnauthorized());
@@ -64,6 +606,9 @@ class FoundationIT {
         mvc.perform(post("/api/users/register").contentType("application/json")
                 .content("{\"email\":\"admin@example.com\",\"password\":\"correct horse battery\",\"role\":\"ADMIN\"}"))
                 .andExpect(status().isForbidden());
+        mvc.perform(post("/api/auth/register").contentType("application/json")
+                .content("{\"email\":\"admin@example.com\",\"password\":\"StrongPassword123!\",\"role\":\"ADMIN\"}"))
+                .andExpect(status().isBadRequest());
         mvc.perform(get("/api/jobs").header("Authorization", "Bearer invalid"))
                 .andExpect(status().isUnauthorized());
     }
