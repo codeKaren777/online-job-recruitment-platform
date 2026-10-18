@@ -348,9 +348,22 @@ If the endpoint returns an error, verify the backend logs and confirm that the h
 |---|---|
 | Backend API | `http://localhost:8080` |
 | Health endpoint | `http://localhost:8080/actuator/health` |
+| Swagger UI | `http://localhost:8080/swagger-ui/index.html` (local profile only) |
+| OpenAPI JSON | `http://localhost:8080/v3/api-docs` (local profile only) |
 | PostgreSQL | `localhost:5432`, if the database port is published |
 
 These are expected local addresses, not guarantees. Confirm the actual port mappings using `docker compose ps`.
+
+### API documentation
+
+The `local` Spring profile enables Swagger UI and the OpenAPI JSON document.
+Docker Compose already activates this profile. The documentation routes are
+public only in this profile, and they expose the API contract without exposing
+Actuator environment/configuration endpoints. Other API routes continue to
+use their existing Spring Security rules. Documentation is disabled by default
+outside `local`; set `APP_OPENAPI_ENABLED=false` to disable it in any profile.
+If enabled outside `local`, both documentation routes remain protected by the
+default-deny policy.
 
 ### Why the full stack matters
 

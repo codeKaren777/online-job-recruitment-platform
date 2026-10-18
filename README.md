@@ -1,6 +1,6 @@
 # Group CC2 Online Job Board backend
 
-Backend foundation only. Java 21, Spring Boot 3.5.16, Maven 3.9.16 via official Wrapper 3.3.4, PostgreSQL 17, Spring Data JPA/Hibernate, Spring Security JWT and Flyway. Spring Boot manages compatible library versions; see [decisions](docs/decisions.md) for rationale and primary version references.
+Backend foundation only. Java 21, Spring Boot 3.5.16, Maven 3.9.16 via official Wrapper 3.3.4, PostgreSQL 17, Spring Data JPA/Hibernate, Spring Security JWT, Flyway, and Springdoc OpenAPI 2.8.17. Spring Boot manages compatible library versions; Springdoc is explicitly pinned because it is not part of the Boot BOM. See [decisions](docs/decisions.md) for rationale and primary version references.
 
 Implemented: application startup wiring, environment configuration, private-by-default route policy, JWT validation, BCrypt password hashing, schema migration, Docker/Compose, package boundaries, and the core Authentication API (registration, login, current user, logout, password change and password reset). Non-authentication feature routes remain closed until their owning modules add authorization. Registration/login/recovery entry points and health are public; protected auth operations require a validated JWT. There are no demo credentials or seeded administrators.
 
@@ -74,6 +74,15 @@ docker compose config --quiet
 docker compose up -d --wait db
 .\mvnw.cmd -B -ntp spring-boot:run
 ```
+
+When running with the `local` Spring profile (including Docker Compose), API
+documentation is enabled at [Swagger UI](http://localhost:8080/swagger-ui/index.html)
+and [OpenAPI JSON](http://localhost:8080/v3/api-docs). These paths expose only
+the API specification and UI; API operations still enforce Spring Security.
+Outside the local profile, documentation is disabled by default. Set
+`APP_OPENAPI_ENABLED=false` to disable it, including in local development. If
+enabled in another profile, documentation endpoints remain behind the
+default-deny security policy. See [setup](docs/setup.md) for details.
 
 In a second PowerShell window:
 

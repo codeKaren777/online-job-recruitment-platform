@@ -9,6 +9,8 @@ import com.groupcc2.recruitment.users.entity.UserRole;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -35,8 +37,13 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 @EnableMethodSecurity
 public class SecurityConfig {
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationConverter jwtAuthenticationConverter)
+    SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationConverter jwtAuthenticationConverter,
+                                            Environment environment,
+                                            @Value("${app.openapi.enabled:false}") boolean openApiEnabled,
+                                            @Value("${app.openapi.public-in-local:false}") boolean openApiPublicInLocal)
             throws Exception {
+        boolean localPublicDocs = openApiEnabled && openApiPublicInLocal
+                && environment.acceptsProfiles(Profiles.of("local"));
         return http
                 // REST bearer tokens only; no cookie or HTTP session authentication.
                 .csrf(AbstractHttpConfigurer::disable)
@@ -45,8 +52,13 @@ public class SecurityConfig {
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
-                .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
+                .authorizeHttpRequests(authorize -> {
+                    authorize.requestMatchers(HttpMethod.GET, "/actuator/health").permitAll();
+                    if (localPublicDocs) {
+                        authorize.requestMatchers(HttpMethod.GET, "/v3/api-docs", "/v3/api-docs/**",
+                                "/swagger-ui.html", "/swagger-ui/**").permitAll();
+                    }
+                    authorize
                         .requestMatchers(HttpMethod.POST,
                                 "/api/auth/register", "/api/auth/login",
                                 "/api/auth/forgot-password", "/api/auth/reset-password").permitAll()
@@ -56,7 +68,8 @@ public class SecurityConfig {
                         // Retain the existing users registration endpoint for API compatibility.
                         .requestMatchers(HttpMethod.POST, "/api/users/register").permitAll()
                         // Open routes deliberately as each feature gains authorization tests.
-                        .anyRequest().denyAll())
+                        .anyRequest().denyAll();
+                })
                 .oauth2ResourceServer(resourceServer -> resourceServer.jwt(
                         jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))
                 .build();

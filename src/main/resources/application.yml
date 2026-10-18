@@ -27,6 +27,11 @@ spring:
       enabled: false
       max-file-size: 5MB
       max-request-size: 6MB
+springdoc:
+  api-docs:
+    enabled: ${app.openapi.enabled:false}
+  swagger-ui:
+    enabled: ${app.openapi.enabled:false}
 server:
   port: 8080
   error:
@@ -43,6 +48,9 @@ management:
       show-details: never
       show-components: never
 app:
+  openapi:
+    enabled: ${APP_OPENAPI_ENABLED:false}
+    public-in-local: false
   security:
     jwt:
       secret-base64: ${JWT_SECRET_BASE64}

@@ -26,9 +26,12 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 
 @RestController
 @RequestMapping("/api/auth")
+@Tag(name = "Authentication", description = "Login, token lifecycle, and password recovery")
 public class AuthController {
     private final AuthService authService;
 
@@ -47,6 +50,7 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
+    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Void> logout(@AuthenticationPrincipal Jwt principal) {
         authService.logout(
                 principal.getSubject(),
@@ -56,6 +60,7 @@ public class AuthController {
     }
 
     @PostMapping("/change-password")
+    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Void> changePassword(
             @AuthenticationPrincipal Jwt principal,
             @Valid @RequestBody ChangePasswordRequest request) {
@@ -80,6 +85,7 @@ public class AuthController {
     }
 
     @GetMapping("/me")
+    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<CurrentUserResponse> currentUser(@AuthenticationPrincipal Jwt principal) {
         return ResponseEntity.ok(authService.currentUser(
                 principal.getSubject(), principal.getClaimAsString("role")));
