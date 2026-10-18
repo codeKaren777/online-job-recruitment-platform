@@ -10,6 +10,8 @@ import com.groupcc2.recruitment.profile.service.ProfileService;
 @org.springframework.security.access.prepost.PreAuthorize("hasRole('JOB_SEEKER')")
 @RestController
 @RequestMapping("/api/profile")
+@io.swagger.v3.oas.annotations.tags.Tag(name = "Profiles", description = "Profile and private document operations")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 public class ProfileController {
  private final ProfileService service;
  public ProfileController(ProfileService service){this.service=service;}
