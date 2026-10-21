@@ -1,11 +1,16 @@
 package com.groupcc2.recruitment.security;
 
 import java.util.Base64;
+import java.util.List;
+import java.util.UUID;
 import javax.crypto.spec.SecretKeySpec;
 
+import com.groupcc2.recruitment.users.entity.UserRole;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -17,18 +22,28 @@ import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
+import org.springframework.security.oauth2.jwt.BadJwtException;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfig {
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationConverter jwtAuthenticationConverter,
+                                            Environment environment,
+                                            @Value("${app.openapi.enabled:false}") boolean openApiEnabled,
+                                            @Value("${app.openapi.public-in-local:false}") boolean openApiPublicInLocal)
+            throws Exception {
+        boolean localPublicDocs = openApiEnabled && openApiPublicInLocal
+                && environment.acceptsProfiles(Profiles.of("local"));
         return http
                 // REST bearer tokens only; no cookie or HTTP session authentication.
                 .csrf(AbstractHttpConfigurer::disable)
@@ -37,19 +52,53 @@ public class SecurityConfig {
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
-                .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
+                .authorizeHttpRequests(authorize -> {
+                    authorize.requestMatchers(HttpMethod.GET, "/actuator/health").permitAll();
+                    if (localPublicDocs) {
+                        authorize.requestMatchers(HttpMethod.GET, "/v3/api-docs", "/v3/api-docs/**",
+                                "/swagger-ui.html", "/swagger-ui/**").permitAll();
+                    }
+                    authorize
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/auth/register", "/api/auth/login",
+                                "/api/auth/forgot-password", "/api/auth/reset-password").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/auth/logout", "/api/auth/change-password").authenticated()
+                        // Retain the existing users registration endpoint for API compatibility.
                         .requestMatchers(HttpMethod.POST, "/api/users/register").permitAll()
                         // Open routes deliberately as each feature gains authorization tests.
-                        .anyRequest().denyAll())
-                .oauth2ResourceServer(resourceServer -> resourceServer.jwt(jwt -> {}))
+                        .anyRequest().denyAll();
+                })
+                .oauth2ResourceServer(resourceServer -> resourceServer.jwt(
+                        jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))
                 .build();
+    }
+
+    @Bean
+    JwtAuthenticationConverter jwtAuthenticationConverter() {
+        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+        converter.setJwtGrantedAuthoritiesConverter(jwt -> {
+            try {
+                UUID.fromString(jwt.getSubject());
+                Object roleClaim = jwt.getClaims().get("role");
+                if (!(roleClaim instanceof String roleName)) {
+                    throw new BadJwtException("JWT identity or role claim is invalid");
+                }
+                UserRole role = UserRole.valueOf(roleName);
+                return List.<GrantedAuthority>of(new SimpleGrantedAuthority("ROLE_" + role.name()));
+            } catch (IllegalArgumentException | NullPointerException exception) {
+                throw new BadJwtException("JWT identity or role claim is invalid", exception);
+            }
+        });
+        return converter;
     }
 
     @Bean
     JwtDecoder jwtDecoder(@Value("${app.security.jwt.secret-base64}") String secret,
                           @Value("${app.security.jwt.issuer}") String issuer,
-                          @Value("${app.security.jwt.audience}") String audience) {
+                          @Value("${app.security.jwt.audience}") String audience,
+                          AccountJwtValidator accountJwtValidator) {
         byte[] key;
         try {
             key = Base64.getDecoder().decode(secret);
@@ -73,7 +122,7 @@ public class SecurityConfig {
                     "Required token claims missing or invalid", null));
         };
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
-                JwtValidators.createDefaultWithIssuer(issuer), requiredClaims));
+                JwtValidators.createDefaultWithIssuer(issuer), requiredClaims, accountJwtValidator));
         return decoder;
     }
 
