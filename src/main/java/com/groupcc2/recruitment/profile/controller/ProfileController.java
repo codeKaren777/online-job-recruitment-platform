@@ -6,7 +6,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.http.HttpStatus;
 import com.groupcc2.recruitment.profile.dto.*;
 import com.groupcc2.recruitment.profile.service.ProfileService;
-/** Authenticated job seeker endpoints; services enforce account and resource ownership. */
+/** Authenticated job seeker endpoints; services enforce account and ownership. */
 @org.springframework.security.access.prepost.PreAuthorize("hasRole('JOB_SEEKER')")
 @RestController
 @RequestMapping("/api/profile")
@@ -20,7 +20,6 @@ public class ProfileController {
  @PostMapping(value="/documents",consumes="multipart/form-data") @ResponseStatus(HttpStatus.CREATED)
  public DocumentResponse upload(@RequestPart("file") MultipartFile file){return service.upload(file);}
  @GetMapping("/documents") public List<DocumentResponse> documents(){return service.listOwn();}
- @GetMapping("/documents/{documentId}/download") public DownloadResponse download(@PathVariable UUID documentId){return service.downloadOwn(documentId);}
  @DeleteMapping("/documents/{documentId}") @ResponseStatus(HttpStatus.NO_CONTENT)
  public void delete(@PathVariable UUID documentId){service.deleteOwn(documentId);}
 }

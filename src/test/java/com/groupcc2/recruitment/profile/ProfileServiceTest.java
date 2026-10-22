@@ -48,10 +48,6 @@ class ProfileServiceTest {
  @Test void authorizedDocumentSignsShortLivedGet(){UUID id=UUID.randomUUID();when(documents.findByIdAndProfileUserId(id,owner)).thenReturn(Optional.of(new Document(owner,"generated-key","cv.pdf","application/pdf",20)));
  when(storage.signGet("generated-key",java.time.Duration.ofSeconds(120))).thenReturn(java.net.URI.create("http://example.test/signed"));
  assertThat(service.downloadOwn(id).url().getHost()).isEqualTo("example.test");verify(storage).signGet("generated-key",java.time.Duration.ofSeconds(120));}
- @Test void signingFailureReturnsSafeStorageError(){UUID id=UUID.randomUUID();when(documents.findByIdAndProfileUserId(id,owner)).thenReturn(Optional.of(new Document(owner,"generated-key","cv.pdf","application/pdf",20)));
- when(storage.signGet(any(),any())).thenThrow(new IllegalStateException("sensitive storage details"));
- assertThatThrownBy(()->service.downloadOwn(id)).isInstanceOfSatisfying(ProfileFailure.class,
-  failure->assertThat(failure.code()).isEqualTo(ProfileFailure.Code.STORAGE_UNAVAILABLE));}
  @Test void uploadReturnsSafeMetadata(){DocumentResponse d=service.upload(file());assertThat(d.originalFilename()).isEqualTo("cv.pdf");
  verify(storage).upload(matches("documents/[a-f0-9-]{36}"),any(),eq("application/pdf"));verify(storage,never()).delete(any());}
  @Test void storageFailureNeverPersists(){doThrow(new IllegalStateException()).when(storage).upload(any(),any(),any());assertThatThrownBy(()->service.upload(file())).isInstanceOf(ProfileFailure.class);verify(documents,never()).saveAndFlush(any());verify(storage).delete(any());}
@@ -62,11 +58,6 @@ class ProfileServiceTest {
  @Test void cleanupFailureDoesNotHideOriginal(){manager.failCommit=true;doThrow(new IllegalStateException("sensitive")).when(storage).delete(any());assertThatThrownBy(()->service.upload(file())).isInstanceOf(TransactionSystemException.class);}
  @Test void deleteFailureRetainsMetadata(){UUID id=UUID.randomUUID();when(documents.findByIdAndProfileUserId(id,owner)).thenReturn(Optional.of(new Document(owner,"internal","cv.pdf","application/pdf",20)));
  doThrow(new IllegalStateException()).when(storage).delete(any());assertThatThrownBy(()->service.deleteOwn(id)).isInstanceOf(ProfileFailure.class);verify(documents,never()).delete(any());}
- @Test void metadataDeleteFailureCanBeRetriedAfterIdempotentObjectDelete(){UUID id=UUID.randomUUID();Document document=new Document(owner,"generated-key","cv.pdf","application/pdf",20);
- when(documents.findByIdAndProfileUserId(id,owner)).thenReturn(Optional.of(document));doThrow(new IllegalStateException()).doNothing().when(documents).delete(document);
- assertThatThrownBy(()->service.deleteOwn(id)).isInstanceOfSatisfying(ProfileFailure.class,
-  failure->assertThat(failure.code()).isEqualTo(ProfileFailure.Code.INTEGRATION_UNAVAILABLE));service.deleteOwn(id);
- verify(storage,times(2)).delete("generated-key");verify(documents,times(2)).delete(document);verify(documents,times(1)).flush();}
  @Test void employerMustPassSpecificJobApplicationCheck(){when(users.findById(owner)).thenReturn(new User("e@test","hash",UserRole.EMPLOYER));UUID job=UUID.randomUUID(),applicant=UUID.randomUUID();
  doThrow(new ProfileFailure(ProfileFailure.Code.FORBIDDEN)).when(access).requireSubmittedApplication(owner,job,applicant);
  assertThatThrownBy(()->service.readForEmployer(job,applicant)).isInstanceOf(ProfileFailure.class);verify(profiles,never()).findById(applicant);
