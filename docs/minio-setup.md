@@ -24,10 +24,10 @@ at least 32 characters using a password manager; use letters/numbers or hex for
 simple KEY=VALUE parsing. Replace MINIO_ROOT_USER and MINIO_ROOT_PASSWORD.
 Never commit .env or share your local passwords with teammates.
 
-Leave PROFILE_STORAGE_ENABLED=false for now. The application credentials are
-separate from the MinIO admin credentials and are provisioned in step 5. The
-backend can start while storage is disabled; private upload routes remain closed
-pending authentication, application and runtime database integration.
+Keep PROFILE_STORAGE_ENABLED=false until the private bucket and restricted
+application credentials are provisioned in step 5. Compose now initializes the
+bucket idempotently through the `minio-init` service; the application still
+uses a separate restricted identity and never uses the MinIO root credentials.
 
 ## 2. Start MinIO
 
@@ -35,6 +35,13 @@ pending authentication, application and runtime database integration.
 docker compose config --quiet
 docker compose up --build -d --wait minio
 curl --fail http://localhost:9000/minio/health/ready
+```
+
+When starting the full stack, `minio-init` waits for MinIO readiness, creates
+the configured bucket if absent, and reapplies the private anonymous policy:
+
+```bash
+docker compose up --build -d --wait
 ```
 
 The first build can take several minutes. Readiness returns HTTP 200, normally
@@ -127,16 +134,16 @@ and [policy attachment](https://docs.min.io/aistor/reference/cli/admin/mc-admin-
 | PROFILE_DOWNLOAD_SECONDS | 120; allowed range 30..300 |
 | PROFILE_STORAGE_ENABLED | false until bucket/account setup is complete |
 
-After steps 4–5, you may set PROFILE_STORAGE_ENABLED=true and recreate the backend:
+After steps 4–5, set PROFILE_STORAGE_ENABLED=true and recreate the backend:
 
 ```bash
 docker compose up -d backend
 curl --fail http://localhost:8080/actuator/health
 ```
 
-This enables the storage adapter only. It does not enable Profile HTTP routes or
-replace the missing authentication/application contracts. Health UP proves
-backend/database readiness; it does not prove bucket credentials or uploads work.
+This enables the storage adapter and private document HTTP flow. Health UP proves
+backend/database readiness; it does not prove bucket credentials or an
+authenticated upload workflow.
 For a shared server, the signed-link endpoint must be reachable by recipients;
 localhost points to each recipient's own machine. Do not rewrite a signed URL.
 

@@ -47,7 +47,7 @@ does. Results are in target/surefire-reports and target/failsafe-reports.
 | ProfileServiceTest.storageFailureNeverPersists / flushFailureCleansObject / commitFailureCleansObject | Storage/transaction contract failure behavior |
 | ProfileServiceTest.unknownCommitOutcomeRequiresReconciliationInsteadOfDeletingPotentiallyCommittedData | Unknown commit outcome does not delete potentially committed data |
 | ProfileServiceTest.cleanupFailureDoesNotHideOriginal / deleteFailureRetainsMetadata | Compensation failure preserves the original failure; deletion failure retains metadata |
-| SecurityBoundaryTest.profileIntegrationGateRejectsAllRolesAndMutations | Closed HTTP routes do not invoke ProfileService |
+| SecurityBoundaryTest.profileRoutesRejectRolesOtherThanJobSeeker | Non-seeker HTTP routes do not invoke ProfileService |
 | ProfileRlsIT.ownerIsolationEmployerVisibilityAndTransactionLocalContext | Real restricted-role database policies and context isolation |
 | MinioStorageIT.privateBucketUploadSignedGetAndDelete | Real S3 adapter behavior: private upload, signed GET, wrong-method denial, idempotent delete |
 

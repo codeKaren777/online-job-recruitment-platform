@@ -43,6 +43,8 @@ class SecurityBoundaryTest {
             mvc.perform(put("/api/profile").with(token).contentType("application/json")
                     .content("{\"displayName\":\"Name\"}")).andExpect(status().isForbidden());
             mvc.perform(post("/api/profile/documents").with(token)).andExpect(status().isForbidden());
+            mvc.perform(get("/api/profile/documents/" + java.util.UUID.randomUUID() + "/download").with(token))
+                    .andExpect(status().isForbidden());
             mvc.perform(delete("/api/profile/documents/" + java.util.UUID.randomUUID()).with(token)).andExpect(status().isForbidden());
         }
         org.mockito.Mockito.verifyNoInteractions(profileService);

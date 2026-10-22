@@ -32,6 +32,22 @@ services:
       interval: 5s
       timeout: 5s
       retries: 12
+  minio-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
+      PROFILE_STORAGE_BUCKET: ${PROFILE_STORAGE_BUCKET:-recruitment-documents}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" &&
+        mc mb --ignore-existing "local/$$PROFILE_STORAGE_BUCKET" &&
+        mc anonymous set none "local/$$PROFILE_STORAGE_BUCKET" &&
+        mc anonymous get "local/$$PROFILE_STORAGE_BUCKET"
   backend:
     build: .
     environment:
@@ -57,6 +73,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     read_only: true
     tmpfs:
       - /tmp

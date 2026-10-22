@@ -16,6 +16,7 @@ database and private storage integrations.
 | GET | /api/profile | None | 200, own profile; 404 if absent |
 | POST | /api/profile/documents | multipart/form-data, part named file | 201, document metadata |
 | GET | /api/profile/documents | None | 200, own document metadata array |
+| GET | /api/profile/documents/{documentId}/download | None | 200, short-lived signed GET URL |
 | DELETE | /api/profile/documents/{documentId} | Document UUID from upload/list | 204, empty body |
 
 ## Postman setup
@@ -111,6 +112,17 @@ seeker's document UUID or a missing document returns 404 after integration.
 Storage failures can return 503 and require an owner retry, as described in
 [the document module](profile-module.md#files-and-consistency).
 
+## 6. Download your own document
+
+```bash
+curl -i http://localhost:8080/api/profile/documents/<DOCUMENT_ID>/download \
+  -H 'Authorization: Bearer <TOKEN>'
+```
+
+The response contains a short-lived signed GET URL and its expiry timestamp.
+The application verifies ownership before issuing the URL; the bucket remains
+private and no permanent object URL is returned.
+
 ## Errors and negative endpoint tests
 
 After the integration gate opens, check these cases with real tokens:
@@ -127,14 +139,14 @@ After the integration gate opens, check these cases with real tokens:
 | Storage/database service failure | Safe 503 code, no credentials/storage paths |
 
 Security-filter errors need not use the controller's JSON error format. Application
-errors use {"code":"..."}. Do not treat 401/403 on the currently closed routes as
-successful upload testing.
+errors use {"code":"..."}.
 
 ## Download and employer endpoints
 
-There is currently **no HTTP download/signing endpoint and no employer-profile
-HTTP endpoint**. downloadOwn, readForEmployer, listForEmployer and
- downloadForEmployer are service methods only. Do not invent a URL for them.
+There is currently **no employer-profile HTTP endpoint**. `downloadOwn` is
+available at `/api/profile/documents/{documentId}/download`; it verifies
+ownership before issuing a short-lived signed URL. `readForEmployer`,
+`listForEmployer`, and `downloadForEmployer` remain service methods only.
 Employer route contracts require the Jobs/Applications owner to supply real
 specific-job/application authorization; download routes must be deliberately
 registered and tested. The [contract-testing checklist](profile-contract-testing.md)
