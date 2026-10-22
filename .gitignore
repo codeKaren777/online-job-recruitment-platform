@@ -13,3 +13,4 @@ uploads/
 *.key
 *.p12
 *.jks
+endpoints.txt
