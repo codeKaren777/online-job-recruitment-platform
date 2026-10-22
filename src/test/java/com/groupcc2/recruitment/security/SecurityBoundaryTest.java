@@ -1,11 +1,14 @@
 package com.groupcc2.recruitment.security;
 
-import com.groupcc2.recruitment.auth.service.AuthService;
 import com.groupcc2.recruitment.auth.dto.CurrentUserResponse;
 import com.groupcc2.recruitment.auth.dto.LoginResponse;
 import com.groupcc2.recruitment.auth.dto.RegisterResponse;
+import com.groupcc2.recruitment.auth.service.AuthService;
+import com.groupcc2.recruitment.job.service.JobService;
+import com.groupcc2.recruitment.profile.service.ProfileService;
 import com.groupcc2.recruitment.users.entity.AccountStatus;
 import com.groupcc2.recruitment.users.entity.UserRole;
+import com.groupcc2.recruitment.users.service.UserService;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,12 +16,10 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import com.groupcc2.recruitment.users.service.UserService;
 
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
-import static org.mockito.Mockito.doThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -29,12 +30,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(SecurityConfig.class)
 class SecurityBoundaryTest {
     @Autowired MockMvc mvc;
-    @MockBean UserService userService;
-<<<<<<< HEAD
-    @MockBean
-    private com.groupcc2.recruitment.job.service.JobService jobService;
-=======
-    @MockBean com.groupcc2.recruitment.profile.service.ProfileService profileService;
+    @MockitoBean UserService userService;
+    @MockitoBean JobService jobService;
+    @MockitoBean ProfileService profileService;
     @MockitoBean AuthService authService;
     @MockitoBean AccountJwtValidator accountJwtValidator;
 
@@ -51,7 +49,6 @@ class SecurityBoundaryTest {
         org.mockito.Mockito.verifyNoInteractions(profileService);
     }
 
->>>>>>> origin/main
     @Test
     void closedRoutesRejectAnonymousAndAuthenticatedRequests() throws Exception {
         doThrow(new com.groupcc2.recruitment.users.service.AdminRegistrationNotAllowedException())

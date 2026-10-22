@@ -2,6 +2,7 @@ package com.groupcc2.recruitment.security;
 
 import com.groupcc2.recruitment.auth.service.AuthService;
 import com.groupcc2.recruitment.common.openapi.OpenApiConfiguration;
+import com.groupcc2.recruitment.job.service.JobService;
 import com.groupcc2.recruitment.profile.service.ProfileService;
 import com.groupcc2.recruitment.users.service.UserService;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class OpenApiSecurityTest {
     @Autowired MockMvc mvc;
     @MockitoBean UserService userService;
+    @MockitoBean JobService jobService;
     @MockitoBean ProfileService profileService;
     @MockitoBean AuthService authService;
     @MockitoBean AccountJwtValidator accountJwtValidator;
