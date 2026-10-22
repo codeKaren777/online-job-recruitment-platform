@@ -2,8 +2,9 @@
 
 Use this checklist when joining Profile to your teammate's authentication and
 application modules. The interface files are the integration points; no request
-may supply the acting user or role. The full API remains closed until the real
-adapters and protected-route tests exist.
+may supply the acting user or role. The five own-profile routes are protected
+by JWT role checks; employer visibility and database/storage integration remain
+separate contracts.
 
 ## Contracts and expected behavior
 

@@ -8,17 +8,17 @@ PR #12). Integration uses the actual `users.service.UserService.findById` and
 The Users package differs from the planned auth package; this module respects
 its existing ownership. Jobs/Applications remain package placeholders.
 
-**HTTP remains closed by SecurityConfig; multipart remains disabled.** This is
-an implementation for review, not a completed deployable feature. The required
-identity, employer visibility, and runtime database integration are absent.
+**The five own-profile HTTP routes are authorized for authenticated job seekers.**
+This is an implementation for review, not a completed deployable feature.
+Employer visibility and runtime database integration remain separate concerns.
 `docs/decisions.md`, `docs/backlog.md` and SRS/API contracts are absent in this
 checkout; no JWT lifecycle or employer route decision was invented.
 
 To finish integration:
 
-1. Authentication owner supplies a `ProfileIdentity` bean returning a UUID from
-   validated authentication, confirms JWT subject mapping, and supplies actual
-   authentication integration tests. Do not accept a request owner/role parameter.
+1. `SecurityContextProfileIdentity` supplies the UUID from validated JWT
+   authentication, and its subject mapping is covered by focused tests. Do not
+   accept a request owner/role parameter.
 2. Application owner implements `EmployerApplicationAccess` through their service
    contracts: a persisted application by the applicant to the specified job AND
    job ownership by this employer. Failure must deny. Default is unavailable;

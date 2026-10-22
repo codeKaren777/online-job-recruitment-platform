@@ -4,11 +4,11 @@ Base URL: http://localhost:8080. These five routes exist in ProfileController.
 All require an active JOB_SEEKER acting on their own records. No request accepts
 a userId or role to choose an owner.
 
-**Current checkout:** SecurityConfig denies these routes and multipart is disabled.
-Without a token expect 401; with a valid token expect 403 while the integration
-gate remains closed. Success examples below describe the controller/service
-contract after verified authentication/RLS integration and protected-route tests.
-They are not evidence that uploads currently work through HTTP.
+**Current checkout:** SecurityConfig authorizes these routes only for
+`JOB_SEEKER` tokens. Without a token expect 401; other roles expect 403.
+Controller authorization and JWT-subject identity resolution are covered by
+focused tests. Profile service operations still require the configured runtime
+database and private storage integrations.
 
 | Method | Endpoint | Input | Success after integration |
 |---|---|---|---|
