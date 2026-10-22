@@ -8,17 +8,30 @@ PR #12). Integration uses the actual `users.service.UserService.findById` and
 The Users package differs from the planned auth package; this module respects
 its existing ownership. Jobs/Applications remain package placeholders.
 
-Authenticated JOB_SEEKER profile/document routes are explicitly authorized in
-SecurityConfig; other feature routes remain default-deny. ProfileIdentity resolves
-the validated JWT subject, and every service operation checks the active persisted
-user and ownership. Multipart upload is enabled with bounded request sizes.
+**HTTP remains closed by SecurityConfig; multipart remains disabled.** This is
+an implementation for review, not a completed deployable feature. The required
+identity, employer visibility, and runtime database integration are absent.
+`docs/decisions.md`, `docs/backlog.md` and SRS/API contracts are absent in this
+checkout; no JWT lifecycle or employer route decision was invented.
 
-The local Compose PostgreSQL bootstrap account is a superuser. ProfileRls rejects
-superuser/bypass accounts, so a non-bypass runtime role and suitable grants are
-still required before profile operations can succeed against that database.
-EmployerApplicationAccess remains unavailable until the Applications owner
-provides the service contract; there is no employer HTTP profile route. No JWT
-lifecycle or employer route behavior is inferred here.
+To finish integration:
+
+1. Authentication owner supplies a `ProfileIdentity` bean returning a UUID from
+   validated authentication, confirms JWT subject mapping, and supplies actual
+   authentication integration tests. Do not accept a request owner/role parameter.
+2. Application owner implements `EmployerApplicationAccess` through their service
+   contracts: a persisted application by the applicant to the specified job AND
+   job ownership by this employer. Failure must deny. Default is unavailable;
+   no employer HTTP route exists.
+3. Provision a NOSUPERUSER NOBYPASSRLS runtime role, separate migration credentials,
+   schema/type usage and required table grants. Existing Compose credentials are
+   PostgreSQL bootstrap superuser credentials. ProfileRls rejects them, even with
+   FORCE RLS. Coordinate shared auth/bootstrap RLS requirements before changing
+   database credentials. No migration creates hard-coded runtime credentials.
+4. Add HTTP ownership/role tests using real authentication and restricted runtime
+   DB credentials BEFORE deliberately registering profile route permissions and
+   enabling multipart. Suggested limits: max-file-size 5MB, max-request-size 6MB.
+   Keep every unrelated feature route's security unchanged.
 
 ## HTTP adapter and service contracts
 
@@ -26,13 +39,12 @@ All responses are DTOs (plain JSON, matching Users; no existing envelope).
 No request accepts an owner UUID. Service authorization checks active persisted
 account status and expected role on every call, including employer calls.
 
-| Route | JOB_SEEKER behavior |
+| Route (currently denied) | JOB_SEEKER behavior |
 |---|---|
 | GET /api/profile | Own profile; 404 if absent |
 | PUT /api/profile | Create/update own profile; 200 |
 | POST /api/profile/documents | Multipart part `file`; own existing profile required; 201 |
 | GET /api/profile/documents | Own metadata only; profile required |
-| GET /api/profile/documents/{documentId}/download | Owner-scoped lookup, then short-lived signed GET URL |
 | DELETE /api/profile/documents/{documentId} | Own document only; 204; foreign/missing ID gives 404 |
 
 Profile fields: displayName (nonblank, max 200), phone (optional, max 50), biography
