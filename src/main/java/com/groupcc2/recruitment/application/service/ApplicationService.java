@@ -100,18 +100,52 @@ public class ApplicationService {
         return ApplicationResponse.from(application, job);
     }
 
+    /** Employers may see applications only for their own jobs. */
+    @Transactional(readOnly = true)
+    public List<ApplicationResponse> listForEmployer(UUID employerId) {
+        requireEmployer(employerId);
+        Map<UUID, JobSnapshot> jobs = directory().findAllForEmployer(employerId);
+        if (jobs.isEmpty()) {
+            return List.of();
+        }
+        return applications.findAllByJobIdInOrderBySubmittedAtDesc(jobs.keySet()).stream()
+                .map(application -> ApplicationResponse.from(application, jobs.get(application.getJobId())))
+                .toList();
+    }
+
+    /** An employer can read an application only when its job belongs to that employer. */
+    @Transactional(readOnly = true)
+    public ApplicationResponse getForEmployer(UUID employerId, UUID applicationId) {
+        requireEmployer(employerId);
+        Map<UUID, JobSnapshot> jobs = directory().findAllForEmployer(employerId);
+        if (jobs.isEmpty()) {
+            throw new ApplicationFailure(ApplicationFailure.Code.NOT_FOUND);
+        }
+        Application application = applications.findByIdAndJobIdIn(applicationId, jobs.keySet())
+                .orElseThrow(() -> new ApplicationFailure(ApplicationFailure.Code.NOT_FOUND));
+        return ApplicationResponse.from(application, jobs.get(application.getJobId()));
+    }
+
     /**
      * Mirrors ProfileService: bootstrap with self-only visibility, then derive the role from the persisted
      * active account (never from token claims or request data) and establish it for RLS.
      */
     private void requireJobSeeker(UUID userId) {
+        requireRole(userId, UserRole.JOB_SEEKER);
+    }
+
+    private void requireEmployer(UUID userId) {
+        requireRole(userId, UserRole.EMPLOYER);
+    }
+
+    private void requireRole(UUID userId, UserRole requiredRole) {
         if (userId == null) {
             throw new ApplicationFailure(ApplicationFailure.Code.FORBIDDEN);
         }
         rls.establish(userId, "");
         User user = users.findById(userId);
         users.requireActive(user);
-        if (user.getRole() != UserRole.JOB_SEEKER) {
+        if (user.getRole() != requiredRole) {
             throw new ApplicationFailure(ApplicationFailure.Code.FORBIDDEN);
         }
         rls.establish(userId, user.getRole().name());

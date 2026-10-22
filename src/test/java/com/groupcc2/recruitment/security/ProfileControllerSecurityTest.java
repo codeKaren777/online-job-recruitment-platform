@@ -1,5 +1,6 @@
 package com.groupcc2.recruitment.security;
 
+import com.groupcc2.recruitment.application.service.ApplicationService;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -39,6 +40,7 @@ class ProfileControllerSecurityTest {
     @Autowired MockMvc mvc;
     @MockitoBean ProfileService profileService;
     @MockitoBean AccountJwtValidator accountJwtValidator;
+    @MockitoBean ApplicationService applicationService;
 
     @Test
     void everyProfileRouteRejectsAnonymousRequests() throws Exception {

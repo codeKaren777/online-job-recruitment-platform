@@ -1,6 +1,7 @@
 package com.groupcc2.recruitment.common.exception;
 
 import com.groupcc2.recruitment.application.controller.ApplicationController;
+import com.groupcc2.recruitment.application.controller.EmployerApplicationController;
 import com.groupcc2.recruitment.application.service.ApplicationFailure;
 import com.groupcc2.recruitment.users.service.AuthorizationDeniedException;
 import com.groupcc2.recruitment.users.service.InactiveAccountException;
@@ -14,7 +15,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /** Translates application failures to HTTP; bodies carry only a stable error code, never internals. */
-@RestControllerAdvice(assignableTypes = ApplicationController.class)
+@RestControllerAdvice(assignableTypes = {ApplicationController.class, EmployerApplicationController.class})
 public class ApplicationExceptionHandler {
     public record ErrorResponse(String code) {
     }
