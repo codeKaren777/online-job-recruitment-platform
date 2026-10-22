@@ -215,16 +215,13 @@ class FoundationIT {
                 .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.type").value("http"))
                 .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"))
                 .andExpect(jsonPath("$.paths['/actuator/health'].get.responses['200']").exists())
-                .andExpect(jsonPath("$.paths['/api/users/register'].post.tags[0]").value("Users"))
-                .andExpect(jsonPath("$.paths['/api/users/register'].post.responses['201']").exists())
-                .andExpect(jsonPath("$.paths['/api/users/register'].post.responses['400']").exists())
-                .andExpect(jsonPath("$.paths['/api/users/register'].post.responses['403']").exists())
-                .andExpect(jsonPath("$.paths['/api/users/register'].post.responses['409']").exists())
-                .andExpect(jsonPath("$.components.schemas.RegisterUserRequest.properties.role.enum[0]")
-                        .value("JOB_SEEKER"))
-                .andExpect(jsonPath("$.components.schemas.RegisterUserRequest.properties.role.enum[1]")
-                        .value("EMPLOYER"))
-                .andExpect(jsonPath("$.components.schemas.UserResponse.properties.passwordHash").doesNotExist())
+                .andExpect(jsonPath("$.paths['/api/auth/register'].post").exists())
+                .andExpect(jsonPath("$.paths['/api/users/register']").doesNotExist())
+                .andExpect(jsonPath("$.paths['/api/users/me'].get").exists())
+                .andExpect(jsonPath("$.paths['/api/admin/users'].get").exists())
+                .andExpect(jsonPath("$.paths['/api/admin/users/{id}'].get").exists())
+                .andExpect(jsonPath("$.paths['/api/admin/users/{id}/suspend'].patch").exists())
+                .andExpect(jsonPath("$.paths['/api/admin/users/{id}/remove'].patch").exists())
                 .andExpect(jsonPath("$.paths['/api/auth/me'].get.security[0].bearerAuth").exists());
 
         mvc.perform(get("/swagger-ui/index.html")).andExpect(status().isOk());
@@ -621,14 +618,11 @@ class FoundationIT {
 
     @Test
     void featureRoutesRemainClosedAndAuthenticationDoesNotExposeAdminRegistration() throws Exception {
-        for (String path : new String[] {"/api/auth/login", "/api/users/register", "/api/jobs",
+        for (String path : new String[] {"/api/auth/login", "/api/jobs",
                 "/api/profiles/me", "/api/applications", "/api/admin/users", "/actuator/env"}) {
             mvc.perform(get(path)).andExpect(status().isUnauthorized());
             mvc.perform(get(path).with(jwt())).andExpect(status().isForbidden());
         }
-        mvc.perform(post("/api/users/register").contentType("application/json")
-                .content("{\"email\":\"admin@example.com\",\"password\":\"correct horse battery\",\"role\":\"ADMIN\"}"))
-                .andExpect(status().isForbidden());
         mvc.perform(post("/api/auth/register").contentType("application/json")
                 .content("{\"email\":\"admin@example.com\",\"password\":\"StrongPassword123!\",\"role\":\"ADMIN\"}"))
                 .andExpect(status().isBadRequest());

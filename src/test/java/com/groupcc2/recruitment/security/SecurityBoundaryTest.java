@@ -17,7 +17,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -51,16 +50,10 @@ class SecurityBoundaryTest {
 
     @Test
     void closedRoutesRejectAnonymousAndAuthenticatedRequests() throws Exception {
-        doThrow(new com.groupcc2.recruitment.users.service.AdminRegistrationNotAllowedException())
-                .when(userService).register("admin@example.com", "correct horse battery",
-                        com.groupcc2.recruitment.users.entity.UserRole.ADMIN);
         for (String path : new String[] {"/api/profile", "/api/profile/documents", "/api/jobs", "/api/profiles/me", "/api/applications", "/api/admin/users"}) {
             mvc.perform(get(path)).andExpect(status().isUnauthorized());
             mvc.perform(get(path).with(jwt())).andExpect(status().isForbidden());
         }
-        mvc.perform(post("/api/users/register").contentType("application/json")
-                .content("{\"email\":\"admin@example.com\",\"password\":\"correct horse battery\",\"role\":\"ADMIN\"}"))
-                .andExpect(status().isForbidden());
     }
 
     @Test
