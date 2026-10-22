@@ -1,6 +1,7 @@
 package com.groupcc2.recruitment.users.service;
 
 import java.util.Locale;
+import java.util.List;
 import java.util.UUID;
 
 import com.groupcc2.recruitment.users.entity.User;
@@ -48,6 +49,20 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public User findById(UUID id) {
         return users.findById(id).orElseThrow(UserNotFoundException::new);
+    }
+
+    @Override
+    @Transactional
+    public List<User> findAllForAdministrator(UUID administratorId) {
+        requireAdministrator(administratorId);
+        return users.findAll();
+    }
+
+    @Override
+    @Transactional
+    public User findForAdministrator(UUID administratorId, UUID id) {
+        requireAdministrator(administratorId);
+        return findById(id);
     }
 
     @Override

@@ -1,6 +1,7 @@
 package com.groupcc2.recruitment.users.service;
 
 import java.util.UUID;
+import java.util.List;
 
 import com.groupcc2.recruitment.users.entity.User;
 import com.groupcc2.recruitment.users.entity.UserRole;
@@ -9,6 +10,10 @@ public interface UserService {
     User register(String email, String rawPassword, UserRole role);
 
     User findById(UUID id);
+
+    List<User> findAllForAdministrator(UUID administratorId);
+
+    User findForAdministrator(UUID administratorId, UUID id);
 
     User findByNormalizedEmail(String email);
 
