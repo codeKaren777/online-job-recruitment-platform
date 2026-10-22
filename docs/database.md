@@ -65,22 +65,21 @@ policy behavior only through its isolated temporary policy-test role; it does
 not prove that the local runtime is protected by RLS. A least-privilege role
 model is required before claiming that RLS protects production data.
 
-Migration V5 defines `SECURITY INVOKER` authentication functions and grants
-execution to the current migration account; it no longer creates or depends on
-additional database accounts. V6 adds a monotonically increasing account token
-version plus a hashed, expiring password-reset token on `recruitment.users`.
+Migration V5 defines the narrow authentication functions and grants execution
+to the current migration account. V6 adds a monotonically increasing account
+token version plus a hashed, expiring password-reset token on
+`recruitment.users`. V7 makes only those authentication functions
+`SECURITY DEFINER`, allowing a restricted runtime role to authenticate without
+granting it unrestricted pre-authentication table access.
 Reset completion is an atomic update, so expired or reused tokens cannot reset
 the password. The existing `users_self_or_admin` and other RLS policies are not
 removed or weakened.
 
-These invoker functions and the direct password-reset/password-change queries
-are **not** an RLS-compatible pre-authentication design for a future
-non-superuser runtime. Under the existing forced `users_self_or_admin` policy,
-anonymous login/reset lookups have no trusted `app.user_id` context, and this
-single-account setup grants no separate pre-authentication access path. A
-restricted runtime would therefore fail those flows until the database team
-approves and tests a narrowly scoped access design. Do not replace the local
-superuser connection with a non-superuser and assume authentication will work.
+The integration suite provisions a separate non-superuser runtime role,
+executes Flyway as the container administrator, and verifies that JWT-backed
+feature operations run with forced RLS. Local Compose still uses the existing
+single account for developer convenience; that account may bypass RLS and is
+not a production least-privilege model.
 
 The current development credentials are `POSTGRES_DB`, `POSTGRES_USER`, and
 `POSTGRES_PASSWORD`; `DB_URL` is overridden inside Compose to use the `db`
@@ -89,7 +88,7 @@ service, and JWT configuration uses `JWT_SECRET_BASE64` with optional
 
 The existing database has V1-V3 applied and has not been changed by this work.
 Before starting the updated backend, make a protected backup. Startup will run
-the pending V4, V5, and V6 Flyway migrations using the existing account. V6 adds
+the pending V4, V5, V6, and V7 Flyway migrations using the existing account. V6 adds
 columns and an index; it does not delete application data. Do not use
 `docker compose down -v`.
 
@@ -103,7 +102,7 @@ docker compose up -d db
 
 The detached flag belongs after `up`. If Docker socket permissions require elevated access, use `sudo docker compose up -d db` temporarily. The preferred permanent fix is to add your Linux user to the `docker` group and start a new login session.
 
-Compose starts PostgreSQL and then Spring Boot; Flyway runs V4, V5, and V6 during
+Compose starts PostgreSQL and then Spring Boot; Flyway runs V4, V5, V6, and V7 during
 application startup using the same `recruitment` database account. No role
 provisioner or extra database account is used by this local development setup.
 
@@ -121,7 +120,7 @@ docker compose up -d db
 
 Start PostgreSQL, Flyway migrations, and the backend. This requires the existing
 database variables and JWT secret in `.env`. Back up the database before this
-command because it applies pending V4, V5, and V6 migrations:
+command because it applies pending V4, V5, V6, and V7 migrations:
 
 ```bash
 docker compose up --build -d
