@@ -1,7 +1,9 @@
 package com.groupcc2.recruitment.security;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -11,12 +13,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.groupcc2.recruitment.profile.controller.ProfileController;
 import com.groupcc2.recruitment.profile.dto.DocumentResponse;
-import com.groupcc2.recruitment.profile.dto.DownloadResponse;
 import com.groupcc2.recruitment.profile.dto.ProfileRequest;
 import com.groupcc2.recruitment.profile.dto.ProfileResponse;
 import com.groupcc2.recruitment.profile.service.ProfileService;
 import java.time.Instant;
-import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -29,6 +29,8 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.ResultMatcher;
 
 @WebMvcTest(controllers = ProfileController.class,
         properties = "app.security.jwt.secret-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
@@ -47,9 +49,8 @@ class ProfileControllerSecurityTest {
     @Test
     void everyProfileRouteRejectsEmployersAndAdministrators() throws Exception {
         for (String role : List.of("EMPLOYER", "ADMIN")) {
-            RequestPostProcessor token = jwt().authorities(
-                    new SimpleGrantedAuthority("ROLE_" + role));
-            assertRoutes(token, status().isForbidden());
+            assertRoutes(jwt().authorities(new SimpleGrantedAuthority("ROLE_" + role)),
+                    status().isForbidden());
         }
         verifyNoInteractions(profileService);
     }
@@ -58,15 +59,12 @@ class ProfileControllerSecurityTest {
     void jobSeekersCanUseAllOwnProfileRoutes() throws Exception {
         UUID documentId = UUID.randomUUID();
         Instant now = Instant.now();
-        org.mockito.Mockito.when(profileService.readOwn())
+        when(profileService.readOwn()).thenReturn(new ProfileResponse("Name", null, null, now, now));
+        when(profileService.upsert(new ProfileRequest("Name", null, null)))
                 .thenReturn(new ProfileResponse("Name", null, null, now, now));
-        org.mockito.Mockito.when(profileService.upsert(new ProfileRequest("Name", null, null)))
-                .thenReturn(new ProfileResponse("Name", null, null, now, now));
-        org.mockito.Mockito.when(profileService.upload(org.mockito.ArgumentMatchers.any()))
+        when(profileService.upload(any()))
                 .thenReturn(new DocumentResponse(documentId, "cv.pdf", "application/pdf", 20, now));
-        org.mockito.Mockito.when(profileService.listOwn()).thenReturn(List.of());
-        org.mockito.Mockito.when(profileService.downloadOwn(documentId)).thenReturn(
-                new DownloadResponse(URI.create("https://objects.example.test/signed"), now.plusSeconds(120)));
+        when(profileService.listOwn()).thenReturn(List.of());
 
         RequestPostProcessor token = jwt().jwt(jwt -> jwt
                         .subject(UUID.randomUUID().toString()).claim("role", "JOB_SEEKER"))
@@ -82,42 +80,31 @@ class ProfileControllerSecurityTest {
                         .with(token))
                 .andExpect(status().isCreated());
         mvc.perform(get("/api/profile/documents").with(token)).andExpect(status().isOk());
-        mvc.perform(get("/api/profile/documents/{documentId}/download", documentId).with(token))
-                .andExpect(status().isOk());
         mvc.perform(delete("/api/profile/documents/{documentId}", documentId).with(token))
                 .andExpect(status().isNoContent());
 
         verify(profileService).readOwn();
         verify(profileService).upsert(new ProfileRequest("Name", null, null));
-        verify(profileService).upload(org.mockito.ArgumentMatchers.any());
+        verify(profileService).upload(any());
         verify(profileService).listOwn();
-        verify(profileService).downloadOwn(documentId);
         verify(profileService).deleteOwn(documentId);
     }
 
-    private void assertRoutes(RequestPostProcessor token,
-                             org.springframework.test.web.servlet.ResultMatcher expected) throws Exception {
-        var read = get("/api/profile");
-        var update = put("/api/profile").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"displayName\":\"Name\"}");
-        var upload = multipart("/api/profile/documents")
-                .file(new MockMultipartFile("file", "cv.pdf", "application/pdf", new byte[]{1}));
-        var documents = get("/api/profile/documents");
-        var download = get("/api/profile/documents/{documentId}/download", UUID.randomUUID());
-        var deleteDocument = delete("/api/profile/documents/{documentId}", UUID.randomUUID());
-        if (token != null) {
-            read.with(token);
-            update.with(token);
-            upload.with(token);
-            documents.with(token);
-            download.with(token);
-            deleteDocument.with(token);
-        }
-        mvc.perform(read).andExpect(expected);
-        mvc.perform(update).andExpect(expected);
-        mvc.perform(upload).andExpect(expected);
-        mvc.perform(documents).andExpect(expected);
-        mvc.perform(download).andExpect(expected);
-        mvc.perform(deleteDocument).andExpect(expected);
+    private void assertRoutes(RequestPostProcessor token, ResultMatcher expected) throws Exception {
+        mvc.perform(withToken(get("/api/profile"), token)).andExpect(expected);
+        mvc.perform(withToken(put("/api/profile")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"displayName\":\"Name\"}"), token)).andExpect(expected);
+        mvc.perform(withToken(multipart("/api/profile/documents")
+                .file(new MockMultipartFile("file", "cv.pdf", "application/pdf", new byte[]{1})), token))
+                .andExpect(expected);
+        mvc.perform(withToken(get("/api/profile/documents"), token)).andExpect(expected);
+        mvc.perform(withToken(delete("/api/profile/documents/{documentId}", UUID.randomUUID()), token))
+                .andExpect(expected);
+    }
+
+    private MockHttpServletRequestBuilder withToken(MockHttpServletRequestBuilder request,
+                                                     RequestPostProcessor token) {
+        return token == null ? request : request.with(token);
     }
 }

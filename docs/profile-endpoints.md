@@ -1,22 +1,21 @@
 # Profile and document-upload endpoints
 
-Base URL: http://localhost:8080. These routes exist in ProfileController. All
-require an active JOB_SEEKER acting on their own records. No request accepts a
-userId or role to choose an owner.
+Base URL: http://localhost:8080. These five routes exist in ProfileController.
+All require an active JOB_SEEKER acting on their own records. No request accepts
+a userId or role to choose an owner.
 
-SecurityConfig authorizes only the methods below for JOB_SEEKER and retains its
-default-deny rule for other feature routes. Configure an active account, private
-storage, and a non-bypass database account; the local Compose PostgreSQL bootstrap
-account is a superuser and profile RLS rejects it. Without a token expect 401;
-other roles receive 403.
+**Current checkout:** SecurityConfig authorizes these routes only for
+`JOB_SEEKER` tokens. Without a token expect 401; other roles expect 403.
+Controller authorization and JWT-subject identity resolution are covered by
+focused tests. Profile service operations still require the configured runtime
+database and private storage integrations.
 
-| Method | Endpoint | Input | Success response |
+| Method | Endpoint | Input | Success after integration |
 |---|---|---|---|
 | PUT | /api/profile | JSON profile fields | 200, created/updated own profile |
 | GET | /api/profile | None | 200, own profile; 404 if absent |
 | POST | /api/profile/documents | multipart/form-data, part named file | 201, document metadata |
 | GET | /api/profile/documents | None | 200, own document metadata array |
-| GET | /api/profile/documents/{documentId}/download | None | 200, short-lived signed GET URL for an owned document |
 | DELETE | /api/profile/documents/{documentId} | Document UUID from upload/list | 204, empty body |
 
 ## Postman setup
@@ -112,19 +111,9 @@ seeker's document UUID or a missing document returns 404 after integration.
 Storage failures can return 503 and require an owner retry, as described in
 [the document module](profile-module.md#files-and-consistency).
 
-## 6. Download your own document
-
-The application verifies the authenticated owner against the stored document
-metadata before asking MinIO for a signed GET URL. The response contains only the
-temporary URL and expiration time. Treat the URL as a bearer secret and do not log
-or persist it. Its lifetime is configured by PROFILE_DOWNLOAD_SECONDS (30–300
-seconds, default 120 seconds). A foreign or missing document returns 404 without
-calling the signer. The download route is
-GET /api/profile/documents/{documentId}/download.
-
 ## Errors and negative endpoint tests
 
-Check these cases with real tokens and a non-bypass database role:
+After the integration gate opens, check these cases with real tokens:
 
 | Request | Expected |
 |---|---|
@@ -143,12 +132,15 @@ successful upload testing.
 
 ## Download and employer endpoints
 
-There is no employer-profile HTTP endpoint. The employer service methods remain
-service contracts only and require specific application/job authorization before
-any employer route is added. The [contract-testing checklist](profile-contract-testing.md)
-records these separate integration gates.
+There is currently **no HTTP download/signing endpoint and no employer-profile
+HTTP endpoint**. downloadOwn, readForEmployer, listForEmployer and
+ downloadForEmployer are service methods only. Do not invent a URL for them.
+Employer route contracts require the Jobs/Applications owner to supply real
+specific-job/application authorization; download routes must be deliberately
+registered and tested. The [contract-testing checklist](profile-contract-testing.md)
+records this remaining work.
 
-## Readiness and integration limits
+## What you can test before auth is ready
 
 GET /actuator/health is available now for backend readiness:
 

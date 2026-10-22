@@ -18,15 +18,14 @@ public class DocumentValidator {
   String name=file.getOriginalFilename();
   if(name==null || name.length()>180 || !name.matches("[A-Za-z0-9][A-Za-z0-9 _().-]*")
    || name.contains("..") || !name.toLowerCase(Locale.ROOT).endsWith(".pdf")
-   || !"application/pdf".equals(file.getContentType()) || file.isEmpty()) throw invalid();
-  if(file.getSize()>MAX_BYTES)throw tooLarge();
+   || !"application/pdf".equals(file.getContentType()) || file.isEmpty() || file.getSize()>MAX_BYTES) throw invalid();
   Path temp=null;boolean success=false;
   try {
    temp=Files.createTempFile("profile-document-",".pdf");
    long size=0;
    try(InputStream in=file.getInputStream(); OutputStream out=Files.newOutputStream(temp)) {
     byte[] buffer=new byte[8192];int n;
-    while((n=in.read(buffer))!=-1) {size+=n;if(size>MAX_BYTES)throw tooLarge();out.write(buffer,0,n);}
+    while((n=in.read(buffer))!=-1) {size+=n;if(size>MAX_BYTES)throw invalid();out.write(buffer,0,n);}
    }
    if(size<12)throw invalid();
    try(var in=Files.newInputStream(temp)) {
@@ -44,5 +43,4 @@ public class DocumentValidator {
   }
  }
  private ProfileFailure invalid(){return new ProfileFailure(ProfileFailure.Code.INVALID_FILE);}
- private ProfileFailure tooLarge(){return new ProfileFailure(ProfileFailure.Code.FILE_TOO_LARGE);}
 }
