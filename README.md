@@ -1,8 +1,8 @@
 # Group CC2 Online Job Board backend
 
-Java 21 Spring Boot modular monolith, built with Maven 3.9.16 via official Wrapper 3.3.4, PostgreSQL 17, Spring Data JPA/Hibernate, Spring Security JWT, Flyway, and Springdoc OpenAPI 2.8.17. Spring Boot manages compatible library versions; Springdoc is explicitly pinned because it is not part of the Boot BOM. See [decisions](docs/decisions.md) for rationale and primary version references.
+Backend foundation only. Java 21, Spring Boot 3.5.16, Maven 3.9.16 via official Wrapper 3.3.4, PostgreSQL 17, Spring Data JPA/Hibernate, Spring Security JWT, Flyway, and Springdoc OpenAPI 2.8.17. Spring Boot manages compatible library versions; Springdoc is explicitly pinned because it is not part of the Boot BOM. See [decisions](docs/decisions.md) for rationale and primary version references.
 
-Implemented: application startup wiring, environment configuration, private-by-default route policy, JWT validation, BCrypt password hashing, schema migration, Docker/Compose, package boundaries, Authentication API, and authenticated job-seeker profile/document routes. Other feature routes remain denied by default. Registration/login/recovery entry points and health are public; profile and protected authentication operations require validated JWTs. There are no demo credentials or seeded administrators.
+Implemented: application startup wiring, environment configuration, private-by-default route policy, JWT validation, BCrypt password hashing, schema migration, Docker/Compose, package boundaries, and the core Authentication API (registration, login, current user, logout, password change and password reset). Non-authentication feature routes remain closed until their owning modules add authorization. Registration/login/recovery entry points and health are public; protected auth operations require a validated JWT. There are no demo credentials or seeded administrators.
 
 ## Prerequisites
 
@@ -88,7 +88,7 @@ In a second PowerShell window:
 
 ```powershell
 Invoke-RestMethod 'http://localhost:8080/actuator/health'
-# Expect 401 for an unauthenticated protected route.
+# Expect 401; feature routes have not been opened or implemented.
 curl.exe -i 'http://localhost:8080/api/jobs'
 ```
 
@@ -131,13 +131,12 @@ PostgreSQL lives in the named `postgres_data` volume across container recreation
 
 ## Profile and private documents (Issue #8)
 
-The authenticated job-seeker profile and document routes are available when the
-database RLS requirements and private storage are configured. The API does not
-accept caller-selected owners and keeps signed downloads short lived. See the
-[Profile module](docs/profile-module.md), [MinIO setup](docs/minio-setup.md), and
-[endpoint guide](docs/profile-endpoints.md). MinIO is built from pinned community
-source with a persistent volume. Compose's local PostgreSQL bootstrap account is
-a superuser and profile RLS intentionally rejects it; use an approved non-bypass
-runtime database role before expecting profile operations to succeed.
+The implementation and integration gates are documented in
+[Profile module](docs/profile-module.md). Its HTTP adapters remain closed until
+validated identity, application authorization and restricted runtime RLS contracts
+are integrated. MinIO is built from pinned community source with a persistent
+volume; configure the additional `.env.example` variables without replacing your
+existing `.env`. See [local MinIO setup and testing without auth](docs/minio-setup.md) and
+[independent QA handoff](docs/issue-8-qa-handoff.md).
 
 The local Compose profile exposes password-reset tokens in the forgot-password response for development/Postman only; production requires a configured delivery provider. Local Compose currently uses the `recruitment` PostgreSQL superuser account, which bypasses RLS and must not be presented as production-ready isolation. Email, SMS, notifications and interviews remain out of scope.
