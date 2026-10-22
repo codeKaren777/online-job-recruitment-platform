@@ -216,6 +216,7 @@ class FoundationIT {
                 .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"))
                 .andExpect(jsonPath("$.paths['/actuator/health'].get.responses['200']").exists())
                 .andExpect(jsonPath("$.paths['/api/auth/register'].post").exists())
+                .andExpect(jsonPath("$.paths['/api/jobs'].get.tags[0]").value("Jobs"))
                 .andExpect(jsonPath("$.paths['/api/users/register']").doesNotExist())
                 .andExpect(jsonPath("$.paths['/api/users/me'].get").exists())
                 .andExpect(jsonPath("$.paths['/api/admin/users'].get").exists())

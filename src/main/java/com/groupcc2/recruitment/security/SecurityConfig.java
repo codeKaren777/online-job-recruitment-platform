@@ -76,6 +76,12 @@ public class SecurityConfig {
                                 .hasRole("JOB_SEEKER")
                         .requestMatchers(HttpMethod.DELETE, "/api/profile/documents/{documentId}")
                                 .hasRole("JOB_SEEKER")
+                        .requestMatchers(HttpMethod.POST, "/api/jobs").hasRole("EMPLOYER")
+                        .requestMatchers(HttpMethod.GET, "/api/jobs").hasRole("JOB_SEEKER")
+                        .requestMatchers(HttpMethod.GET, "/api/jobs/{jobId}").hasAnyRole("JOB_SEEKER", "EMPLOYER")
+                        .requestMatchers(HttpMethod.GET, "/api/employer/jobs").hasRole("EMPLOYER")
+                        .requestMatchers(HttpMethod.PUT, "/api/jobs/{jobId}").hasRole("EMPLOYER")
+                        .requestMatchers(HttpMethod.PATCH, "/api/jobs/{jobId}/close").hasRole("EMPLOYER")
                         // Retain the existing users registration endpoint for API compatibility.
                         .requestMatchers(HttpMethod.POST, "/api/users/register").permitAll()
                         // Open routes deliberately as each feature gains authorization tests.

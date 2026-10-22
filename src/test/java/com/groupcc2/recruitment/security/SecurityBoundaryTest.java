@@ -4,6 +4,8 @@ import com.groupcc2.recruitment.auth.dto.CurrentUserResponse;
 import com.groupcc2.recruitment.auth.dto.LoginResponse;
 import com.groupcc2.recruitment.auth.dto.RegisterResponse;
 import com.groupcc2.recruitment.auth.service.AuthService;
+import com.groupcc2.recruitment.job.dto.JobResponse;
+import com.groupcc2.recruitment.job.entity.JobStatus;
 import com.groupcc2.recruitment.job.service.JobService;
 import com.groupcc2.recruitment.profile.service.ProfileService;
 import com.groupcc2.recruitment.users.entity.AccountStatus;
@@ -14,12 +16,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.server.ResponseStatusException;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -46,6 +51,77 @@ class SecurityBoundaryTest {
             mvc.perform(delete("/api/profile/documents/" + java.util.UUID.randomUUID()).with(token)).andExpect(status().isForbidden());
         }
         org.mockito.Mockito.verifyNoInteractions(profileService);
+    }
+
+    @Test
+    void jobsRoutesRequireExplicitRoleAuthorization() throws Exception {
+        UUID jobId = UUID.randomUUID();
+        var employerToken = jwt().jwt(token -> token.subject(UUID.randomUUID().toString()).claim("role", "EMPLOYER"))
+                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_EMPLOYER"));
+        var seekerToken = jwt().jwt(token -> token.subject(UUID.randomUUID().toString()).claim("role", "JOB_SEEKER"))
+                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_JOB_SEEKER"));
+        var adminToken = jwt().jwt(token -> token.subject(UUID.randomUUID().toString()).claim("role", "ADMIN"))
+                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ADMIN"));
+        when(jobService.createJob(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new JobResponse(jobId, UUID.randomUUID(), "Backend Engineer", "Build APIs",
+                        "BSc CS", java.time.LocalDate.of(2099, 12, 31), "Zomba", JobStatus.ACTIVE,
+                        java.time.Instant.now(), java.time.Instant.now()));
+        when(jobService.getJob(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Job not found"));
+        when(jobService.updateJob(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Job not found"));
+        when(jobService.closeJob(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Job not found"));
+
+        mvc.perform(get("/api/jobs")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/jobs").with(seekerToken)).andExpect(status().isOk());
+        mvc.perform(get("/api/jobs").with(employerToken)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/jobs").with(adminToken)).andExpect(status().isForbidden());
+
+        mvc.perform(post("/api/jobs").contentType("application/json")
+                .content("""
+                        {"title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
+                        """))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/jobs").with(seekerToken).contentType("application/json")
+                .content("""
+                        {"title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
+                        """))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/jobs").with(employerToken).contentType("application/json")
+                .content("""
+                        {"title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
+                        """))
+                .andExpect(status().isCreated());
+
+        mvc.perform(get("/api/jobs/{jobId}", jobId)).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/jobs/{jobId}", jobId).with(adminToken)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/jobs/{jobId}", jobId).with(seekerToken)).andExpect(status().isNotFound());
+        mvc.perform(get("/api/jobs/{jobId}", jobId).with(employerToken)).andExpect(status().isNotFound());
+
+        mvc.perform(get("/api/employer/jobs")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/employer/jobs").with(seekerToken)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/employer/jobs").with(employerToken)).andExpect(status().isOk());
+
+        mvc.perform(put("/api/jobs/{jobId}", jobId).contentType("application/json")
+                .content("""
+                        {"title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
+                        """))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(put("/api/jobs/{jobId}", jobId).with(seekerToken).contentType("application/json")
+                .content("""
+                        {"title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
+                        """))
+                .andExpect(status().isForbidden());
+        mvc.perform(put("/api/jobs/{jobId}", jobId).with(employerToken).contentType("application/json")
+                .content("""
+                        {"title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
+                        """))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(patch("/api/jobs/{jobId}/close", jobId)).andExpect(status().isUnauthorized());
+        mvc.perform(patch("/api/jobs/{jobId}/close", jobId).with(seekerToken)).andExpect(status().isForbidden());
+        mvc.perform(patch("/api/jobs/{jobId}/close", jobId).with(employerToken)).andExpect(status().isNotFound());
     }
 
     @Test
