@@ -6,7 +6,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.http.HttpStatus;
 import com.groupcc2.recruitment.profile.dto.*;
 import com.groupcc2.recruitment.profile.service.ProfileService;
-/** HTTP adapter remains denied by SecurityConfig until identity/RLS integration is approved. */
+/** Authenticated job seeker endpoints; services enforce account and ownership. */
 @org.springframework.security.access.prepost.PreAuthorize("hasRole('JOB_SEEKER')")
 @RestController
 @RequestMapping("/api/profile")
