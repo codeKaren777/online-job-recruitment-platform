@@ -249,7 +249,7 @@ Starting the full stack allows Docker Compose to start the database and backend 
 
 First, check your existing containers and volumes as described in Section 3.
 
-The current database has V4, V5, and V6 pending. Before starting the updated
+The current database has V4, V5, V6, and V7 pending. Before starting the updated
 backend, make a protected backup outside the repository:
 
 ```bash
@@ -273,8 +273,9 @@ What this command does:
 - `--build` builds or rebuilds images when necessary.
 - `-d` runs the containers in the background.
 
-This runs pending Flyway migrations V4, V5, and V6. They add authentication
-functions, token-version and password-reset fields/indexes; they do not delete
+This runs pending Flyway migrations V4, V5, V6, and V7. They add authentication
+functions, token-version and password-reset fields/indexes, and harden the
+authentication functions for restricted runtime roles; they do not delete
 existing rows. The named `postgres_data` volume is preserved. Never use
 `docker compose down -v` for this update.
 

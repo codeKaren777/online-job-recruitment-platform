@@ -32,6 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest
@@ -39,9 +40,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("local")
 class FoundationIT {
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17");
+    private static final String APPLICATION_USERNAME = "recruitment_app";
+    private static final String APPLICATION_PASSWORD = "recruitment-app-test-password";
 
     static {
         POSTGRES.start();
+        bootstrapNonSuperuserApplicationRole();
     }
 
     @AfterAll
@@ -52,12 +56,41 @@ class FoundationIT {
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
-        registry.add("spring.datasource.username", POSTGRES::getUsername);
-        registry.add("spring.datasource.password", POSTGRES::getPassword);
+        registry.add("spring.datasource.username", () -> APPLICATION_USERNAME);
+        registry.add("spring.datasource.password", () -> APPLICATION_PASSWORD);
         registry.add("spring.flyway.url", POSTGRES::getJdbcUrl);
         registry.add("spring.flyway.user", POSTGRES::getUsername);
         registry.add("spring.flyway.password", POSTGRES::getPassword);
         registry.add("app.security.jwt.secret-base64", () -> "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");
+    }
+
+    private static void bootstrapNonSuperuserApplicationRole() {
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+             Statement statement = connection.createStatement()) {
+            Flyway.configure()
+                    .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+                    .defaultSchema("public")
+                    .locations("classpath:db/migration")
+                    .load()
+                    .migrate();
+            statement.execute("CREATE ROLE " + APPLICATION_USERNAME
+                    + " LOGIN PASSWORD '" + APPLICATION_PASSWORD + "'");
+            statement.execute("GRANT USAGE ON SCHEMA recruitment TO " + APPLICATION_USERNAME);
+            statement.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA recruitment TO "
+                    + APPLICATION_USERNAME);
+            statement.execute("GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA recruitment TO "
+                    + APPLICATION_USERNAME);
+            statement.execute("GRANT USAGE ON TYPE recruitment.user_role, recruitment.account_status, "
+                    + "recruitment.job_status, recruitment.application_status TO " + APPLICATION_USERNAME);
+            statement.execute("GRANT SELECT ON recruitment.current_jobs TO " + APPLICATION_USERNAME);
+            statement.execute("GRANT EXECUTE ON FUNCTION recruitment.auth_lookup_user(text) TO "
+                    + APPLICATION_USERNAME);
+            statement.execute("GRANT EXECUTE ON FUNCTION recruitment.auth_register_user(text, text, text) TO "
+                    + APPLICATION_USERNAME);
+        } catch (Exception exception) {
+            throw new IllegalStateException("Unable to bootstrap the non-superuser integration account", exception);
+        }
     }
 
     @Autowired MockMvc mvc;
@@ -71,7 +104,7 @@ class FoundationIT {
     @Test
     void bootsAgainstPostgresAndAppliesMigrationOnlyOnce() throws Exception {
         assertThat(flyway.getConfiguration().getDefaultSchema()).isEqualTo("public");
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("6");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("7");
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
         try (var connection = dataSource.getConnection(); var statement = connection.createStatement();
@@ -85,9 +118,9 @@ class FoundationIT {
                      FROM pg_roles WHERE rolname = current_user
                      """)) {
             assertThat(result.next()).isTrue();
-            assertThat(result.getString("current_user")).isEqualTo(POSTGRES.getUsername());
-            assertThat(result.getBoolean("rolsuper")).isTrue();
-            assertThat(result.getBoolean("rolbypassrls")).isTrue();
+            assertThat(result.getString("current_user")).isEqualTo(APPLICATION_USERNAME);
+            assertThat(result.getBoolean("rolsuper")).isFalse();
+            assertThat(result.getBoolean("rolbypassrls")).isFalse();
         }
         try (Connection connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
@@ -225,13 +258,16 @@ class FoundationIT {
                 .andExpect(jsonPath("$.paths['/api/admin/users/{id}/remove'].patch").exists())
                 .andExpect(jsonPath("$.paths['/api/employer/applications'].get").exists())
                 .andExpect(jsonPath("$.paths['/api/employer/applications/{applicationId}'].get").exists())
+                .andExpect(jsonPath("$.paths['/api/applications'].post.security[0].bearerAuth").exists())
+                .andExpect(jsonPath("$.paths['/api/employer/applications'].get.security[0].bearerAuth").exists())
+                .andExpect(jsonPath("$.paths['/api/profile'].put.security[0].bearerAuth").exists())
                 .andExpect(jsonPath("$.paths['/api/auth/me'].get.security[0].bearerAuth").exists());
 
         mvc.perform(get("/swagger-ui/index.html")).andExpect(status().isOk());
     }
 
     @Test
-    void currentUserLookupWorksAndDocumentsSuperuserRlsBypass() throws Exception {
+    void currentUserLookupWorksWithNonSuperuserRlsEnforcement() throws Exception {
         UUID userId = UUID.randomUUID();
         UUID otherUserId = UUID.randomUUID();
         try (Connection connection = adminConnection(); Statement statement = connection.createStatement()) {
@@ -260,13 +296,13 @@ class FoundationIT {
             try (var result = statement.executeQuery(
                     "SELECT current_user, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")) {
                 assertThat(result.next()).isTrue();
-                assertThat(result.getString(1)).isEqualTo(POSTGRES.getUsername());
-                assertThat(result.getBoolean(2)).isTrue();
-                assertThat(result.getBoolean(3)).isTrue();
+                assertThat(result.getString(1)).isEqualTo(APPLICATION_USERNAME);
+                assertThat(result.getBoolean(2)).isFalse();
+                assertThat(result.getBoolean(3)).isFalse();
             }
             try (var result = statement.executeQuery("SELECT count(id) FROM recruitment.users")) {
                 assertThat(result.next()).isTrue();
-                assertThat(result.getLong(1)).isGreaterThanOrEqualTo(2);
+                assertThat(result.getLong(1)).isZero();
             }
             try (var result = statement.executeQuery("""
                     SELECT has_function_privilege(
@@ -287,8 +323,8 @@ class FoundationIT {
                 assertThat(result.next()).isTrue();
                 assertThat(result.getBoolean(1)).isTrue();
                 assertThat(result.getBoolean(2)).isTrue();
-                assertThat(result.getBoolean(3)).isTrue();
-                assertThat(result.getBoolean(4)).isTrue();
+                assertThat(result.getBoolean(3)).isFalse();
+                assertThat(result.getBoolean(4)).isFalse();
                 assertThat(result.getBoolean(5)).isTrue();
             }
             try (var result = statement.executeQuery("""
@@ -296,7 +332,7 @@ class FoundationIT {
                     FROM pg_class WHERE oid = 'recruitment.users'::regclass
                     """)) {
                 assertThat(result.next()).isTrue();
-                assertThat(result.getBoolean(1)).isTrue();
+                assertThat(result.getBoolean(1)).isFalse();
             }
         }
 
@@ -394,6 +430,90 @@ class FoundationIT {
         mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + employerToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.role").value("EMPLOYER"));
+    }
+
+    @Test
+    void authenticatedModulesWorkTogetherAndEnforceOwnership() throws Exception {
+        String suffix = UUID.randomUUID().toString();
+        String seekerEmail = "workflow-seeker-" + suffix + "@example.com";
+        String employerEmail = "workflow-employer-" + suffix + "@example.com";
+        String otherEmployerEmail = "workflow-other-employer-" + suffix + "@example.com";
+        String password = "WorkflowPassword123!";
+
+        UUID seekerId = register(seekerEmail, password, "JOB_SEEKER");
+        register(employerEmail, password, "EMPLOYER");
+        register(otherEmployerEmail, password, "EMPLOYER");
+        String seekerToken = loginAndGetToken(seekerEmail, password);
+        String employerToken = loginAndGetToken(employerEmail, password);
+        String otherEmployerToken = loginAndGetToken(otherEmployerEmail, password);
+
+        mvc.perform(put("/api/profile")
+                        .header("Authorization", "Bearer " + seekerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"displayName\":\"Workflow Applicant\",\"phone\":\"+265999000111\","
+                                + "\"biography\":\"Integration test profile\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.displayName").value("Workflow Applicant"));
+
+        var jobResponse = mvc.perform(post("/api/jobs")
+                        .header("Authorization", "Bearer " + employerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"Integration Engineer","description":"Build secure APIs",
+                                 "requiredQualifications":"Java","dueDate":"2099-12-31","location":"Blantyre"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.employerId").value(org.hamcrest.Matchers.not(seekerId.toString())))
+                .andReturn();
+        UUID jobId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(
+                jobResponse.getResponse().getContentAsString(), "$.id"));
+
+        mvc.perform(get("/api/jobs").header("Authorization", "Bearer " + seekerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(jobId.toString()));
+
+        var applicationResponse = mvc.perform(post("/api/applications")
+                        .header("Authorization", "Bearer " + seekerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"jobId\":\"" + jobId + "\",\"jobSeekerId\":\""
+                                + UUID.randomUUID() + "\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("PENDING"))
+                .andReturn();
+        UUID applicationId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(
+                applicationResponse.getResponse().getContentAsString(), "$.id"));
+
+        mvc.perform(get("/api/employer/applications").header("Authorization", "Bearer " + employerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(applicationId.toString()));
+        mvc.perform(get("/api/employer/applications/" + applicationId)
+                        .header("Authorization", "Bearer " + otherEmployerToken))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/applications/" + applicationId)
+                        .header("Authorization", "Bearer " + otherEmployerToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/employer/applications").header("Authorization", "Bearer " + seekerToken))
+                .andExpect(status().isForbidden());
+
+        try (Connection connection = adminConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "UPDATE recruitment.users SET status = 'SUSPENDED' WHERE id = ?")) {
+            statement.setObject(1, seekerId);
+            assertThat(statement.executeUpdate()).isEqualTo(1);
+        }
+        mvc.perform(get("/api/users/me").header("Authorization", "Bearer " + seekerToken))
+                .andExpect(status().isUnauthorized());
+    }
+
+    private UUID register(String email, String password, String role) throws Exception {
+        var response = mvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + email + "\",\"password\":\"" + password
+                                + "\",\"role\":\"" + role + "\"}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        return UUID.fromString(com.jayway.jsonpath.JsonPath.read(
+                response.getResponse().getContentAsString(), "$.id"));
     }
 
     @Test
