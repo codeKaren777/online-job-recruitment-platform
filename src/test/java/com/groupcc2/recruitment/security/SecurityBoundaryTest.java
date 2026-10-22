@@ -1,5 +1,6 @@
 package com.groupcc2.recruitment.security;
 
+import com.groupcc2.recruitment.application.service.ApplicationService;
 import com.groupcc2.recruitment.auth.dto.CurrentUserResponse;
 import com.groupcc2.recruitment.auth.dto.LoginResponse;
 import com.groupcc2.recruitment.auth.dto.RegisterResponse;
@@ -39,6 +40,7 @@ class SecurityBoundaryTest {
     @MockitoBean ProfileService profileService;
     @MockitoBean AuthService authService;
     @MockitoBean AccountJwtValidator accountJwtValidator;
+    @MockitoBean ApplicationService applicationService;
 
     @Test
     void profileRoutesRejectRolesOtherThanJobSeeker() throws Exception {

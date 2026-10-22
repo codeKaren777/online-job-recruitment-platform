@@ -75,8 +75,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/api/profile/documents/{documentId}")
                                 .hasRole("JOB_SEEKER")
                        
-                        .requestMatchers(HttpMethod.POST, "/api/applications").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/api/applications", "/api/applications/*").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/applications").hasRole("JOB_SEEKER")
+                        .requestMatchers(HttpMethod.GET, "/api/employer/applications",
+                                "/api/employer/applications/*").hasRole("EMPLOYER")
+                        .requestMatchers(HttpMethod.GET, "/api/applications", "/api/applications/*")
+                                .hasRole("JOB_SEEKER")
                         .requestMatchers(HttpMethod.POST, "/api/jobs").hasRole("EMPLOYER")
                         .requestMatchers(HttpMethod.GET, "/api/jobs").hasRole("JOB_SEEKER")
                         .requestMatchers(HttpMethod.GET, "/api/jobs/{jobId}").hasAnyRole("JOB_SEEKER", "EMPLOYER")

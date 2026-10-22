@@ -17,4 +17,8 @@ public interface JobDirectory {
 
     /** Returns only the postings that exist and are visible to the caller; missing ids are simply absent. */
     Map<UUID, JobSnapshot> findAllById(Collection<UUID> jobIds);
+
+    Optional<JobSnapshot> findOwnedByEmployer(UUID jobId, UUID employerId);
+
+    Map<UUID, JobSnapshot> findAllForEmployer(UUID employerId);
 }

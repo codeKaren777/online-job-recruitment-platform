@@ -48,6 +48,7 @@ public class ApplicationController {
         return service.getOwn(userId(jwt), applicationId);
     }
 
+
     private static UUID userId(Jwt jwt) {
         try {
             return UUID.fromString(jwt.getSubject());

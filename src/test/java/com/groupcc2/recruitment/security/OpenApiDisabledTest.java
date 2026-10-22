@@ -1,5 +1,6 @@
 package com.groupcc2.recruitment.security;
 
+import com.groupcc2.recruitment.application.service.ApplicationService;
 import com.groupcc2.recruitment.auth.service.AuthService;
 import com.groupcc2.recruitment.common.openapi.OpenApiConfiguration;
 import com.groupcc2.recruitment.job.service.JobService;
@@ -29,6 +30,7 @@ class OpenApiDisabledTest {
     @MockitoBean ProfileService profileService;
     @MockitoBean AuthService authService;
     @MockitoBean AccountJwtValidator accountJwtValidator;
+    @MockitoBean ApplicationService applicationService;
 
     @Test
     void disabledDocumentationEndpointsAreNotPublicOrAvailable() throws Exception {

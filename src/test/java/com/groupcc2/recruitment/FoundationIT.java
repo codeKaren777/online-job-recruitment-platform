@@ -223,6 +223,8 @@ class FoundationIT {
                 .andExpect(jsonPath("$.paths['/api/admin/users/{id}'].get").exists())
                 .andExpect(jsonPath("$.paths['/api/admin/users/{id}/suspend'].patch").exists())
                 .andExpect(jsonPath("$.paths['/api/admin/users/{id}/remove'].patch").exists())
+                .andExpect(jsonPath("$.paths['/api/employer/applications'].get").exists())
+                .andExpect(jsonPath("$.paths['/api/employer/applications/{applicationId}'].get").exists())
                 .andExpect(jsonPath("$.paths['/api/auth/me'].get.security[0].bearerAuth").exists());
 
         mvc.perform(get("/swagger-ui/index.html")).andExpect(status().isOk());

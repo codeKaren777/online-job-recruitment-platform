@@ -10,12 +10,15 @@ import com.groupcc2.recruitment.application.entity.ApplicationStatus;
 import com.groupcc2.recruitment.application.service.ApplicationFailure;
 import com.groupcc2.recruitment.application.service.ApplicationService;
 import com.groupcc2.recruitment.security.SecurityConfig;
+import com.groupcc2.recruitment.security.AccountJwtValidator;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -35,12 +38,27 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ApplicationControllerTest {
     @Autowired MockMvc mvc;
     @MockBean ApplicationService service;
+    @MockBean AccountJwtValidator accountJwtValidator;
 
     private final UUID userId = UUID.randomUUID();
     private final UUID jobId = UUID.randomUUID();
 
     private ApplicationResponse sample() {
         return new ApplicationResponse(UUID.randomUUID(), jobId, ApplicationStatus.PENDING, Instant.now(), Instant.now(), null);
+    }
+
+    private RequestPostProcessor seekerToken(UUID id) {
+        return seekerSubject(id.toString());
+    }
+
+    private RequestPostProcessor seekerSubject(String subject) {
+        return jwt().authorities(new SimpleGrantedAuthority("ROLE_JOB_SEEKER"))
+                .jwt(j -> j.subject(subject));
+    }
+
+    private RequestPostProcessor adminToken(UUID id) {
+        return jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))
+                .jwt(j -> j.subject(id.toString()));
     }
 
     @Test
@@ -52,10 +70,21 @@ class ApplicationControllerTest {
     }
 
     @Test
+    void administratorsCannotUseJobSeekerApplicationEndpoints() throws Exception {
+        mvc.perform(get("/api/applications").with(adminToken(userId)))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/applications").with(adminToken(userId))
+                        .contentType("application/json")
+                        .content("{\"jobId\":\"" + jobId + "\"}"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(service);
+    }
+
+    @Test
     void applyUsesTheTokenSubjectAndIgnoresAnyApplicantInTheBody() throws Exception {
         when(service.apply(userId, jobId)).thenReturn(sample());
 
-        mvc.perform(post("/api/applications").with(jwt().jwt(j -> j.subject(userId.toString())))
+        mvc.perform(post("/api/applications").with(seekerToken(userId))
                         .contentType("application/json")
                         .content("{\"jobId\":\"" + jobId + "\",\"jobSeekerId\":\"" + UUID.randomUUID() + "\"}"))
                 .andExpect(status().isCreated())
@@ -68,7 +97,7 @@ class ApplicationControllerTest {
         when(service.apply(eq(userId), any()))
                 .thenThrow(new ApplicationFailure(ApplicationFailure.Code.DUPLICATE_APPLICATION))
                 .thenThrow(new ApplicationFailure(ApplicationFailure.Code.JOB_NOT_ACCEPTING_APPLICATIONS));
-        var token = jwt().jwt(j -> j.subject(userId.toString()));
+        var token = seekerToken(userId);
         String body = "{\"jobId\":\"" + jobId + "\"}";
 
         mvc.perform(post("/api/applications").with(token).contentType("application/json").content(body))
@@ -79,7 +108,7 @@ class ApplicationControllerTest {
 
     @Test
     void invalidBodyIsBadRequest() throws Exception {
-        var token = jwt().jwt(j -> j.subject(userId.toString()));
+        var token = seekerToken(userId);
         mvc.perform(post("/api/applications").with(token).contentType("application/json").content("{}"))
                 .andExpect(status().isBadRequest());
         mvc.perform(post("/api/applications").with(token).contentType("application/json").content("{\"jobId\":\"nope\"}"))
@@ -89,7 +118,7 @@ class ApplicationControllerTest {
 
     @Test
     void nonUuidSubjectIsForbidden() throws Exception {
-        mvc.perform(get("/api/applications").with(jwt().jwt(j -> j.subject("not-a-uuid"))))
+        mvc.perform(get("/api/applications").with(seekerSubject("not-a-uuid")))
                 .andExpect(status().isForbidden());
         verifyNoInteractions(service);
     }
@@ -99,7 +128,7 @@ class ApplicationControllerTest {
         var application = sample();
         when(service.listOwn(userId)).thenReturn(List.of(application));
         when(service.getOwn(userId, application.id())).thenReturn(application);
-        var token = jwt().jwt(j -> j.subject(userId.toString()));
+        var token = seekerToken(userId);
 
         mvc.perform(get("/api/applications").with(token)).andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(application.id().toString()));
@@ -112,7 +141,7 @@ class ApplicationControllerTest {
         UUID id = UUID.randomUUID();
         when(service.getOwn(userId, id)).thenThrow(new ApplicationFailure(ApplicationFailure.Code.NOT_FOUND));
 
-        mvc.perform(get("/api/applications/" + id).with(jwt().jwt(j -> j.subject(userId.toString()))))
+        mvc.perform(get("/api/applications/" + id).with(seekerToken(userId)))
                 .andExpect(status().isNotFound());
     }
 

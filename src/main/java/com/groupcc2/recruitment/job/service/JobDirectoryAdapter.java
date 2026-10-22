@@ -54,4 +54,18 @@ class JobDirectoryAdapter implements JobDirectory {
                 .forEach(job -> found.put(job.id(), job));
         return found;
     }
+
+    @Override
+    public Optional<JobSnapshot> findOwnedByEmployer(UUID jobId, UUID employerId) {
+        return jdbc.query(SELECT + " WHERE id = ? AND employer_id = ?", MAPPER, jobId, employerId)
+                .stream().findFirst();
+    }
+
+    @Override
+    public Map<UUID, JobSnapshot> findAllForEmployer(UUID employerId) {
+        Map<UUID, JobSnapshot> found = new HashMap<>();
+        jdbc.query(SELECT + " WHERE employer_id = ?", MAPPER, employerId)
+                .forEach(job -> found.put(job.id(), job));
+        return found;
+    }
 }

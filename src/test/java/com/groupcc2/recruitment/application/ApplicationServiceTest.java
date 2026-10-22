@@ -4,12 +4,14 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Map;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 import com.groupcc2.recruitment.application.entity.Application;
 import com.groupcc2.recruitment.application.entity.ApplicationStatus;
+import com.groupcc2.recruitment.application.dto.ApplicationResponse;
 import com.groupcc2.recruitment.application.repository.ApplicationRepository;
 import com.groupcc2.recruitment.application.service.ApplicationFailure;
 import com.groupcc2.recruitment.application.service.ApplicationRls;
@@ -202,5 +204,44 @@ class ApplicationServiceTest {
         assertThatThrownBy(() -> service.getOwn(seeker.getId(), applicationId))
                 .isInstanceOfSatisfying(ApplicationFailure.class,
                         e -> assertThat(e.code()).isEqualTo(ApplicationFailure.Code.NOT_FOUND));
+    }
+
+    @Test
+    void employerListsOnlyApplicationsForOwnedJobs() {
+        User employer = new User("employer@example.com", "hash", UserRole.EMPLOYER);
+        UUID ownedJobId = UUID.randomUUID();
+        UUID foreignJobId = UUID.randomUUID();
+        Application owned = Application.submit(ownedJobId, seeker.getId());
+        Application foreign = Application.submit(foreignJobId, seeker.getId());
+        when(users.findById(employer.getId())).thenReturn(employer);
+        when(directory.findAllForEmployer(employer.getId())).thenReturn(Map.of(ownedJobId,
+                new JobSnapshot(ownedJobId, "Owned", "Zomba", TODAY.plusDays(1), JobSnapshot.State.ACTIVE)));
+        when(repository.findAllByJobIdInOrderBySubmittedAtDesc(Set.of(ownedJobId)))
+                .thenReturn(List.of(owned));
+
+        var result = service.listForEmployer(employer.getId());
+
+        assertThat(result).extracting(ApplicationResponse::jobId).containsExactly(ownedJobId);
+        verify(rls).establish(employer.getId(), "EMPLOYER");
+    }
+
+    @Test
+    void employerCannotReadAnApplicationOutsideOwnedJobs() {
+        User employer = new User("employer@example.com", "hash", UserRole.EMPLOYER);
+        UUID applicationId = UUID.randomUUID();
+        when(users.findById(employer.getId())).thenReturn(employer);
+        when(directory.findAllForEmployer(employer.getId())).thenReturn(Map.of());
+
+        assertThatThrownBy(() -> service.getForEmployer(employer.getId(), applicationId))
+                .isInstanceOfSatisfying(ApplicationFailure.class,
+                        e -> assertThat(e.code()).isEqualTo(ApplicationFailure.Code.NOT_FOUND));
+        verify(repository, never()).findByIdAndJobIdIn(any(), any());
+    }
+
+    @Test
+    void jobSeekerCannotUseEmployerApplicationAccess() {
+        assertThatThrownBy(() -> service.listForEmployer(seeker.getId()))
+                .isInstanceOfSatisfying(ApplicationFailure.class,
+                        e -> assertThat(e.code()).isEqualTo(ApplicationFailure.Code.FORBIDDEN));
     }
 }

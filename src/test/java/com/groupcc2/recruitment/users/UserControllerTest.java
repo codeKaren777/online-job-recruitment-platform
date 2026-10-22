@@ -1,6 +1,7 @@
 package com.groupcc2.recruitment.users;
 
 import com.groupcc2.recruitment.users.controller.UserController;
+import com.groupcc2.recruitment.application.service.ApplicationService;
 import com.groupcc2.recruitment.users.entity.User;
 import com.groupcc2.recruitment.users.entity.UserRole;
 import com.groupcc2.recruitment.users.service.UserService;
@@ -36,6 +37,7 @@ class UserControllerTest {
     @MockitoBean AuthService authService;
     @MockitoBean JobService jobService;
     @MockitoBean ProfileService profileService;
+    @MockitoBean ApplicationService applicationService;
 
     @Test
     void currentUserUsesTheAuthenticatedPrincipalSubject() throws Exception {

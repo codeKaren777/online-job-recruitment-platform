@@ -3,6 +3,7 @@ package com.groupcc2.recruitment.auth;
 import java.util.UUID;
 
 import com.groupcc2.recruitment.auth.controller.AuthController;
+import com.groupcc2.recruitment.application.service.ApplicationService;
 import com.groupcc2.recruitment.auth.dto.CurrentUserResponse;
 import com.groupcc2.recruitment.auth.dto.ChangePasswordRequest;
 import com.groupcc2.recruitment.auth.dto.ForgotPasswordRequest;
@@ -46,6 +47,9 @@ class AuthControllerTest {
 
     @MockitoBean
     private AuthService authService;
+
+    @MockitoBean
+    private ApplicationService applicationService;
 
     @Test
     void registrationValidatesRequestAndReturnsCreatedSafeResponse() throws Exception {
