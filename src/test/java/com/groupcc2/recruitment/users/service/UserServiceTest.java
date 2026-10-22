@@ -1,6 +1,7 @@
 package com.groupcc2.recruitment.users.service;
 
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 import com.groupcc2.recruitment.users.entity.AccountStatus;
@@ -64,6 +65,19 @@ class UserServiceTest {
         UUID id = UUID.randomUUID();
         when(repository.findById(id)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.findById(id)).isInstanceOf(UserNotFoundException.class);
+    }
+
+    @Test
+    void administratorCanListAndReadUsersThroughTheServiceContract() {
+        User administrator = new User("admin@example.com", "hash", UserRole.ADMIN);
+        User user = new User("person@example.com", "hash", UserRole.JOB_SEEKER);
+        when(repository.findById(administrator.getId())).thenReturn(Optional.of(administrator));
+        when(repository.findAll()).thenReturn(List.of(administrator, user));
+        when(repository.findById(user.getId())).thenReturn(Optional.of(user));
+
+        assertThat(service.findAllForAdministrator(administrator.getId())).containsExactly(administrator, user);
+        assertThat(service.findForAdministrator(administrator.getId(), user.getId())).isSameAs(user);
+        verify(repository).findAll();
     }
 
     @Test
