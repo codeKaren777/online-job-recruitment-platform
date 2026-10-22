@@ -36,8 +36,8 @@ class SecurityBoundaryTest {
     @MockitoBean AccountJwtValidator accountJwtValidator;
 
     @Test
-    void profileIntegrationGateRejectsAllRolesAndMutations() throws Exception {
-        for (String role : new String[]{"JOB_SEEKER", "EMPLOYER", "ADMIN"}) {
+    void profileRoutesRejectRolesOtherThanJobSeeker() throws Exception {
+        for (String role : new String[]{"EMPLOYER", "ADMIN"}) {
             var token = jwt().authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + role));
             mvc.perform(get("/api/profile").with(token)).andExpect(status().isForbidden());
             mvc.perform(put("/api/profile").with(token).contentType("application/json")
@@ -50,7 +50,7 @@ class SecurityBoundaryTest {
 
     @Test
     void closedRoutesRejectAnonymousAndAuthenticatedRequests() throws Exception {
-        for (String path : new String[] {"/api/profile", "/api/profile/documents", "/api/jobs", "/api/profiles/me", "/api/applications", "/api/admin/users"}) {
+        for (String path : new String[] {"/api/jobs", "/api/profiles/me", "/api/applications", "/api/admin/users"}) {
             mvc.perform(get(path)).andExpect(status().isUnauthorized());
             mvc.perform(get(path).with(jwt())).andExpect(status().isForbidden());
         }
