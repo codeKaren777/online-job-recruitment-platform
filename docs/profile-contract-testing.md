@@ -1,9 +1,10 @@
 # Profile integration contract testing
 
 Use this checklist when joining Profile to your teammate's authentication and
-application modules. The interface files are the integration points; no request
-may supply the acting user or role. The full API remains closed until the real
-adapters and protected-route tests exist.
+application modules. No request may supply the acting user or role. The own-profile
+routes are explicitly authorized for JOB_SEEKER; unrelated feature routes remain
+default-deny. A real end-to-end workflow still depends on a non-bypass database
+runtime account and configured private object storage.
 
 ## Contracts and expected behavior
 
@@ -46,7 +47,7 @@ does. Results are in target/surefire-reports and target/failsafe-reports.
 | ProfileServiceTest.storageFailureNeverPersists / flushFailureCleansObject / commitFailureCleansObject | Storage/transaction contract failure behavior |
 | ProfileServiceTest.unknownCommitOutcomeRequiresReconciliationInsteadOfDeletingPotentiallyCommittedData | Unknown commit outcome does not delete potentially committed data |
 | ProfileServiceTest.cleanupFailureDoesNotHideOriginal / deleteFailureRetainsMetadata | Compensation failure preserves the original failure; deletion failure retains metadata |
-| SecurityBoundaryTest.profileIntegrationGateRejectsAllRolesAndMutations | Closed HTTP routes do not invoke ProfileService |
+| SecurityBoundaryTest.profileIntegrationGateRejectsRolesOtherThanJobSeekers | Non-job-seeker roles do not invoke ProfileService |
 | ProfileRlsIT.ownerIsolationEmployerVisibilityAndTransactionLocalContext | Real restricted-role database policies and context isolation |
 | MinioStorageIT.privateBucketUploadSignedGetAndDelete | Real S3 adapter behavior: private upload, signed GET, wrong-method denial, idempotent delete |
 
@@ -56,7 +57,7 @@ real JWT adapter or prove that an application provider queries real records.
 ProfileRlsIT and MinioStorageIT use real separate systems, not a combined full API
 workflow. These limits must remain explicit in test reports.
 
-## Authentication provider tests to add when the adapter arrives
+## Authenticated identity and document HTTP coverage
 
 Test the actual ProfileIdentity implementation using the real validated security
 context and the agreed token subject mapping:
@@ -71,8 +72,11 @@ context and the agreed token subject mapping:
 5. Two authenticated users reuse pooled connections: context stays transaction-local
    and neither inherits the other's records/settings.
 
-Use actual verification for signature/expiry tests; MockMvc jwt() creates a test
-security context and does not prove that token decoding/verification works.
+ProfileIdentityIntegrationTest uses a genuinely signed test bearer token through
+the configured decoder, then the production identity adapter and ProfileService;
+it mocks the account database validator and profile persistence boundaries. Use
+actual verification for database/RLS and MinIO end-to-end tests; MockMvc jwt()
+creates a test security context and does not prove JWT decoding/verification.
 No fake production users, development login shortcuts or public upload routes.
 
 ## Applications provider tests to add when the adapter arrives
@@ -98,8 +102,8 @@ deletes. Do not infer extra application status restrictions or transitions.
 
 ## Final HTTP workflow and acceptance gates
 
-After verified adapters, a non-bypass runtime DB role, private bucket/account and
-role mapping exist, add authentic HTTP tests before deliberately opening routes:
+The JOB_SEEKER HTTP routes are registered. Complete the following against an
+isolated database role that does not bypass RLS and a private MinIO bucket/account:
 
 1. Authenticate active seeker A; PUT profile (200), GET profile (200).
 2. Upload a valid allowed PDF (201), list metadata (200) with no storage key/public
@@ -113,12 +117,11 @@ role mapping exist, add authentic HTTP tests before deliberately opening routes:
    failure recovery as documented in profile-module.md.
 8. Check expired/invalid tokens and inactive accounts across the workflow.
 
-Own profile/document route conventions exist in profile-module.md. Employer HTTP
-routes and a download HTTP adapter are not exposed on this base; agree those
-contracts with their owners before writing route examples. Service download
-methods are available for integration tests. Record PASS/FAIL/BLOCKED for each
-check with executed test evidence. Health UP or manual mc uploads alone do not
-prove these contracts or full HTTP acceptance.
+The own-document signed-download HTTP route is GET
+/api/profile/documents/{documentId}/download. Employer HTTP routes are not exposed;
+agree those contracts with their owners before adding them. Record PASS/FAIL/BLOCKED
+for each real database/MinIO acceptance check. Health UP or manual mc uploads alone
+do not prove the full HTTP workflow.
 
 For the actual HTTP routes, Postman setup, curl requests and response/error
 contracts, see [Profile and document endpoints](profile-endpoints.md).

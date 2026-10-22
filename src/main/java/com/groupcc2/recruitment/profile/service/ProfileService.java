@@ -57,17 +57,27 @@ public class ProfileService {
    @Override public void afterCompletion(int status){if(status==STATUS_ROLLED_BACK)cleanup(store,key,operation);
     else if(status==STATUS_UNKNOWN)log.error("Profile upload commit outcome unknown; reconciliation operation {}",operation);}
   });
-  try{store.upload(key,validated.path(),"application/pdf");}catch(RuntimeException e){throw failure(ProfileFailure.Code.STORAGE_UNAVAILABLE);}
+  try{store.upload(key,validated.path(),"application/pdf");}catch(RuntimeException e){
+   log.error("Private profile document upload failed; operation {}",operation);
+   throw failure(ProfileFailure.Code.STORAGE_UNAVAILABLE);}
   return documents.saveAndFlush(new Document(id,key,validated.filename(),"application/pdf",validated.size())).response();
  }catch(java.io.IOException e){throw failure(ProfileFailure.Code.STORAGE_UNAVAILABLE);}
  });
  }
  public void deleteOwn(UUID documentId) {
  tx.executeWithoutResult(s->{UUID id=actor(UserRole.JOB_SEEKER);Document d=document(documentId,id);PrivateDocumentStorage store=store();
+ String operation=UUID.randomUUID().toString();
  // Object deletion first. On failure retain metadata so an owner can retry. On commit failure
  // metadata may refer to a missing object; repeated S3 deletion is idempotent and completes recovery.
- try{store.delete(d.storageKey());}catch(RuntimeException e){throw failure(ProfileFailure.Code.STORAGE_UNAVAILABLE);}
- documents.delete(d);documents.flush();});
+ try{store.delete(d.storageKey());}catch(RuntimeException e){
+  log.error("Private profile document deletion failed; metadata is retained for retry. operation {}",operation);
+  throw failure(ProfileFailure.Code.STORAGE_UNAVAILABLE);}
+ TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization(){
+  @Override public void afterCompletion(int status){if(status!=STATUS_COMMITTED)
+   log.error("Profile document metadata may remain after object removal; retry DELETE. operation {}",operation);}
+ });
+ try{documents.delete(d);documents.flush();}catch(RuntimeException e){
+  throw failure(ProfileFailure.Code.INTEGRATION_UNAVAILABLE);}});
  }
  public ProfileResponse readForEmployer(UUID jobId,UUID applicant) {
  return tx.execute(s->{employer(jobId,applicant);return profile(applicant).response();});
@@ -85,7 +95,11 @@ public class ProfileService {
  EmployerApplicationAccess access=employerAccess.getIfAvailable();if(access==null)throw failure(ProfileFailure.Code.INTEGRATION_UNAVAILABLE);
  access.requireSubmittedApplication(employer,jobId,applicant);
  }
- private DownloadResponse sign(Document d){return new DownloadResponse(store().signGet(d.storageKey(),expiry),Instant.now().plus(expiry));}
+ private DownloadResponse sign(Document d){String operation=UUID.randomUUID().toString();
+ try{return new DownloadResponse(store().signGet(d.storageKey(),expiry),Instant.now().plus(expiry));}
+ catch(ProfileFailure e){throw e;}catch(RuntimeException e){
+  log.error("Private profile document URL signing failed; operation {}",operation);
+  throw failure(ProfileFailure.Code.STORAGE_UNAVAILABLE);}}
  private Profile profile(UUID id){return profiles.findById(id).orElseThrow(()->failure(ProfileFailure.Code.NOT_FOUND));}
  private Document document(UUID id,UUID owner){return documents.findByIdAndProfileUserId(id,owner).orElseThrow(()->failure(ProfileFailure.Code.NOT_FOUND));}
  private List<DocumentResponse> list(UUID id){profile(id);return documents.findAllByProfileUserIdOrderByCreatedAtDesc(id).stream().map(Document::response).toList();}

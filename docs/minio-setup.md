@@ -24,10 +24,12 @@ at least 32 characters using a password manager; use letters/numbers or hex for
 simple KEY=VALUE parsing. Replace MINIO_ROOT_USER and MINIO_ROOT_PASSWORD.
 Never commit .env or share your local passwords with teammates.
 
-Leave PROFILE_STORAGE_ENABLED=false for now. The application credentials are
-separate from the MinIO admin credentials and are provisioned in step 5. The
-backend can start while storage is disabled; private upload routes remain closed
-pending authentication, application and runtime database integration.
+Leave PROFILE_STORAGE_ENABLED=false until the private bucket and restricted
+application account are provisioned in steps 4–5. The application credentials are
+separate from the MinIO admin credentials. The backend can start with storage
+disabled; when enabled, missing or placeholder credentials and invalid endpoints
+fail application startup. Profile routes require authenticated JOB_SEEKER access
+and a database account that does not bypass RLS.
 
 ## 2. Start MinIO
 
@@ -86,6 +88,7 @@ The alias points to port 9000, not the browser port 9001.
 mc mb --ignore-existing recruitment-local/recruitment-documents
 mc anonymous set none recruitment-local/recruitment-documents
 mc anonymous get recruitment-local/recruitment-documents
+mc ls recruitment-local/recruitment-documents
 ```
 
 The access result should be private/no anonymous access. This is sufficient for
@@ -118,14 +121,19 @@ and [policy attachment](https://docs.min.io/aistor/reference/cli/admin/mc-admin-
 
 ## 6. Understand the endpoints and activation
 
-| Setting | Local value/purpose |
+| Environment variable | Purpose and local default |
 |---|---|
-| PROFILE_STORAGE_BUCKET | recruitment-documents |
-| PROFILE_STORAGE_ENDPOINT | http://localhost:9000 for a host JVM; Compose overrides it to http://minio:9000 |
-| PROFILE_STORAGE_PUBLIC_ENDPOINT | http://localhost:9000; hostname used in signed links, not public bucket access |
-| PROFILE_STORAGE_REGION | us-east-1 |
-| PROFILE_DOWNLOAD_SECONDS | 120; allowed range 30..300 |
-| PROFILE_STORAGE_ENABLED | false until bucket/account setup is complete |
+| PROFILE_STORAGE_ENABLED | Enables the S3 adapter; defaults to false until setup is complete |
+| PROFILE_STORAGE_ENDPOINT | S3 API used by the backend; http://localhost:9000 for a host JVM, Compose uses http://minio:9000 |
+| PROFILE_STORAGE_PUBLIC_ENDPOINT | Host inside signed links and reachable by the recipient; http://localhost:9000 locally |
+| PROFILE_STORAGE_ACCESS_KEY | Restricted application account access key; never use the MinIO root key |
+| PROFILE_STORAGE_SECRET_KEY | Restricted application account secret; inject from local .env or a production secret manager |
+| PROFILE_STORAGE_BUCKET | Private bucket name; defaults to recruitment-documents |
+| PROFILE_STORAGE_REGION | S3 signing region; defaults to us-east-1 |
+| PROFILE_DOWNLOAD_SECONDS | Signed GET lifetime; defaults to 120 seconds and must be 30–300 |
+
+Multipart requests are enabled with a 5 MiB per-file limit and a 6 MiB total
+request limit. The PDF validator independently streams and enforces a 5 MiB cap.
 
 After steps 4–5, you may set PROFILE_STORAGE_ENABLED=true and recreate the backend:
 
@@ -134,16 +142,20 @@ docker compose up -d backend
 curl --fail http://localhost:8080/actuator/health
 ```
 
-This enables the storage adapter only. It does not enable Profile HTTP routes or
-replace the missing authentication/application contracts. Health UP proves
-backend/database readiness; it does not prove bucket credentials or uploads work.
+This enables the storage adapter. Profile routes require a validated JWT and an
+active JOB_SEEKER. The current Compose PostgreSQL bootstrap account is a
+superuser; ProfileRls intentionally rejects superuser/bypass roles, so profile
+operations require a separately provisioned non-bypass application database role.
+Health UP proves backend/database readiness; it does not prove bucket credentials
+or uploads work.
 For a shared server, the signed-link endpoint must be reachable by recipients;
 localhost points to each recipient's own machine. Do not rewrite a signed URL.
 
-## 7. Test while authentication is being developed
+## 7. Run focused and integration tests
 
-Start with automated tests; no developer .env, manual bucket or auth module is
-needed for them:
+Unit and MVC slice tests use test-only credentials/mocks; no developer .env or
+running MinIO is needed. verify runs the actual isolated PostgreSQL and MinIO
+containers and requires Docker:
 
 ```bash
 # Validation, ownership/service rules and protected-route regression checks.

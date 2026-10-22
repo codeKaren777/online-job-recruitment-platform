@@ -69,6 +69,8 @@ public class SecurityConfig {
                                 .hasRole("JOB_SEEKER")
                         .requestMatchers(HttpMethod.PUT, "/api/profile").hasRole("JOB_SEEKER")
                         .requestMatchers(HttpMethod.POST, "/api/profile/documents").hasRole("JOB_SEEKER")
+                        .requestMatchers(HttpMethod.GET, "/api/profile/documents/{documentId}/download")
+                                .hasRole("JOB_SEEKER")
                         .requestMatchers(HttpMethod.DELETE, "/api/profile/documents/{documentId}")
                                 .hasRole("JOB_SEEKER")
                         // Retain the existing users registration endpoint for API compatibility.

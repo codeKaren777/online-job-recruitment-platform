@@ -11,10 +11,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.groupcc2.recruitment.profile.controller.ProfileController;
 import com.groupcc2.recruitment.profile.dto.DocumentResponse;
+import com.groupcc2.recruitment.profile.dto.DownloadResponse;
 import com.groupcc2.recruitment.profile.dto.ProfileRequest;
 import com.groupcc2.recruitment.profile.dto.ProfileResponse;
 import com.groupcc2.recruitment.profile.service.ProfileService;
 import java.time.Instant;
+import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -63,6 +65,8 @@ class ProfileControllerSecurityTest {
         org.mockito.Mockito.when(profileService.upload(org.mockito.ArgumentMatchers.any()))
                 .thenReturn(new DocumentResponse(documentId, "cv.pdf", "application/pdf", 20, now));
         org.mockito.Mockito.when(profileService.listOwn()).thenReturn(List.of());
+        org.mockito.Mockito.when(profileService.downloadOwn(documentId)).thenReturn(
+                new DownloadResponse(URI.create("https://objects.example.test/signed"), now.plusSeconds(120)));
 
         RequestPostProcessor token = jwt().jwt(jwt -> jwt
                         .subject(UUID.randomUUID().toString()).claim("role", "JOB_SEEKER"))
@@ -78,6 +82,8 @@ class ProfileControllerSecurityTest {
                         .with(token))
                 .andExpect(status().isCreated());
         mvc.perform(get("/api/profile/documents").with(token)).andExpect(status().isOk());
+        mvc.perform(get("/api/profile/documents/{documentId}/download", documentId).with(token))
+                .andExpect(status().isOk());
         mvc.perform(delete("/api/profile/documents/{documentId}", documentId).with(token))
                 .andExpect(status().isNoContent());
 
@@ -85,6 +91,7 @@ class ProfileControllerSecurityTest {
         verify(profileService).upsert(new ProfileRequest("Name", null, null));
         verify(profileService).upload(org.mockito.ArgumentMatchers.any());
         verify(profileService).listOwn();
+        verify(profileService).downloadOwn(documentId);
         verify(profileService).deleteOwn(documentId);
     }
 
@@ -96,18 +103,21 @@ class ProfileControllerSecurityTest {
         var upload = multipart("/api/profile/documents")
                 .file(new MockMultipartFile("file", "cv.pdf", "application/pdf", new byte[]{1}));
         var documents = get("/api/profile/documents");
+        var download = get("/api/profile/documents/{documentId}/download", UUID.randomUUID());
         var deleteDocument = delete("/api/profile/documents/{documentId}", UUID.randomUUID());
         if (token != null) {
             read.with(token);
             update.with(token);
             upload.with(token);
             documents.with(token);
+            download.with(token);
             deleteDocument.with(token);
         }
         mvc.perform(read).andExpect(expected);
         mvc.perform(update).andExpect(expected);
         mvc.perform(upload).andExpect(expected);
         mvc.perform(documents).andExpect(expected);
+        mvc.perform(download).andExpect(expected);
         mvc.perform(deleteDocument).andExpect(expected);
     }
 }
