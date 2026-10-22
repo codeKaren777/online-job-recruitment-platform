@@ -46,4 +46,18 @@ class SecurityContextProfileIdentityTest {
 
         assertThat(identity.authenticatedUserId()).isNull();
     }
+
+    @Test
+    void returnsNoIdentityForMalformedJwtSubject() {
+        Jwt principal = Jwt.withTokenValue("test-token")
+                .header("alg", "none")
+                .subject("not-a-uuid")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(60))
+                .build();
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(
+                principal, List.of(new SimpleGrantedAuthority("ROLE_JOB_SEEKER"))));
+
+        assertThat(identity.authenticatedUserId()).isNull();
+    }
 }
