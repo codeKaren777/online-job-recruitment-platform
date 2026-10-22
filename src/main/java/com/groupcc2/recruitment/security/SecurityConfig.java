@@ -65,8 +65,6 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
                         .requestMatchers(HttpMethod.POST,
                                 "/api/auth/logout", "/api/auth/change-password").authenticated()
-                        // Retain the existing users registration endpoint for API compatibility.
-                        .requestMatchers(HttpMethod.POST, "/api/users/register").permitAll()
                         // Open routes deliberately as each feature gains authorization tests.
                         .anyRequest().denyAll();
                 })
