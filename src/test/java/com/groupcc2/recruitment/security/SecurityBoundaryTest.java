@@ -30,6 +30,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class SecurityBoundaryTest {
     @Autowired MockMvc mvc;
     @MockBean UserService userService;
+<<<<<<< HEAD
+    @MockBean
+    private com.groupcc2.recruitment.job.service.JobService jobService;
+=======
     @MockBean com.groupcc2.recruitment.profile.service.ProfileService profileService;
     @MockitoBean AuthService authService;
     @MockitoBean AccountJwtValidator accountJwtValidator;
@@ -47,6 +51,7 @@ class SecurityBoundaryTest {
         org.mockito.Mockito.verifyNoInteractions(profileService);
     }
 
+>>>>>>> origin/main
     @Test
     void closedRoutesRejectAnonymousAndAuthenticatedRequests() throws Exception {
         doThrow(new com.groupcc2.recruitment.users.service.AdminRegistrationNotAllowedException())
