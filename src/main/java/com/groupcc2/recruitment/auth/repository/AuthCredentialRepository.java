@@ -79,32 +79,22 @@ public interface AuthCredentialRepository extends JpaRepository<User, UUID> {
             @Param("newPasswordHash") String newPasswordHash,
             @Param("tokenVersion") int tokenVersion);
 
-    @Modifying
     @Transactional
     @Query(value = """
-            UPDATE recruitment.users
-            SET password_reset_token_hash = :tokenHash,
-                password_reset_expires_at = :expiresAt
-            WHERE email = :email AND status = 'ACTIVE'
+            SELECT recruitment.auth_store_password_reset_token(
+                :email, :tokenHash, :expiresAt)
             """, nativeQuery = true)
-    int storePasswordResetToken(
+    Integer storePasswordResetToken(
             @Param("email") String email,
             @Param("tokenHash") String tokenHash,
             @Param("expiresAt") java.time.Instant expiresAt);
 
-    @Modifying
     @Transactional
     @Query(value = """
-            UPDATE recruitment.users
-            SET password_hash = :newPasswordHash,
-                token_version = token_version + 1,
-                password_reset_token_hash = NULL,
-                password_reset_expires_at = NULL
-            WHERE password_reset_token_hash = :tokenHash
-              AND password_reset_expires_at > CURRENT_TIMESTAMP
-              AND status = 'ACTIVE'
+            SELECT recruitment.auth_consume_password_reset_token(
+                :tokenHash, :newPasswordHash)
             """, nativeQuery = true)
-    int resetPassword(
+    Integer resetPassword(
             @Param("tokenHash") String tokenHash,
             @Param("newPasswordHash") String newPasswordHash);
 
