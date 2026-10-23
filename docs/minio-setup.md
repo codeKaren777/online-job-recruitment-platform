@@ -44,8 +44,10 @@ the configured bucket if absent, and reapplies the private anonymous policy:
 docker compose up --build -d --wait
 ```
 
-The first build can take several minutes. Readiness returns HTTP 200, normally
-with an empty body. Open http://localhost:9001 and sign in using MINIO_ROOT_USER
+The first build can take several minutes: Compose builds both the MinIO server
+and the project-owned MinIO Client image from pinned upstream source. Readiness
+returns HTTP 200, normally with an empty body. Open http://localhost:9001 and
+sign in using MINIO_ROOT_USER
 and MINIO_ROOT_PASSWORD from your .env. Port 9001 is the browser interface;
 port 9000 is the S3 API used by clients and the backend.
 
@@ -53,6 +55,24 @@ If a command fails, use `docker compose ps` and `docker compose logs --tail 50
 minio`. Don't paste credentials or full resolved Compose configuration into chats.
 
 ## 3. Get the MinIO command-line client (mc)
+
+Compose does not pull an `mc` image from Docker Hub or Quay. The `minio-init`
+service builds [docker/minio-client.Dockerfile](../docker/minio-client.Dockerfile)
+from the verified `RELEASE.2025-08-13T08-35-41Z` source release, then uses that
+client to create the configured bucket and apply the private anonymous policy.
+The image contains no credentials; Compose injects the root credentials only
+when the one-shot initialization container runs.
+
+To rebuild just the initialization image and rerun the idempotent setup while
+preserving both named volumes:
+
+```bash
+docker compose build minio-init
+docker compose up --no-recreate minio-init
+```
+
+The source release tag was verified against upstream commit
+`d6541ea280b73a834b64d4097e21f2be77676104` when this setup was prepared.
 
 The pinned server uses the reduced object-browser interface. Older screenshots
 show account/policy controls that may not exist here. If the interface offers
