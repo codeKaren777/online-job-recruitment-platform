@@ -56,8 +56,10 @@ services:
       # Keep Flyway history in the original bootstrap schema across restarts.
       SPRING_FLYWAY_DEFAULT_SCHEMA: public
       DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:?Set POSTGRES_DB in .env}
-      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_USER: ${POSTGRES_RUNTIME_USER:?Set POSTGRES_RUNTIME_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_RUNTIME_PASSWORD:?Set POSTGRES_RUNTIME_PASSWORD in .env}
+      SPRING_FLYWAY_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       JWT_SECRET_BASE64: ${JWT_SECRET_BASE64:?Set JWT_SECRET_BASE64 in .env}
       PROFILE_STORAGE_ENABLED: ${PROFILE_STORAGE_ENABLED:-false}
       PROFILE_STORAGE_ENDPOINT: http://minio:9000
@@ -75,6 +77,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      db-runtime-init:
+        condition: service_completed_successfully
       minio-init:
         condition: service_completed_successfully
     read_only: true
@@ -84,6 +88,30 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+  db-runtime-init:
+    image: postgres:17
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGDATABASE: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      PGUSER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_RUNTIME_USER: ${POSTGRES_RUNTIME_USER:?Set POSTGRES_RUNTIME_USER in .env}
+      POSTGRES_RUNTIME_PASSWORD: ${POSTGRES_RUNTIME_PASSWORD:?Set POSTGRES_RUNTIME_PASSWORD in .env}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        if psql -tAc "SELECT 1 FROM pg_roles WHERE rolname = '$${POSTGRES_RUNTIME_USER}'" | grep -q 1;
+        then psql -v ON_ERROR_STOP=1 -c "ALTER ROLE \"$${POSTGRES_RUNTIME_USER}\" WITH LOGIN PASSWORD '$${POSTGRES_RUNTIME_PASSWORD}' NOSUPERUSER NOBYPASSRLS";
+        else psql -v ON_ERROR_STOP=1 -c "CREATE ROLE \"$${POSTGRES_RUNTIME_USER}\" LOGIN PASSWORD '$${POSTGRES_RUNTIME_PASSWORD}' NOSUPERUSER NOBYPASSRLS";
+        fi &&
+        psql -v ON_ERROR_STOP=1 -c "GRANT USAGE ON SCHEMA recruitment TO \"$${POSTGRES_RUNTIME_USER}\";" &&
+        psql -v ON_ERROR_STOP=1 -c "GRANT SELECT, INSERT, UPDATE, DELETE ON recruitment.users, recruitment.profiles, recruitment.documents, recruitment.jobs, recruitment.applications TO \"$${POSTGRES_RUNTIME_USER}\";" &&
+        psql -v ON_ERROR_STOP=1 -c "GRANT SELECT ON recruitment.current_jobs TO \"$${POSTGRES_RUNTIME_USER}\";" &&
+        psql -v ON_ERROR_STOP=1 -c "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA recruitment TO \"$${POSTGRES_RUNTIME_USER}\";" &&
+        psql -v ON_ERROR_STOP=1 -c "GRANT EXECUTE ON FUNCTION recruitment.auth_lookup_user(text), recruitment.auth_register_user(text, text, text), recruitment.auth_store_password_reset_token(text, text, timestamptz), recruitment.auth_consume_password_reset_token(text, text) TO \"$${POSTGRES_RUNTIME_USER}\";"
 volumes:
   postgres_data:
   minio_data:

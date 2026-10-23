@@ -127,6 +127,18 @@ public class ApplicationService {
     }
 
     /**
+     * Verifies the relationship required before an employer can read an applicant's profile.
+     * The job ownership check and application lookup are both scoped to the supplied identifiers.
+     */
+    public void requireSubmittedApplication(UUID employerId, UUID jobId, UUID applicantId) {
+        requireEmployer(employerId);
+        if (directory().findOwnedByEmployer(jobId, employerId).isEmpty()
+                || !applications.existsByJobIdAndJobSeekerId(jobId, applicantId)) {
+            throw new ApplicationFailure(ApplicationFailure.Code.FORBIDDEN);
+        }
+    }
+
+    /**
      * Mirrors ProfileService: bootstrap with self-only visibility, then derive the role from the persisted
      * active account (never from token claims or request data) and establish it for RLS.
      */

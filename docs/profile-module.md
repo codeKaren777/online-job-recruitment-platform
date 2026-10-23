@@ -6,7 +6,9 @@ Base: `origin/main` c51180f, containing Users implementation c65f530 (Issue #11,
 PR #12). Integration uses the actual `users.service.UserService.findById` and
 `requireActive`, and persisted UserRole. No duplicate User model was added.
 The Users package differs from the planned auth package; this module respects
-its existing ownership. Jobs/Applications remain package placeholders.
+its existing ownership. The Applications module registers the
+`EmployerApplicationAccess` adapter and verifies employer-owned jobs and
+persisted applicant submissions.
 
 **The five own-profile HTTP routes are authorized for authenticated job seekers.**
 This is an implementation for review, not a completed deployable feature.
@@ -19,10 +21,10 @@ To finish integration:
 1. `SecurityContextProfileIdentity` supplies the UUID from validated JWT
    authentication, and its subject mapping is covered by focused tests. Do not
    accept a request owner/role parameter.
-2. Application owner implements `EmployerApplicationAccess` through their service
-   contracts: a persisted application by the applicant to the specified job AND
-   job ownership by this employer. Failure must deny. Default is unavailable;
-   no employer HTTP route exists.
+2. Employer profile visibility is service-only. The Applications-owned
+   `EmployerApplicationAccess` adapter verifies a persisted application by the
+   applicant to the specified job AND job ownership by this employer. Failure
+   denies access; no employer profile HTTP route exists.
 3. Provision a NOSUPERUSER NOBYPASSRLS runtime role, separate migration credentials,
    schema/type usage and required table grants. Existing Compose credentials are
    PostgreSQL bootstrap superuser credentials. ProfileRls rejects them, even with
