@@ -3,7 +3,10 @@ package com.groupcc2.recruitment.auth.dto;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 public record ForgotPasswordRequest(
-        @NotBlank @Email @Size(max = 254) String email) {
+        @NotBlank @Email @Size(max = 254)
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED, example = "applicant@example.com")
+        String email) {
 }
