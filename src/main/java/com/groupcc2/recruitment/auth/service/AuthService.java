@@ -81,6 +81,7 @@ public class AuthService {
     @Transactional
     public void logout(String subject, String roleClaim, int tokenVersion) {
         UUID userId = parseUserId(subject, roleClaim);
+        rlsTransactionContext.setAuthenticatedUser(userId, UserRole.valueOf(roleClaim));
         if (tokenVersion < 0 || userRepository.revokeSessions(userId, tokenVersion) != 1) {
             throw new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE);
         }
@@ -89,6 +90,7 @@ public class AuthService {
     @Transactional
     public void changePassword(String subject, String roleClaim, int tokenVersion, ChangePasswordRequest request) {
         UUID userId = parseUserId(subject, roleClaim);
+        rlsTransactionContext.setAuthenticatedUser(userId, UserRole.valueOf(roleClaim));
         AuthCredentialRepository.LoginCredential credentials = userRepository.findLoginCredentialsById(userId)
                 .orElseThrow(() -> new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE));
         if (credentials.getTokenVersion() != tokenVersion

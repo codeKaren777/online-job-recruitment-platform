@@ -88,7 +88,7 @@ service, and JWT configuration uses `JWT_SECRET_BASE64` with optional
 
 The existing database has V1-V3 applied and has not been changed by this work.
 Before starting the updated backend, make a protected backup. Startup will run
-the pending V4, V5, V6, and V7 Flyway migrations using the existing account. V6 adds
+the pending V4, V5, V6, V7, and V8 Flyway migrations using the existing account. V6 adds
 columns and an index; it does not delete application data. Do not use
 `docker compose down -v`.
 
@@ -102,7 +102,7 @@ docker compose up -d db
 
 The detached flag belongs after `up`. If Docker socket permissions require elevated access, use `sudo docker compose up -d db` temporarily. The preferred permanent fix is to add your Linux user to the `docker` group and start a new login session.
 
-Compose starts PostgreSQL and then Spring Boot; Flyway runs V4, V5, V6, and V7 during
+Compose starts PostgreSQL and then Spring Boot; Flyway runs V4, V5, V6, V7, and V8 during
 application startup using the same `recruitment` database account. No role
 provisioner or extra database account is used by this local development setup.
 
@@ -120,7 +120,7 @@ docker compose up -d db
 
 Start PostgreSQL, Flyway migrations, and the backend. This requires the existing
 database variables and JWT secret in `.env`. Back up the database before this
-command because it applies pending V4, V5, V6, and V7 migrations:
+command because it applies pending V4, V5, V6, V7, and V8 migrations:
 
 ```bash
 docker compose up --build -d

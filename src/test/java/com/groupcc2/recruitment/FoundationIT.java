@@ -88,6 +88,10 @@ class FoundationIT {
                     + APPLICATION_USERNAME);
             statement.execute("GRANT EXECUTE ON FUNCTION recruitment.auth_register_user(text, text, text) TO "
                     + APPLICATION_USERNAME);
+            statement.execute("GRANT EXECUTE ON FUNCTION recruitment.auth_store_password_reset_token(text, text, timestamptz) TO "
+                    + APPLICATION_USERNAME);
+            statement.execute("GRANT EXECUTE ON FUNCTION recruitment.auth_consume_password_reset_token(text, text) TO "
+                    + APPLICATION_USERNAME);
         } catch (Exception exception) {
             throw new IllegalStateException("Unable to bootstrap the non-superuser integration account", exception);
         }
@@ -104,7 +108,7 @@ class FoundationIT {
     @Test
     void bootsAgainstPostgresAndAppliesMigrationOnlyOnce() throws Exception {
         assertThat(flyway.getConfiguration().getDefaultSchema()).isEqualTo("public");
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("7");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("8");
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
         try (var connection = dataSource.getConnection(); var statement = connection.createStatement();
