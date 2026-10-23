@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
  * HTTP adapter for the job seeker's applications. The caller is the JWT subject (a user UUID);
@@ -25,6 +27,8 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/applications")
+@Tag(name = "Applications", description = "Job application submission and access")
+@SecurityRequirement(name = "bearerAuth")
 public class ApplicationController {
     private final ApplicationService service;
 

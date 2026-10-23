@@ -7,6 +7,7 @@ import com.groupcc2.recruitment.job.entity.JobStatus;
 import com.groupcc2.recruitment.job.service.JobService;
 import com.groupcc2.recruitment.users.entity.UserRole;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api")
 @Tag(name = "Jobs", description = "Job postings")
+@SecurityRequirement(name = "bearerAuth")
 public class JobController {
 
     private final JobService jobService;
