@@ -1,5 +1,6 @@
 package com.groupcc2.recruitment.users.service;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.List;
 import java.util.UUID;
@@ -29,6 +30,30 @@ public class UserServiceImpl implements UserService {
         if (role == null || role == UserRole.ADMIN) {
             throw new AdminRegistrationNotAllowedException();
         }
+        return createUser(email, rawPassword, role);
+    }
+
+    @Override
+    @Transactional
+    public User seedAdministrator(String email, String rawPassword) {
+        String normalizedEmail = normalizeEmail(email);
+        int passwordBytes = rawPassword == null
+                ? 0
+                : rawPassword.getBytes(StandardCharsets.UTF_8).length;
+        if (passwordBytes < 12 || passwordBytes > 72) {
+            throw new IllegalArgumentException("Administrator password must be 12 to 72 UTF-8 bytes");
+        }
+        return users.findByEmail(normalizedEmail)
+                .map(existing -> {
+                    if (existing.getRole() != UserRole.ADMIN) {
+                        throw new DuplicateEmailException();
+                    }
+                    return existing;
+                })
+                .orElseGet(() -> createUser(normalizedEmail, rawPassword, UserRole.ADMIN));
+    }
+
+    private User createUser(String email, String rawPassword, UserRole role) {
         String normalizedEmail = normalizeEmail(email);
         if (users.existsByEmail(normalizedEmail)) {
             throw new DuplicateEmailException();

@@ -48,6 +48,10 @@ management:
       show-details: never
       show-components: never
 app:
+  admin-seed:
+    enabled: ${APP_ADMIN_SEED_ENABLED:false}
+    email: ${ADMIN_EMAIL:}
+    password: ${ADMIN_PASSWORD:}
   openapi:
     enabled: ${APP_OPENAPI_ENABLED:false}
     public-in-local: false

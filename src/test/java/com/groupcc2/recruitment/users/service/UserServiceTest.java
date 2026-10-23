@@ -44,6 +44,33 @@ class UserServiceTest {
     }
 
     @Test
+    void seedCreatesAdministratorAndIsIdempotentForThatAdministrator() {
+        when(repository.findByEmail("admin@example.com")).thenReturn(Optional.empty());
+        when(repository.existsByEmail("admin@example.com")).thenReturn(false);
+        when(repository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        User administrator = service.seedAdministrator(" Admin@Example.COM ", "correct horse battery");
+
+        assertThat(administrator.getEmail()).isEqualTo("admin@example.com");
+        assertThat(administrator.getRole()).isEqualTo(UserRole.ADMIN);
+        assertThat(administrator.passwordHashForAuthentication()).startsWith("$2");
+
+        when(repository.findByEmail("admin@example.com")).thenReturn(Optional.of(administrator));
+        assertThat(service.seedAdministrator("admin@example.com", "another password")).isSameAs(administrator);
+        verify(repository, times(1)).save(any(User.class));
+    }
+
+    @Test
+    void seedRefusesToUseAnExistingNonAdministratorEmail() {
+        User employer = new User("admin@example.com", "hash", UserRole.EMPLOYER);
+        when(repository.findByEmail("admin@example.com")).thenReturn(Optional.of(employer));
+
+        assertThatThrownBy(() -> service.seedAdministrator("admin@example.com", "correct horse battery"))
+                .isInstanceOf(DuplicateEmailException.class);
+        verify(repository, never()).save(any(User.class));
+    }
+
+    @Test
     void suspendedAndRemovedUsersCannotAuthenticate() {
         User user = new User("person@example.com", "hash", UserRole.JOB_SEEKER);
         User administrator = new User("admin@example.com", "hash", UserRole.ADMIN);

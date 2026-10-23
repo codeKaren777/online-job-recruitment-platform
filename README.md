@@ -2,7 +2,7 @@
 
 Backend foundation only. Java 21, Spring Boot 3.5.16, Maven 3.9.16 via official Wrapper 3.3.4, PostgreSQL 17, Spring Data JPA/Hibernate, Spring Security JWT, Flyway, and Springdoc OpenAPI 2.8.17. Spring Boot manages compatible library versions; Springdoc is explicitly pinned because it is not part of the Boot BOM. See [decisions](docs/decisions.md) for rationale and primary version references.
 
-Implemented: application startup wiring, environment configuration, private-by-default route policy, JWT validation, BCrypt password hashing, schema migration, Docker/Compose, package boundaries, and the core Authentication API (registration, login, current user, logout, password change and password reset). Non-authentication feature routes remain closed until their owning modules add authorization. Registration/login/recovery entry points and health are public; protected auth operations require a validated JWT. There are no demo credentials or seeded administrators.
+Implemented: application startup wiring, environment configuration, private-by-default route policy, JWT validation, BCrypt password hashing, schema migration, Docker/Compose, package boundaries, and the core Authentication API (registration, login, current user, logout, password change and password reset). Non-authentication feature routes remain closed until their owning modules add authorization. Registration/login/recovery entry points and health are public; protected auth operations require a validated JWT. Administrators are created only through the explicit local seed command below.
 
 ## Prerequisites
 
@@ -97,6 +97,27 @@ With an independently installed PostgreSQL 17 server, create the database/user m
 ```powershell
 java -jar .\target\recruitment.jar
 ```
+
+## Create the first administrator
+
+ADMIN registration is not available through the API. After starting PostgreSQL and
+building the application, run the one-shot seed script with credentials supplied
+through the process environment:
+
+```bash
+./mvnw -B -ntp package
+./scripts/seed-admin.sh
+```
+
+The script loads `KEY=VALUE` settings from the local `.env` file. Keep
+administrator credentials out of source control and command history.
+
+The command runs without an HTTP server, creates an `ADMIN` account if the email
+does not exist, and exits. If the same administrator already exists, it leaves
+the account and password unchanged; an email used by a non-admin account fails.
+Do not put administrator credentials in `.env`, source control, command-line
+arguments, or logs. The seed operation is disabled unless explicitly enabled by
+the script.
 
 ## Run everything in Docker Compose
 

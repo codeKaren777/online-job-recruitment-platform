@@ -9,6 +9,8 @@ import com.groupcc2.recruitment.users.entity.UserRole;
 public interface UserService {
     User register(String email, String rawPassword, UserRole role);
 
+    User seedAdministrator(String email, String rawPassword);
+
     User findById(UUID id);
 
     List<User> findAllForAdministrator(UUID administratorId);
