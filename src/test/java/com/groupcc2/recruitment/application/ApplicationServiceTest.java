@@ -172,6 +172,31 @@ class ApplicationServiceTest {
     }
 
     @Test
+    void requiresEmployerOwnedJobAndSubmittedApplicant() {
+        User employer = new User("employer@example.com", "hash", UserRole.EMPLOYER);
+        UUID applicantId = seeker.getId();
+        when(users.findById(employer.getId())).thenReturn(employer);
+        when(directory.findOwnedByEmployer(jobId, employer.getId()))
+                .thenReturn(Optional.of(job(TODAY.plusDays(3), JobSnapshot.State.ACTIVE)));
+        when(repository.existsByJobIdAndJobSeekerId(jobId, applicantId)).thenReturn(true);
+
+        service.requireSubmittedApplication(employer.getId(), jobId, applicantId);
+
+        verify(rls).establish(employer.getId(), "EMPLOYER");
+        verify(repository).existsByJobIdAndJobSeekerId(jobId, applicantId);
+    }
+
+    @Test
+    void rejectsApplicantWithoutSubmissionOrEmployerOwnedJob() {
+        User employer = new User("employer@example.com", "hash", UserRole.EMPLOYER);
+        when(users.findById(employer.getId())).thenReturn(employer);
+
+        assertThatThrownBy(() -> service.requireSubmittedApplication(employer.getId(), jobId, seeker.getId()))
+                .isInstanceOfSatisfying(ApplicationFailure.class,
+                        e -> assertThat(e.code()).isEqualTo(ApplicationFailure.Code.FORBIDDEN));
+    }
+
+    @Test
     void listsOwnApplicationsWithJobAndToleratesInvisibleJobs() {
         UUID visibleJob = UUID.randomUUID();
         UUID hiddenJob = UUID.randomUUID();

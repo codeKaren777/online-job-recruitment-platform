@@ -55,15 +55,12 @@ must set the same transaction-local context before touching RLS-protected data.
 
 ### Local database account and RLS boundary
 
-To preserve the existing local database and avoid creating more accounts,
-Compose uses the same `POSTGRES_USER` and `POSTGRES_PASSWORD` for Spring Boot
-and Flyway. The currently running development database was inspected read-only:
-the connected account is `recruitment`, it is a superuser with `BYPASSRLS`, and
-Flyway history is at V3. Therefore, **RLS policies remain enabled but do not
-isolate data from this application connection**. The test suite verifies RLS
-policy behavior only through its isolated temporary policy-test role; it does
-not prove that the local runtime is protected by RLS. A least-privilege role
-model is required before claiming that RLS protects production data.
+Compose uses the `POSTGRES_USER`/`POSTGRES_PASSWORD` bootstrap account only for
+Flyway. Spring Boot uses the separate `POSTGRES_RUNTIME_USER` and
+`POSTGRES_RUNTIME_PASSWORD` role, which Compose provisions as
+`NOSUPERUSER NOBYPASSRLS` and grants only the application schema privileges.
+This is required because the application rejects superuser/BYPASSRLS
+connections instead of pretending that row-level security is active.
 
 Migration V5 defines the narrow authentication functions and grants execution
 to the current migration account. V6 adds a monotonically increasing account
@@ -77,13 +74,14 @@ removed or weakened.
 
 The integration suite provisions a separate non-superuser runtime role,
 executes Flyway as the container administrator, and verifies that JWT-backed
-feature operations run with forced RLS. Local Compose still uses the existing
-single account for developer convenience; that account may bypass RLS and is
-not a production least-privilege model.
+feature operations run with forced RLS. Local Compose now follows the same
+separation: the bootstrap account runs Flyway, while the backend uses the
+restricted runtime role.
 
-The current development credentials are `POSTGRES_DB`, `POSTGRES_USER`, and
-`POSTGRES_PASSWORD`; `DB_URL` is overridden inside Compose to use the `db`
-service, and JWT configuration uses `JWT_SECRET_BASE64` with optional
+The current development credentials are `POSTGRES_DB`, `POSTGRES_USER`,
+`POSTGRES_PASSWORD`, `POSTGRES_RUNTIME_USER`, and
+`POSTGRES_RUNTIME_PASSWORD`; `DB_URL` is overridden inside Compose to use the
+`db` service, and JWT configuration uses `JWT_SECRET_BASE64` with optional
 `JWT_ISSUER` and `JWT_AUDIENCE`. Do not display or commit `.env` values.
 
 The existing database has V1-V3 applied and has not been changed by this work.
