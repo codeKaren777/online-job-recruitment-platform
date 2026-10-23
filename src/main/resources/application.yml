@@ -24,7 +24,7 @@ spring:
     validate-on-migrate: true
   servlet:
     multipart:
-      enabled: false
+      enabled: true
       max-file-size: 5MB
       max-request-size: 6MB
 springdoc:

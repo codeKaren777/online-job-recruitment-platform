@@ -82,6 +82,8 @@ class ProfileControllerSecurityTest {
                         .with(token))
                 .andExpect(status().isCreated());
         mvc.perform(get("/api/profile/documents").with(token)).andExpect(status().isOk());
+        mvc.perform(get("/api/profile/documents/{documentId}/download", documentId).with(token))
+                .andExpect(status().isOk());
         mvc.perform(delete("/api/profile/documents/{documentId}", documentId).with(token))
                 .andExpect(status().isNoContent());
 
@@ -101,6 +103,8 @@ class ProfileControllerSecurityTest {
                 .file(new MockMultipartFile("file", "cv.pdf", "application/pdf", new byte[]{1})), token))
                 .andExpect(expected);
         mvc.perform(withToken(get("/api/profile/documents"), token)).andExpect(expected);
+        mvc.perform(withToken(get("/api/profile/documents/{documentId}/download", UUID.randomUUID()), token))
+                .andExpect(expected);
         mvc.perform(withToken(delete("/api/profile/documents/{documentId}", UUID.randomUUID()), token))
                 .andExpect(expected);
     }

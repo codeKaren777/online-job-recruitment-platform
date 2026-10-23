@@ -105,9 +105,10 @@ the guide includes mc commands. Keep anonymous access **none**, not public.
 
 Copy new variables from .env.example into your existing .env manually; do not
 replace existing secrets. Use unique random root and application credentials.
-Storage is disabled by default until configured. `docker compose up --build -d minio`
-starts private localhost ports 9000 (S3) and 9001 (console), readiness probing and
-persistent minio_data. Never run down -v.
+Storage remains disabled by default until restricted application credentials are
+configured. `docker compose up --build -d minio` starts private localhost ports
+9000 (S3) and 9001 (console); the `minio-init` service creates the bucket
+idempotently and reapplies the private anonymous policy. Never run down -v.
 
 Provision `recruitment-documents` using MinIO administrative tools/console. Set
 anonymous access to **none**, do not attach any bucket policy or group ACL. The
@@ -128,7 +129,7 @@ from the recipient browser; localhost is only suitable for local tests. The
 presigner uses that endpoint directly (never rewrite a signed URL). Use HTTPS and
 an approved externally reachable hostname outside local development. Region is
 us-east-1; path-style addressing is configurable in application configuration.
-Compose does not automatically create a bucket or privileged application account.
+Compose creates the bucket but does not create a privileged application account.
 
 AWS v2 S3 uses an explicit AWS BOM 2.31.78 because Spring Boot does not manage AWS
 SDK v2; other dependencies retain Boot management. Follow the
@@ -140,7 +141,7 @@ module, base-image and Debian repository downloads. The upstream project is now
 archived; deployment maintenance requires a separate reviewed decision. See the
 [official source-only build instructions](https://github.com/minio/minio#source-only-distribution).
 
-Once integration gates above are completed, examples (currently rejected):
+Once the restricted storage credentials are configured and the adapter is enabled:
 
 ```bash
 curl -H 'Authorization: Bearer <JOB_SEEKER_TOKEN>' http://localhost:8080/api/profile
@@ -156,8 +157,8 @@ Use the [testing walkthrough](minio-setup.md#7-test-while-authentication-is-bein
 Unit tests cover validation and service behavior; isolated MinIO and PostgreSQL
 integration tests cover storage and real RLS separately. Manual mc upload/signed
 link/deletion checks can confirm local storage credentials, but do not create
-application metadata or verify the authenticated API workflow. Keep HTTP routes
-closed until the identity, application and runtime RLS integration is complete.
+application metadata or verify the authenticated API workflow. Own-profile HTTP
+routes require a validated JWT and continue to enforce service-level ownership.
 
 For exact provider/consumer expectations and integration acceptance cases, see
 [Profile contract testing](profile-contract-testing.md).

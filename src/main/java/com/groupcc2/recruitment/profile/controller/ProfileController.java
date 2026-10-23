@@ -20,6 +20,8 @@ public class ProfileController {
  @PostMapping(value="/documents",consumes="multipart/form-data") @ResponseStatus(HttpStatus.CREATED)
  public DocumentResponse upload(@RequestPart("file") MultipartFile file){return service.upload(file);}
  @GetMapping("/documents") public List<DocumentResponse> documents(){return service.listOwn();}
+ @GetMapping("/documents/{documentId}/download")
+ public DownloadResponse download(@PathVariable UUID documentId){return service.downloadOwn(documentId);}
  @DeleteMapping("/documents/{documentId}") @ResponseStatus(HttpStatus.NO_CONTENT)
  public void delete(@PathVariable UUID documentId){service.deleteOwn(documentId);}
 }
