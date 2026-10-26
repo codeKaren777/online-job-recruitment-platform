@@ -75,4 +75,46 @@ class AdminUserControllerTest {
         verify(users).suspend(administratorId, userId);
         verify(users).remove(administratorId, userId);
     }
+
+    @Test
+    void administratorCanPromoteAnExistingUser() throws Exception {
+        UUID administratorId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        User user = new User("person@example.com", "hash", UserRole.ADMIN);
+        when(users.promoteToAdministrator(administratorId, userId)).thenReturn(user);
+
+        mvc.perform(patch("/api/admin/users/{id}/role", userId)
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))
+                                .jwt(token -> token.subject(administratorId.toString())))
+                        .contentType("application/json")
+                        .content("""
+                                {"role":"ADMIN"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("ADMIN"));
+
+        verify(users).promoteToAdministrator(administratorId, userId);
+    }
+
+    @Test
+    void roleAssignmentRejectsNonAdminRole() throws Exception {
+        mvc.perform(patch("/api/admin/users/{id}/role", UUID.randomUUID())
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN")))
+                        .contentType("application/json")
+                        .content("""
+                                {"role":"EMPLOYER"}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void nonAdministratorCannotAssignAnAdministratorRole() throws Exception {
+        mvc.perform(patch("/api/admin/users/{id}/role", UUID.randomUUID())
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_EMPLOYER")))
+                        .contentType("application/json")
+                        .content("""
+                                {"role":"ADMIN"}
+                                """))
+                .andExpect(status().isForbidden());
+    }
 }

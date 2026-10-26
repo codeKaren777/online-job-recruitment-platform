@@ -3,6 +3,7 @@ package com.groupcc2.recruitment.common.exception;
 import com.groupcc2.recruitment.admin.controller.AdminUserController;
 import com.groupcc2.recruitment.users.controller.UserController;
 import com.groupcc2.recruitment.users.service.AuthorizationDeniedException;
+import com.groupcc2.recruitment.users.service.InvalidRoleChangeException;
 import com.groupcc2.recruitment.users.service.UserNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,5 +22,10 @@ public class UserExceptionHandler {
     @ExceptionHandler(AuthorizationDeniedException.class)
     ResponseEntity<ErrorResponse> denied(AuthorizationDeniedException exception) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResponse("FORBIDDEN"));
+    }
+
+    @ExceptionHandler(InvalidRoleChangeException.class)
+    ResponseEntity<ErrorResponse> invalidRoleChange(InvalidRoleChangeException exception) {
+        return ResponseEntity.badRequest().body(new ErrorResponse("INVALID_ROLE_CHANGE"));
     }
 }

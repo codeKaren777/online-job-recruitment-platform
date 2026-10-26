@@ -8,6 +8,8 @@ import com.groupcc2.recruitment.users.entity.AccountStatus;
 import com.groupcc2.recruitment.users.entity.User;
 import com.groupcc2.recruitment.users.entity.UserRole;
 import com.groupcc2.recruitment.users.repository.UserRepository;
+import com.groupcc2.recruitment.admin.repository.AdminRoleChangeRepository;
+import com.groupcc2.recruitment.security.RlsTransactionContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
@@ -18,7 +20,10 @@ import static org.mockito.Mockito.*;
 
 class UserServiceTest {
     private final UserRepository repository = mock(UserRepository.class);
-    private final UserServiceImpl service = new UserServiceImpl(repository, new BCryptPasswordEncoder());
+    private final AdminRoleChangeRepository roleChanges = mock(AdminRoleChangeRepository.class);
+    private final RlsTransactionContext rls = mock(RlsTransactionContext.class);
+    private final UserServiceImpl service =
+            new UserServiceImpl(repository, new BCryptPasswordEncoder(), roleChanges, rls);
 
     @Test
     void normalizesEmailAndStoresOnlyBcryptHash() {
@@ -86,5 +91,34 @@ class UserServiceTest {
         when(repository.findById(user.getId())).thenReturn(Optional.of(user));
         assertThatThrownBy(() -> service.suspend(user.getId(), user.getId()))
                 .isInstanceOf(AuthorizationDeniedException.class);
+    }
+
+    @Test
+    void administratorCanPromoteAnActiveUserAndRevokeExistingTokens() {
+        User administrator = new User("admin@example.com", "hash", UserRole.ADMIN);
+        User user = new User("person@example.com", "hash", UserRole.JOB_SEEKER);
+        when(repository.findById(administrator.getId())).thenReturn(Optional.of(administrator));
+        when(repository.findById(user.getId())).thenReturn(Optional.of(user));
+
+        User promoted = service.promoteToAdministrator(administrator.getId(), user.getId());
+
+        assertThat(promoted.getRole()).isEqualTo(UserRole.ADMIN);
+        assertThat(promoted.getTokenVersion()).isEqualTo(1);
+        verify(roleChanges).save(any());
+    }
+
+    @Test
+    void administratorCannotPromoteThemselfOrInactiveUser() {
+        User administrator = new User("admin@example.com", "hash", UserRole.ADMIN);
+        User suspended = new User("person@example.com", "hash", UserRole.JOB_SEEKER);
+        suspended.suspend();
+        when(repository.findById(administrator.getId())).thenReturn(Optional.of(administrator));
+        when(repository.findById(suspended.getId())).thenReturn(Optional.of(suspended));
+
+        assertThatThrownBy(() -> service.promoteToAdministrator(administrator.getId(), administrator.getId()))
+                .isInstanceOf(InvalidRoleChangeException.class);
+        assertThatThrownBy(() -> service.promoteToAdministrator(administrator.getId(), suspended.getId()))
+                .isInstanceOf(InvalidRoleChangeException.class);
+        verifyNoInteractions(roleChanges);
     }
 }

@@ -7,6 +7,9 @@ import java.util.UUID;
 import com.groupcc2.recruitment.users.entity.User;
 import com.groupcc2.recruitment.users.entity.UserRole;
 import com.groupcc2.recruitment.users.repository.UserRepository;
+import com.groupcc2.recruitment.admin.entity.AdminRoleChange;
+import com.groupcc2.recruitment.admin.repository.AdminRoleChangeRepository;
+import com.groupcc2.recruitment.security.RlsTransactionContext;
 import jakarta.transaction.Transactional;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -17,10 +20,15 @@ import org.springframework.stereotype.Service;
 public class UserServiceImpl implements UserService {
     private final UserRepository users;
     private final PasswordEncoder passwordEncoder;
+    private final AdminRoleChangeRepository roleChanges;
+    private final RlsTransactionContext rlsTransactionContext;
 
-    public UserServiceImpl(UserRepository users, PasswordEncoder passwordEncoder) {
+    public UserServiceImpl(UserRepository users, PasswordEncoder passwordEncoder,
+                           AdminRoleChangeRepository roleChanges, RlsTransactionContext rlsTransactionContext) {
         this.users = users;
         this.passwordEncoder = passwordEncoder;
+        this.roleChanges = roleChanges;
+        this.rlsTransactionContext = rlsTransactionContext;
     }
 
     @Override
@@ -102,7 +110,26 @@ public class UserServiceImpl implements UserService {
         user.remove();
     }
 
+    @Override
+    @Transactional
+    public User promoteToAdministrator(UUID administratorId, UUID id) {
+        requireAdministrator(administratorId);
+        if (administratorId.equals(id)) {
+            throw new InvalidRoleChangeException("Administrators cannot change their own role");
+        }
+        User user = findById(id);
+        UserRole previousRole = user.getRole();
+        try {
+            user.promoteToAdministrator();
+        } catch (IllegalStateException exception) {
+            throw new InvalidRoleChangeException(exception.getMessage());
+        }
+        roleChanges.save(new AdminRoleChange(administratorId, id, previousRole, UserRole.ADMIN));
+        return user;
+    }
+
     private void requireAdministrator(UUID administratorId) {
+        rlsTransactionContext.setAuthenticatedUser(administratorId, UserRole.ADMIN);
         if (findById(administratorId).getRole() != UserRole.ADMIN) {
             throw new AuthorizationDeniedException();
         }
