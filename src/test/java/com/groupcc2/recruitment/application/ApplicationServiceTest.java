@@ -1,6 +1,7 @@
 package com.groupcc2.recruitment.application;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Map;
@@ -13,6 +14,7 @@ import com.groupcc2.recruitment.application.entity.Application;
 import com.groupcc2.recruitment.application.entity.ApplicationStatus;
 import com.groupcc2.recruitment.application.dto.ApplicationResponse;
 import com.groupcc2.recruitment.application.repository.ApplicationRepository;
+import com.groupcc2.recruitment.application.repository.ApplicationDecisionAuditRepository;
 import com.groupcc2.recruitment.application.service.ApplicationFailure;
 import com.groupcc2.recruitment.application.service.ApplicationRls;
 import com.groupcc2.recruitment.application.service.ApplicationService;
@@ -38,6 +40,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -48,6 +51,7 @@ class ApplicationServiceTest {
     @Mock ApplicationRepository repository;
     @Mock UserService users;
     @Mock ApplicationRls rls;
+    @Mock ApplicationDecisionAuditRepository decisionAudits;
     @Mock ObjectProvider<JobDirectory> directoryProvider;
     @Mock JobDirectory directory;
 
@@ -58,7 +62,7 @@ class ApplicationServiceTest {
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(TODAY.atTime(9, 0).toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
-        service = new ApplicationService(repository, users, rls, directoryProvider, clock);
+        service = new ApplicationService(repository, users, rls, directoryProvider, decisionAudits, clock);
         when(directoryProvider.getIfAvailable()).thenReturn(directory);
         when(users.findById(seeker.getId())).thenReturn(seeker);
         when(repository.saveAndFlush(any(Application.class))).thenAnswer(call -> call.getArgument(0));
@@ -268,5 +272,43 @@ class ApplicationServiceTest {
         assertThatThrownBy(() -> service.listForEmployer(seeker.getId()))
                 .isInstanceOfSatisfying(ApplicationFailure.class,
                         e -> assertThat(e.code()).isEqualTo(ApplicationFailure.Code.FORBIDDEN));
+    }
+
+    @Test
+    void employerCanShortlistOwnedPendingApplicationAndAuditDecision() {
+        User employer = new User("employer@example.com", "hash", UserRole.EMPLOYER);
+        Application application = Application.submit(jobId, seeker.getId());
+        when(users.findById(employer.getId())).thenReturn(employer);
+        when(directory.findAllForEmployer(employer.getId())).thenReturn(
+                Map.of(jobId, job(TODAY.plusDays(2), JobSnapshot.State.ACTIVE)));
+        when(repository.findByIdAndJobIdIn(application.getId(), Set.of(jobId))).thenReturn(Optional.of(application));
+
+        ApplicationResponse response = service.changeStatus(
+                employer.getId(), application.getId(), ApplicationStatus.SHORTLISTED);
+
+        assertThat(response.status()).isEqualTo(ApplicationStatus.SHORTLISTED);
+        assertThat(response.shortlistedAt()).isNotNull();
+        verify(decisionAudits).save(any());
+    }
+
+    @Test
+    void employerCannotChangeAFinalApplicationOrAssignPendingStatus() {
+        User employer = new User("employer@example.com", "hash", UserRole.EMPLOYER);
+        Application application = Application.submit(jobId, seeker.getId());
+        application.changeStatus(ApplicationStatus.REJECTED, Instant.now());
+        when(users.findById(employer.getId())).thenReturn(employer);
+        when(directory.findAllForEmployer(employer.getId())).thenReturn(
+                Map.of(jobId, job(TODAY.plusDays(2), JobSnapshot.State.ACTIVE)));
+        when(repository.findByIdAndJobIdIn(application.getId(), Set.of(jobId))).thenReturn(Optional.of(application));
+
+        assertThatThrownBy(() -> service.changeStatus(
+                employer.getId(), application.getId(), ApplicationStatus.SHORTLISTED))
+                .isInstanceOfSatisfying(ApplicationFailure.class,
+                        e -> assertThat(e.code()).isEqualTo(ApplicationFailure.Code.INVALID_STATUS_TRANSITION));
+        assertThatThrownBy(() -> service.changeStatus(
+                employer.getId(), application.getId(), ApplicationStatus.PENDING))
+                .isInstanceOfSatisfying(ApplicationFailure.class,
+                        e -> assertThat(e.code()).isEqualTo(ApplicationFailure.Code.INVALID_STATUS_TRANSITION));
+        verifyNoInteractions(decisionAudits);
     }
 }

@@ -44,6 +44,12 @@ public class Application {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Column(name = "shortlisted_at")
+    private Instant shortlistedAt;
+
+    @Column(name = "rejected_at")
+    private Instant rejectedAt;
+
     protected Application() {
     }
 
@@ -96,5 +102,25 @@ public class Application {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public Instant getShortlistedAt() {
+        return shortlistedAt;
+    }
+
+    public Instant getRejectedAt() {
+        return rejectedAt;
+    }
+
+    public void changeStatus(ApplicationStatus newStatus, Instant changedAt) {
+        if (newStatus == null || newStatus == ApplicationStatus.PENDING || status != ApplicationStatus.PENDING) {
+            throw new IllegalStateException("Only pending applications can be shortlisted or rejected");
+        }
+        status = newStatus;
+        if (newStatus == ApplicationStatus.SHORTLISTED) {
+            shortlistedAt = changedAt;
+        } else {
+            rejectedAt = changedAt;
+        }
     }
 }
