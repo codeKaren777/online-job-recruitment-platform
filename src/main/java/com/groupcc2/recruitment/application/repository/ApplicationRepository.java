@@ -18,5 +18,13 @@ public interface ApplicationRepository extends JpaRepository<Application, UUID> 
 
     List<Application> findAllByJobIdInOrderBySubmittedAtDesc(Collection<UUID> jobIds);
 
+    List<Application> findAllByJobIdInAndStatusOrderBySubmittedAtDesc(Collection<UUID> jobIds,
+                                                                        com.groupcc2.recruitment.application.entity.ApplicationStatus status);
+
+    List<Application> findAllByJobIdOrderBySubmittedAtDesc(UUID jobId);
+
+    List<Application> findAllByJobIdAndStatusOrderBySubmittedAtDesc(UUID jobId,
+                                                                      com.groupcc2.recruitment.application.entity.ApplicationStatus status);
+
     Optional<Application> findByIdAndJobIdIn(UUID id, Collection<UUID> jobIds);
 }

@@ -44,7 +44,8 @@ class ApplicationControllerTest {
     private final UUID jobId = UUID.randomUUID();
 
     private ApplicationResponse sample() {
-        return new ApplicationResponse(UUID.randomUUID(), jobId, ApplicationStatus.PENDING, Instant.now(), Instant.now(), null);
+        return new ApplicationResponse(UUID.randomUUID(), jobId, ApplicationStatus.PENDING,
+                Instant.now(), Instant.now(), null, null, null);
     }
 
     private RequestPostProcessor seekerToken(UUID id) {

@@ -1,7 +1,6 @@
-# Application module (FR-08, FR-09, FR-12)
+# Application module (FR-08, FR-09, FR-10, FR-11, FR-12)
 
-Job seeker submission/tracking and employer read access to applications for owned jobs.
-Employer status changes (Shortlist/Reject, FR-10/FR-11) are not part of this module yet.
+Job seeker submission/tracking and employer review of applications for owned jobs.
 
 ## Endpoints (all require a valid JWT whose `sub` is the user's UUID)
 
@@ -11,10 +10,13 @@ Employer status changes (Shortlist/Reject, FR-10/FR-11) are not part of this mod
 | `GET /api/applications` | 200, caller's applications, newest first |
 | `GET /api/applications/{applicationId}` | 200, or 404 if it is not the caller's |
 | `GET /api/employer/applications` | 200, applications for the caller's jobs, newest first |
+| `GET /api/employer/applications?jobId=<uuid>&status=<status>` | 200, applications for one owned job, optionally filtered by `PENDING`, `SHORTLISTED`, or `REJECTED` |
 | `GET /api/employer/applications/{applicationId}` | 200, or 404 if it is not for one of the caller's jobs |
+| `PATCH /api/employer/applications/{applicationId}/status` body `{"status":"SHORTLISTED"}` | 200, shortlist or reject an application for an owned job |
 
 Errors are `{"code": "..."}`: 400 `INVALID_REQUEST`, 403 `FORBIDDEN`, 404 `NOT_FOUND`,
-409 `DUPLICATE_APPLICATION`, 409 `JOB_NOT_ACCEPTING_APPLICATIONS`, 503 `INTEGRATION_UNAVAILABLE`.
+409 `DUPLICATE_APPLICATION`, 409 `JOB_NOT_ACCEPTING_APPLICATIONS`, 409 `INVALID_STATUS_TRANSITION`,
+503 `INTEGRATION_UNAVAILABLE`.
 
 The applicant is always the token subject. The role is read from the persisted, active user
 (like ProfileService), never from token claims or the request body.
@@ -27,6 +29,10 @@ ownership contract. A client-supplied job or application ID cannot grant access 
 - Only an active JOB_SEEKER can apply (FR-13).
 - Job must exist, have state ACTIVE and `dueDate` after today (UTC). Due date reached means closed (BR-02).
 - New applications are PENDING (BR-03).
+- Only PENDING applications can transition once to SHORTLISTED or REJECTED. The response exposes
+  `shortlistedAt` or `rejectedAt` for the decision timestamp.
+- Every shortlist/reject decision is stored in `application_decision_audits` with the employer,
+  application, job, previous status, new status, and decision time.
 - One per seeker per job: service check plus the `applications_one_per_job_seeker` unique
   constraint, which also catches two concurrent requests (BR-01).
 - Profile sharing (BR-05) needs no copy: the existing RLS policies let the employer read the seeker's
@@ -53,4 +59,6 @@ ownership contract. A client-supplied job or application ID cannot grant access 
 
 - Should applying require an existing profile or a CV? FR-08 does not say, so nothing is enforced.
 - Due date uses the UTC date; PostgreSQL `CURRENT_DATE` uses the session time zone.
-- Pagination and a status filter on `GET /api/applications` are not implemented.
+- Pagination is not implemented.
+- Email/SMS/notification delivery is outside the current architecture scope; status changes are
+  persisted and auditable, but no unconfigured or fake mail sender is invoked.

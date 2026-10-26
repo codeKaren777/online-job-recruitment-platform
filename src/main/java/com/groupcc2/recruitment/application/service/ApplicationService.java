@@ -1,6 +1,7 @@
 package com.groupcc2.recruitment.application.service;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -9,7 +10,10 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import com.groupcc2.recruitment.application.dto.ApplicationResponse;
+import com.groupcc2.recruitment.application.entity.ApplicationDecisionAudit;
 import com.groupcc2.recruitment.application.entity.Application;
+import com.groupcc2.recruitment.application.entity.ApplicationStatus;
+import com.groupcc2.recruitment.application.repository.ApplicationDecisionAuditRepository;
 import com.groupcc2.recruitment.application.repository.ApplicationRepository;
 import com.groupcc2.recruitment.users.entity.User;
 import com.groupcc2.recruitment.users.entity.UserRole;
@@ -32,20 +36,24 @@ public class ApplicationService {
     private final UserService users;
     private final ApplicationRls rls;
     private final ObjectProvider<JobDirectory> jobDirectory;
+    private final ApplicationDecisionAuditRepository decisionAudits;
     private final Clock clock;
 
     @Autowired
     public ApplicationService(ApplicationRepository applications, UserService users, ApplicationRls rls,
-                              ObjectProvider<JobDirectory> jobDirectory) {
-        this(applications, users, rls, jobDirectory, Clock.systemUTC());
+                              ObjectProvider<JobDirectory> jobDirectory,
+                              ApplicationDecisionAuditRepository decisionAudits) {
+        this(applications, users, rls, jobDirectory, decisionAudits, Clock.systemUTC());
     }
 
     public ApplicationService(ApplicationRepository applications, UserService users, ApplicationRls rls,
-                       ObjectProvider<JobDirectory> jobDirectory, Clock clock) {
+                       ObjectProvider<JobDirectory> jobDirectory,
+                       ApplicationDecisionAuditRepository decisionAudits, Clock clock) {
         this.applications = applications;
         this.users = users;
         this.rls = rls;
         this.jobDirectory = jobDirectory;
+        this.decisionAudits = decisionAudits;
         this.clock = clock;
     }
 
@@ -103,14 +111,54 @@ public class ApplicationService {
     /** Employers may see applications only for their own jobs. */
     @Transactional(readOnly = true)
     public List<ApplicationResponse> listForEmployer(UUID employerId) {
+        return listForEmployer(employerId, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ApplicationResponse> listForEmployer(UUID employerId, UUID jobId, ApplicationStatus status) {
         requireEmployer(employerId);
-        Map<UUID, JobSnapshot> jobs = directory().findAllForEmployer(employerId);
+        Map<UUID, JobSnapshot> jobs;
+        if (jobId != null) {
+            JobSnapshot job = directory().findOwnedByEmployer(jobId, employerId)
+                    .orElseThrow(() -> new ApplicationFailure(ApplicationFailure.Code.NOT_FOUND));
+            jobs = Map.of(jobId, job);
+        } else {
+            jobs = directory().findAllForEmployer(employerId);
+        }
         if (jobs.isEmpty()) {
             return List.of();
         }
-        return applications.findAllByJobIdInOrderBySubmittedAtDesc(jobs.keySet()).stream()
+        List<Application> found = jobId != null
+                ? (status == null
+                    ? applications.findAllByJobIdOrderBySubmittedAtDesc(jobId)
+                    : applications.findAllByJobIdAndStatusOrderBySubmittedAtDesc(jobId, status))
+                : (status == null
+                    ? applications.findAllByJobIdInOrderBySubmittedAtDesc(jobs.keySet())
+                    : applications.findAllByJobIdInAndStatusOrderBySubmittedAtDesc(jobs.keySet(), status));
+        return found.stream()
                 .map(application -> ApplicationResponse.from(application, jobs.get(application.getJobId())))
                 .toList();
+    }
+
+    @Transactional
+    public ApplicationResponse changeStatus(UUID employerId, UUID applicationId, ApplicationStatus newStatus) {
+        requireEmployer(employerId);
+        if (newStatus != ApplicationStatus.SHORTLISTED && newStatus != ApplicationStatus.REJECTED) {
+            throw new ApplicationFailure(ApplicationFailure.Code.INVALID_STATUS_TRANSITION);
+        }
+        Map<UUID, JobSnapshot> jobs = directory().findAllForEmployer(employerId);
+        Application application = applications.findByIdAndJobIdIn(applicationId, jobs.keySet())
+                .orElseThrow(() -> new ApplicationFailure(ApplicationFailure.Code.NOT_FOUND));
+        ApplicationStatus previousStatus = application.getStatus();
+        Instant changedAt = Instant.now(clock);
+        try {
+            application.changeStatus(newStatus, changedAt);
+        } catch (IllegalStateException exception) {
+            throw new ApplicationFailure(ApplicationFailure.Code.INVALID_STATUS_TRANSITION);
+        }
+        decisionAudits.save(new ApplicationDecisionAudit(application.getId(), application.getJobId(),
+                employerId, previousStatus, newStatus, changedAt));
+        return ApplicationResponse.from(application, jobs.get(application.getJobId()));
     }
 
     /** An employer can read an application only when its job belongs to that employer. */
