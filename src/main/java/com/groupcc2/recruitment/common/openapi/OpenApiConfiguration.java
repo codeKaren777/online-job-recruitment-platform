@@ -30,7 +30,8 @@ public class OpenApiConfiguration {
                         .version("1.0.0")
                         .contact(new Contact().name("Group CC2")))
                 .tags(List.of(
-                        new io.swagger.v3.oas.models.tags.Tag().name("Users").description("User registration and identity"),
+                        new io.swagger.v3.oas.models.tags.Tag().name("Users")
+                                .description("User registration, identity, and account management"),
                         new io.swagger.v3.oas.models.tags.Tag().name("Authentication").description("Login and token lifecycle"),
                         new io.swagger.v3.oas.models.tags.Tag().name("Profiles").description("Profiles and private documents"),
                         new io.swagger.v3.oas.models.tags.Tag().name("Jobs").description("Job postings"),
