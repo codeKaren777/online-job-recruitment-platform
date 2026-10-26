@@ -35,7 +35,6 @@ public class OpenApiConfiguration {
                         new io.swagger.v3.oas.models.tags.Tag().name("Profiles").description("Profiles and private documents"),
                         new io.swagger.v3.oas.models.tags.Tag().name("Jobs").description("Job postings"),
                         new io.swagger.v3.oas.models.tags.Tag().name("Applications").description("Job applications"),
-                        new io.swagger.v3.oas.models.tags.Tag().name("Administration").description("Administrative operations"),
                         new io.swagger.v3.oas.models.tags.Tag().name("Health").description("Application health")))
                 .components(new Components()
                         .addSecuritySchemes("bearerAuth", new SecurityScheme()
