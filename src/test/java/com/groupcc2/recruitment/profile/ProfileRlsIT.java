@@ -12,7 +12,7 @@ class ProfileRlsIT {
  @Container static PostgreSQLContainer<?> db=new PostgreSQLContainer<>("postgres:17");
  @Test void ownerIsolationEmployerVisibilityAndTransactionLocalContext() throws Exception {
  Flyway.configure().dataSource(db.getJdbcUrl(),db.getUsername(),db.getPassword()).load().migrate();
- UUID a=UUID.randomUUID(),b=UUID.randomUUID(),employer=UUID.randomUUID(),otherEmployer=UUID.randomUUID(),job=UUID.randomUUID();
+ UUID a=UUID.randomUUID(),b=UUID.randomUUID(),employer=UUID.randomUUID(),otherEmployer=UUID.randomUUID(),company=UUID.randomUUID(),job=UUID.randomUUID();
  try(var root=DriverManager.getConnection(db.getJdbcUrl(),db.getUsername(),db.getPassword());var s=root.createStatement()) {
  s.execute("CREATE ROLE profile_runtime LOGIN PASSWORD 'test-only' NOSUPERUSER NOBYPASSRLS");
  s.execute("GRANT USAGE ON SCHEMA recruitment TO profile_runtime");s.execute("GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA recruitment TO profile_runtime");
@@ -21,7 +21,8 @@ class ProfileRlsIT {
  s.execute("INSERT INTO recruitment.profiles(user_id,display_name) VALUES ('"+id+"','name')");
  s.execute("INSERT INTO recruitment.documents(profile_user_id,storage_key,original_filename,content_type,byte_size) VALUES ('"+id+"','"+id+"','cv.pdf','application/pdf',20)");
  }
- s.execute("INSERT INTO recruitment.jobs(id,employer_id,title,description,due_date) VALUES ('"+job+"','"+employer+"','Job','Description',CURRENT_DATE+7)");
+ s.execute("INSERT INTO recruitment.companies(id,employer_id,name) VALUES ('"+company+"','"+employer+"','Company')");
+ s.execute("INSERT INTO recruitment.jobs(id,employer_id,company_id,title,description,due_date) VALUES ('"+job+"','"+employer+"','"+company+"','Job','Description',CURRENT_DATE+7)");
  }
  try(var c=DriverManager.getConnection(db.getJdbcUrl(),"profile_runtime","test-only");var s=c.createStatement()) {
  try(var r=s.executeQuery("SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname=current_user")){r.next();assertThat(r.getBoolean(1)).isFalse();}

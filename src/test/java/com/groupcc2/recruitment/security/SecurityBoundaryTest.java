@@ -67,7 +67,7 @@ class SecurityBoundaryTest {
         var adminToken = jwt().jwt(token -> token.subject(UUID.randomUUID().toString()).claim("role", "ADMIN"))
                 .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ADMIN"));
         when(jobService.createJob(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
-                .thenReturn(new JobResponse(jobId, UUID.randomUUID(), "Backend Engineer", "Build APIs",
+                .thenReturn(new JobResponse(jobId, UUID.randomUUID(), UUID.randomUUID(), "Backend Engineer", "Build APIs",
                         "BSc CS", java.time.LocalDate.of(2099, 12, 31), "Zomba", JobStatus.ACTIVE,
                         java.time.Instant.now(), java.time.Instant.now()));
         when(jobService.getJob(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))

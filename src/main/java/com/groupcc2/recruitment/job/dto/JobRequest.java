@@ -6,9 +6,14 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
+import java.util.UUID;
 
 /** Body for create and update. employerId is deliberately absent: it comes from the JWT. */
 public record JobRequest(
+        @NotNull
+        @Schema(description = "Company represented by the authenticated employer",
+                requiredMode = Schema.RequiredMode.REQUIRED, example = "11111111-1111-1111-1111-111111111111")
+        UUID companyId,
         @NotBlank @Size(max = 255)
         @Schema(description = "Job title", requiredMode = Schema.RequiredMode.REQUIRED,
                 example = "Senior Java Developer")

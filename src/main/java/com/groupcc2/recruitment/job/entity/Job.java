@@ -28,6 +28,9 @@ public class Job {
     @Column(name = "employer_id", nullable = false, updatable = false)
     private UUID employerId;
 
+    @Column(name = "company_id", nullable = false, updatable = false)
+    private UUID companyId;
+
     @Column(name = "title", nullable = false)
     private String title;
 
@@ -60,6 +63,8 @@ public class Job {
     public UUID getId() { return id; }
     public UUID getEmployerId() { return employerId; }
     public void setEmployerId(UUID employerId) { this.employerId = employerId; }
+    public UUID getCompanyId() { return companyId; }
+    public void setCompanyId(UUID companyId) { this.companyId = companyId; }
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
     public String getDescription() { return description; }
