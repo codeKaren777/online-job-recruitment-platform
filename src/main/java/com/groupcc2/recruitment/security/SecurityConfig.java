@@ -64,6 +64,11 @@ public class SecurityConfig {
                                 "/api/auth/forgot-password", "/api/auth/reset-password").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/users/me").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/employer-requests").hasRole("JOB_SEEKER")
+                        .requestMatchers(HttpMethod.GET, "/api/employer-requests")
+                                .hasAnyRole("JOB_SEEKER", "EMPLOYER")
+                        .requestMatchers(HttpMethod.GET, "/api/admin/employer-requests").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PATCH, "/api/admin/employer-requests/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/companies").hasRole("EMPLOYER")
                         .requestMatchers(HttpMethod.GET, "/api/companies", "/api/companies/*").hasRole("EMPLOYER")
                         .requestMatchers(HttpMethod.PUT, "/api/companies/*").hasRole("EMPLOYER")
@@ -91,9 +96,6 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/employer/jobs").hasRole("EMPLOYER")
                         .requestMatchers(HttpMethod.PUT, "/api/jobs/{jobId}").hasRole("EMPLOYER")
                         .requestMatchers(HttpMethod.PATCH, "/api/jobs/{jobId}/close").hasRole("EMPLOYER")
-                       
-                                // Retain the existing users registration endpoint for API compatibility.
-                        .requestMatchers(HttpMethod.POST, "/api/users/register").permitAll()
                         // Open routes deliberately as each feature gains authorization tests.
                         .anyRequest().denyAll();
                 })

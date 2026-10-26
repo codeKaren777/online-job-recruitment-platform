@@ -34,6 +34,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(properties = "app.security.jwt.secret-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 @Import(SecurityConfig.class)
 class SecurityBoundaryTest {
+    @MockitoBean com.groupcc2.recruitment.company.service.CompanyService companyService;
+    @MockitoBean com.groupcc2.recruitment.users.employer.service.EmployerUpgradeService employerUpgradeService;
     @Autowired MockMvc mvc;
     @MockitoBean UserService userService;
     @MockitoBean JobService jobService;
