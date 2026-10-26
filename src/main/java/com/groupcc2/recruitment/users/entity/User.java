@@ -106,6 +106,17 @@ public class User {
         return tokenVersion;
     }
 
+    public void promoteToAdministrator() {
+        if (role == UserRole.ADMIN) {
+            throw new IllegalStateException("User is already an administrator");
+        }
+        if (!canAuthenticate()) {
+            throw new IllegalStateException("Only active users can become administrators");
+        }
+        role = UserRole.ADMIN;
+        tokenVersion++;
+    }
+
     public void suspend() {
         if (accountStatus == AccountStatus.REMOVED) {
             throw new IllegalStateException("Removed accounts cannot be suspended");

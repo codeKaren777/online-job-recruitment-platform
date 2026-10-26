@@ -1,7 +1,9 @@
 package com.groupcc2.recruitment.admin.controller;
 
+import com.groupcc2.recruitment.admin.dto.AssignAdminRoleRequest;
 import com.groupcc2.recruitment.users.dto.UserResponse;
 import com.groupcc2.recruitment.users.service.UserService;
+import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -13,6 +15,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -53,6 +56,15 @@ public class AdminUserController {
     public UserResponse remove(@AuthenticationPrincipal Jwt principal, @PathVariable UUID id) {
         users.remove(userId(principal), id);
         return UserResponse.from(users.findForAdministrator(userId(principal), id));
+    }
+
+    @PatchMapping("/{id}/role")
+    @Operation(summary = "Assign administrator role")
+    public UserResponse assignRole(
+            @AuthenticationPrincipal Jwt principal,
+            @PathVariable UUID id,
+            @Valid @RequestBody AssignAdminRoleRequest request) {
+        return UserResponse.from(users.promoteToAdministrator(userId(principal), id));
     }
 
     private static UUID userId(Jwt principal) {

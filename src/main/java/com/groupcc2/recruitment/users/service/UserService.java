@@ -24,4 +24,6 @@ public interface UserService {
     void suspend(UUID administratorId, UUID id);
 
     void remove(UUID administratorId, UUID id);
+
+    User promoteToAdministrator(UUID administratorId, UUID id);
 }
