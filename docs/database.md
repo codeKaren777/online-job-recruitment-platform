@@ -11,6 +11,7 @@ The model is in third normal form:
 - `documents` stores private document metadata and a storage key. File contents are not stored in PostgreSQL.
 - `jobs` stores employer-owned job postings and due dates.
 - `applications` links one job seeker to one job and stores the application status.
+- `application_notification_outbox` durably records application notification events and delivery state.
 
 Applications have a database-enforced `UNIQUE (job_id, job_seeker_id)` constraint, so a job seeker cannot apply to the same job twice. New applications default to `PENDING`. Employers can change applications for their own jobs to `SHORTLISTED` or `REJECTED`; the application service must enforce the allowed transition rules. Migration V4 separates application SELECT and UPDATE policies so applicants can read their own submissions but cannot update review status.
 
@@ -78,17 +79,33 @@ feature operations run with forced RLS. Local Compose now follows the same
 separation: the bootstrap account runs Flyway, while the backend uses the
 restricted runtime role.
 
+Migration V13 adds the notification outbox with forced RLS. The runtime
+account has no direct table grants. Only four `SECURITY DEFINER` functions
+are executable by that account: enqueue validates the transaction-local
+actor, status/decision, application, and employer ownership before capturing
+the registered applicant address and job/company display fields; claim uses
+`FOR UPDATE SKIP LOCKED` and leases; mark-sent and failure-recording require
+the matching claim token. Each function sets a fixed `search_path`, and
+`PUBLIC` execution is revoked. The Flyway principal owns the functions and
+must retain the source-table access required to capture the validated event;
+the application runtime remains `NOSUPERUSER NOBYPASSRLS` with no direct
+outbox-table privileges. This keeps cross-user email lookup and outbox access
+out of ordinary RLS queries and employer APIs.
+
+Migration V14 restores the `SECURITY DEFINER` and fixed `search_path` settings
+for `auth_register_user`, which V12's function replacement had reset to
+`SECURITY INVOKER`. Execution remains revoked from `PUBLIC` and granted only
+to the migration principal/runtime role configured by the deployment.
+
 The current development credentials are `POSTGRES_DB`, `POSTGRES_USER`,
 `POSTGRES_PASSWORD`, `POSTGRES_RUNTIME_USER`, and
 `POSTGRES_RUNTIME_PASSWORD`; `DB_URL` is overridden inside Compose to use the
 `db` service, and JWT configuration uses `JWT_SECRET_BASE64` with optional
 `JWT_ISSUER` and `JWT_AUDIENCE`. Do not display or commit `.env` values.
 
-The existing database has V1-V3 applied and has not been changed by this work.
-Before starting the updated backend, make a protected backup. Startup will run
-the pending V4, V5, V6, V7, and V8 Flyway migrations using the existing account. V6 adds
-columns and an index; it does not delete application data. Do not use
-`docker compose down -v`.
+For an existing database with V1-V3 applied, make a protected backup before
+starting the updated backend; Flyway will apply the pending migrations through
+V14. These migrations preserve existing data. Do not use `docker compose down -v`.
 
 ## Local database
 
@@ -100,9 +117,9 @@ docker compose up -d db
 
 The detached flag belongs after `up`. If Docker socket permissions require elevated access, use `sudo docker compose up -d db` temporarily. The preferred permanent fix is to add your Linux user to the `docker` group and start a new login session.
 
-Compose starts PostgreSQL and then Spring Boot; Flyway runs V4, V5, V6, V7, and V8 during
-application startup using the same `recruitment` database account. No role
-provisioner or extra database account is used by this local development setup.
+Compose starts PostgreSQL and then Spring Boot; Flyway runs pending migrations
+during application startup. The bootstrap account runs Flyway while the backend
+uses the restricted runtime account provisioned by Compose.
 
 ## Database commands
 
@@ -118,7 +135,7 @@ docker compose up -d db
 
 Start PostgreSQL, Flyway migrations, and the backend. This requires the existing
 database variables and JWT secret in `.env`. Back up the database before this
-command because it applies pending V4, V5, V6, V7, and V8 migrations:
+command because it applies pending Flyway migrations:
 
 ```bash
 docker compose up --build -d

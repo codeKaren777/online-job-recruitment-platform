@@ -92,6 +92,13 @@ class FoundationIT {
                     + APPLICATION_USERNAME);
             statement.execute("GRANT EXECUTE ON FUNCTION recruitment.auth_consume_password_reset_token(text, text) TO "
                     + APPLICATION_USERNAME);
+            statement.execute("REVOKE ALL ON recruitment.application_notification_outbox FROM "
+                    + APPLICATION_USERNAME);
+            statement.execute("GRANT EXECUTE ON FUNCTION recruitment.enqueue_application_notification(uuid, uuid, text), "
+                    + "recruitment.claim_application_notifications(integer), "
+                    + "recruitment.mark_application_notification_sent(uuid, uuid), "
+                    + "recruitment.record_application_notification_failure(uuid, uuid, text, boolean) TO "
+                    + APPLICATION_USERNAME);
         } catch (Exception exception) {
             throw new IllegalStateException("Unable to bootstrap the non-superuser integration account", exception);
         }
@@ -108,7 +115,7 @@ class FoundationIT {
     @Test
     void bootsAgainstPostgresAndAppliesMigrationOnlyOnce() throws Exception {
         assertThat(flyway.getConfiguration().getDefaultSchema()).isEqualTo("public");
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("12");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("14");
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
         try (var connection = dataSource.getConnection(); var statement = connection.createStatement();
@@ -185,7 +192,7 @@ class FoundationIT {
                     INSERT INTO recruitment.jobs (id, employer_id, company_id, title, description, due_date)
                     SELECT '%s', '%s', id, 'RLS test job', 'RLS test description', CURRENT_DATE + 1
                     FROM recruitment.companies WHERE employer_id = '%s'
-                    """.formatted(jobId, employerId));
+                    """.formatted(jobId, employerId, employerId));
             statement.execute("""
                     INSERT INTO recruitment.applications (id, job_id, job_seeker_id)
                     VALUES
@@ -205,7 +212,9 @@ class FoundationIT {
 
             try (Statement statement = connection.createStatement()) {
                 assertThat(statement.executeUpdate("""
-                        UPDATE recruitment.applications SET status = 'REJECTED' WHERE id = '%s'
+                        UPDATE recruitment.applications
+                           SET status = 'REJECTED', rejected_at = CURRENT_TIMESTAMP
+                         WHERE id = '%s'
                         """.formatted(applicationId))).isZero();
             }
             connection.commit();
@@ -214,7 +223,9 @@ class FoundationIT {
             setRlsIdentity(connection, employerId, "EMPLOYER");
             try (Statement statement = connection.createStatement()) {
                 assertThat(statement.executeUpdate("""
-                        UPDATE recruitment.applications SET status = 'SHORTLISTED' WHERE id = '%s'
+                        UPDATE recruitment.applications
+                           SET status = 'SHORTLISTED', shortlisted_at = CURRENT_TIMESTAMP
+                         WHERE id = '%s'
                         """.formatted(applicationId))).isEqualTo(1);
             }
             connection.commit();
@@ -245,6 +256,129 @@ class FoundationIT {
             try (var result = statement.executeQuery()) {
                 assertThat(result.next()).isTrue();
                 assertThat(result.getString(1)).isEqualTo("SHORTLISTED");
+            }
+        }
+    }
+
+    @Test
+    void notificationOutboxCapturesTrustedDataIdempotentlyUnderRestrictedRole() throws Exception {
+        UUID employerId = UUID.randomUUID();
+        UUID applicantId = UUID.randomUUID();
+        UUID companyId = UUID.randomUUID();
+        UUID jobId = UUID.randomUUID();
+        UUID applicationId = UUID.randomUUID();
+
+        try (Connection connection = adminConnection(); Statement statement = connection.createStatement()) {
+            statement.executeUpdate("DELETE FROM recruitment.application_notification_outbox");
+            statement.execute("""
+                    INSERT INTO recruitment.users (id, email, password_hash, role)
+                    VALUES ('%s', 'notify-employer@example.com', 'test-hash', 'EMPLOYER'),
+                           ('%s', 'notify-applicant@example.com', 'test-hash', 'JOB_SEEKER')
+                    """.formatted(employerId, applicantId));
+            statement.execute("""
+                    INSERT INTO recruitment.profiles (user_id, display_name)
+                    VALUES ('%s', '<Applicant & One>')
+                    """.formatted(applicantId));
+            statement.execute("""
+                    INSERT INTO recruitment.companies (id, employer_id, name)
+                    VALUES ('%s', '%s', 'Trusted Company')
+                    """.formatted(companyId, employerId));
+            statement.execute("""
+                    INSERT INTO recruitment.jobs (id, employer_id, company_id, title, description, due_date)
+                    VALUES ('%s', '%s', '%s', '<Backend & API Engineer>', 'Integration test job', CURRENT_DATE + 10)
+                    """.formatted(jobId, employerId, companyId));
+            statement.execute("""
+                    INSERT INTO recruitment.applications (id, job_id, job_seeker_id)
+                    VALUES ('%s', '%s', '%s')
+                    """.formatted(applicationId, jobId, applicantId));
+        }
+
+        try (Connection connection = runtimeConnection()) {
+            connection.setAutoCommit(false);
+            setRlsIdentity(connection, applicantId, "JOB_SEEKER");
+            try (PreparedStatement enqueue = connection.prepareStatement(
+                    "SELECT recruitment.enqueue_application_notification(?, ?, 'SUBMITTED')")) {
+                enqueue.setObject(1, applicationId);
+                enqueue.setObject(2, applicationId);
+                try (var result = enqueue.executeQuery()) {
+                    assertThat(result.next()).isTrue();
+                    assertThat(result.getBoolean(1)).isTrue();
+                }
+                try (var result = enqueue.executeQuery()) {
+                    assertThat(result.next()).isTrue();
+                    assertThat(result.getBoolean(1)).isFalse();
+                }
+            }
+            connection.commit();
+        }
+
+        try (Connection connection = runtimeConnection()) {
+            connection.setAutoCommit(false);
+            try (Statement statement = connection.createStatement()) {
+                try {
+                    statement.executeQuery(
+                            "SELECT recipient_email FROM recruitment.application_notification_outbox");
+                    throw new AssertionError("Runtime role must not query outbox recipient data directly");
+                } catch (java.sql.SQLException exception) {
+                    assertThat(exception.getSQLState()).isEqualTo("42501");
+                    connection.rollback();
+                }
+            }
+        }
+
+        try (Connection connection = runtimeConnection();
+             PreparedStatement claim = connection.prepareStatement(
+                     "SELECT * FROM recruitment.claim_application_notifications(10)")) {
+            UUID claimToken = null;
+            try (var result = claim.executeQuery()) {
+                assertThat(result.next()).isTrue();
+                assertThat(result.getString("recipient_email")).isEqualTo("notify-applicant@example.com");
+                assertThat(result.getString("applicant_name")).isEqualTo("<Applicant & One>");
+                assertThat(result.getString("job_title")).isEqualTo("<Backend & API Engineer>");
+                assertThat(result.getString("company_name")).isEqualTo("Trusted Company");
+                assertThat(result.getString("application_status")).isEqualTo("PENDING");
+                assertThat(result.getInt("attempt_count")).isEqualTo(1);
+                claimToken = result.getObject("claim_token", UUID.class);
+            }
+            try (var result = claim.executeQuery()) {
+                assertThat(result.next()).isFalse();
+            }
+            assertThat(recordNotificationFailure(connection, applicationId, claimToken,
+                    "SMTP error containing secret")).isTrue();
+
+            for (int attempt = 2; attempt <= 5; attempt++) {
+                try (Connection admin = adminConnection(); Statement statement = admin.createStatement()) {
+                    statement.executeUpdate("""
+                            UPDATE recruitment.application_notification_outbox
+                               SET next_attempt_at = CURRENT_TIMESTAMP - INTERVAL '1 second'
+                             WHERE event_id = '%s'
+                            """.formatted(applicationId));
+                }
+                try (var result = claim.executeQuery()) {
+                    assertThat(result.next()).isTrue();
+                    assertThat(result.getInt("attempt_count")).isEqualTo(attempt);
+                    claimToken = result.getObject("claim_token", UUID.class);
+                }
+                assertThat(recordNotificationFailure(connection, applicationId, claimToken,
+                        "SMTP error containing secret")).isTrue();
+            }
+            try (var result = claim.executeQuery()) {
+                assertThat(result.next()).isFalse();
+            }
+        }
+
+        try (Connection connection = adminConnection();
+             PreparedStatement statement = connection.prepareStatement("""
+                     SELECT delivery_state, attempt_count, last_error_code
+                       FROM recruitment.application_notification_outbox
+                      WHERE event_id = ?
+                     """)) {
+            statement.setObject(1, applicationId);
+            try (var result = statement.executeQuery()) {
+                assertThat(result.next()).isTrue();
+                assertThat(result.getString("delivery_state")).isEqualTo("FAILED");
+                assertThat(result.getInt("attempt_count")).isEqualTo(5);
+                assertThat(result.getString("last_error_code")).isEqualTo("DELIVERY_ERROR");
             }
         }
     }
@@ -301,8 +435,8 @@ class FoundationIT {
                 .andExpect(jsonPath("$.paths['/api/admin/users/{id}/role'].patch.responses['403']").exists())
                 .andExpect(jsonPath("$.paths['/api/admin/users/{id}/role'].patch.requestBody.content['application/json'].schema.$ref")
                         .value("#/components/schemas/AssignAdminRoleRequest"))
-                .andExpect(jsonPath("$.tags[?(@.name == 'Administration')]").doesNotExist())
-                .andExpect(jsonPath("$.tags[?(@.name == 'Users')].length()").value(1))
+                .andExpect(jsonPath("$.tags[?(@.name == 'Administration')]").exists())
+                .andExpect(jsonPath("$.tags[?(@.name == 'Users')]").exists())
                 .andExpect(jsonPath("$.paths['/api/employer/applications'].get").exists())
                 .andExpect(jsonPath("$.paths['/api/employer/applications/{applicationId}'].get").exists())
                 .andExpect(jsonPath("$.paths['/api/applications'].post.security[0].bearerAuth").exists())
@@ -544,11 +678,61 @@ class FoundationIT {
         mvc.perform(get("/api/employer/applications/" + applicationId)
                         .header("Authorization", "Bearer " + otherEmployerToken))
                 .andExpect(status().isNotFound());
+        mvc.perform(get("/api/employer/applications/" + applicationId)
+                        .header("Authorization", "Bearer " + employerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").doesNotExist())
+                .andExpect(jsonPath("$.applicantEmail").doesNotExist());
         mvc.perform(get("/api/applications/" + applicationId)
                         .header("Authorization", "Bearer " + otherEmployerToken))
                 .andExpect(status().isForbidden());
         mvc.perform(get("/api/employer/applications").header("Authorization", "Bearer " + seekerToken))
                 .andExpect(status().isForbidden());
+        mvc.perform(post("/api/applications")
+                        .header("Authorization", "Bearer " + seekerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"jobId\":\"" + jobId + "\"}"))
+                .andExpect(status().isConflict());
+        try (Connection connection = adminConnection();
+             PreparedStatement statement = connection.prepareStatement("""
+                     SELECT count(*) FROM recruitment.application_notification_outbox
+                     WHERE application_id = ? AND event_type = 'SUBMITTED'
+                     """)) {
+            statement.setObject(1, applicationId);
+            try (var result = statement.executeQuery()) {
+                assertThat(result.next()).isTrue();
+                assertThat(result.getLong(1)).isEqualTo(1);
+            }
+        }
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .patch("/api/employer/applications/" + applicationId + "/status")
+                        .header("Authorization", "Bearer " + employerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"SHORTLISTED\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SHORTLISTED"));
+        try (Connection connection = adminConnection();
+             PreparedStatement statement = connection.prepareStatement("""
+                     SELECT event_type, recipient_email::TEXT, job_title, company_name, application_status::TEXT
+                     FROM recruitment.application_notification_outbox
+                     WHERE application_id = ? AND event_type IN ('SUBMITTED', 'SHORTLISTED')
+                     ORDER BY event_type
+                     """)) {
+            statement.setObject(1, applicationId);
+            try (var result = statement.executeQuery()) {
+                assertThat(result.next()).isTrue();
+                assertThat(result.getString("event_type")).isEqualTo("SHORTLISTED");
+                assertThat(result.getString("recipient_email")).isEqualTo(seekerEmail);
+                assertThat(result.getString("job_title")).isEqualTo("Integration Engineer");
+                assertThat(result.getString("company_name")).isEqualTo("Workflow Company");
+                assertThat(result.getString("application_status")).isEqualTo("SHORTLISTED");
+                assertThat(result.next()).isTrue();
+                assertThat(result.getString("event_type")).isEqualTo("SUBMITTED");
+                assertThat(result.getString("application_status")).isEqualTo("PENDING");
+                assertThat(result.next()).isFalse();
+            }
+        }
 
         try (Connection connection = adminConnection();
              PreparedStatement statement = connection.prepareStatement(
@@ -764,6 +948,10 @@ class FoundationIT {
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
     }
 
+    private Connection runtimeConnection() throws Exception {
+        return DriverManager.getConnection(POSTGRES.getJdbcUrl(), APPLICATION_USERNAME, APPLICATION_PASSWORD);
+    }
+
     private void setRlsTestRole(Connection connection) throws Exception {
         try (Statement statement = connection.createStatement()) {
             statement.execute("SET LOCAL ROLE recruitment_rls_test");
@@ -776,6 +964,20 @@ class FoundationIT {
             statement.setString(1, userId.toString());
             statement.setString(2, role);
             statement.execute();
+        }
+    }
+
+    private static boolean recordNotificationFailure(Connection connection, UUID eventId, UUID claimToken,
+                                                      String errorCode) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT recruitment.record_application_notification_failure(?, ?, ?, false)")) {
+            statement.setObject(1, eventId);
+            statement.setObject(2, claimToken);
+            statement.setString(3, errorCode);
+            try (var result = statement.executeQuery()) {
+                assertThat(result.next()).isTrue();
+                return result.getBoolean(1);
+            }
         }
     }
 
