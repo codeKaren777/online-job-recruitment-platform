@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/users")
-@Tag(name = "Users", description = "Authenticated user identity")
+@Tag(name = "Users", description = "User registration, identity, and account management")
 @SecurityRequirement(name = "bearerAuth")
 public class UserController {
     private final UserService users;
