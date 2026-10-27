@@ -257,7 +257,7 @@ Starting the full stack allows Docker Compose to start the database and backend 
 First, check your existing containers and volumes as described in Section 3.
 
 Before starting the updated backend, make a protected backup outside the
-repository; Flyway applies any pending migrations through V14:
+repository; Flyway applies any pending migrations through V15:
 
 ```bash
 backup="$HOME/recruitment-before-auth-$(date +%Y%m%d-%H%M%S).dump"
@@ -280,7 +280,7 @@ What this command does:
 - `--build` builds or rebuilds images when necessary.
 - `-d` runs the containers in the background.
 
-This runs all pending Flyway migrations through V14. They preserve existing
+This runs all pending Flyway migrations through V15. They preserve existing
 application rows and the named `postgres_data` volume. Never use
 `docker compose down -v` for this update.
 

@@ -115,9 +115,24 @@ class FoundationIT {
     @Test
     void bootsAgainstPostgresAndAppliesMigrationOnlyOnce() throws Exception {
         assertThat(flyway.getConfiguration().getDefaultSchema()).isEqualTo("public");
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("14");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("15");
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
+        try (var connection = dataSource.getConnection(); var statement = connection.createStatement();
+             var result = statement.executeQuery("""
+                     SELECT p.prosecdef, p.proconfig,
+                            NOT EXISTS (
+                                SELECT 1
+                                FROM aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner)))
+                                WHERE grantee = 0 AND privilege_type = 'EXECUTE')
+                     FROM pg_proc AS p
+                     WHERE p.oid = 'recruitment.auth_register_user(text,text,text)'::regprocedure
+                     """)) {
+            assertThat(result.next()).isTrue();
+            assertThat(result.getBoolean(1)).isTrue();
+            assertThat(result.getString(2)).contains("search_path=pg_catalog");
+            assertThat(result.getBoolean(3)).isTrue();
+        }
         try (var connection = dataSource.getConnection(); var statement = connection.createStatement();
              var result = statement.executeQuery("SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'recruitment'")) {
             assertThat(result.next()).isTrue();

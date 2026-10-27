@@ -77,7 +77,7 @@ company information, and template errors are marked permanently failed. Only saf
 stored or logged, never SMTP exception contents or applicant addresses. Sent rows are retained 90 days;
 failed rows 365 days, then cleaned by the dispatcher.
 
-Migration V13 gives the runtime database account no direct outbox table access. A small set of
+Migration V15 gives the runtime database account no direct outbox table access. A small set of
 `SECURITY DEFINER` functions with a fixed `search_path` captures minimum event details after checking
 the verified transaction-local role, applicant/job relationship or employer-owned decision audit.
 Only the runtime account may execute them. The dispatcher obtains recipient details only through its

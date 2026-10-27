@@ -79,8 +79,13 @@ feature operations run with forced RLS. Local Compose now follows the same
 separation: the bootstrap account runs Flyway, while the backend uses the
 restricted runtime role.
 
-Migration V13 adds the notification outbox with forced RLS. The runtime
-account has no direct table grants. Only four `SECURITY DEFINER` functions
+Migration V13 limits public registration to `JOB_SEEKER`; it retains the
+`SECURITY DEFINER`, fixed `search_path = pg_catalog`, and restricted execution
+permissions required for registration under forced RLS. Employer access is
+available only through the approved upgrade workflow. V14 changes the
+application-to-job foreign key to `ON DELETE RESTRICT`, preserving application
+records when jobs are deleted. V15 adds the notification outbox with forced
+RLS. The runtime account has no direct table grants. Only four `SECURITY DEFINER` functions
 are executable by that account: enqueue validates the transaction-local
 actor, status/decision, application, and employer ownership before capturing
 the registered applicant address and job/company display fields; claim uses
@@ -92,10 +97,10 @@ the application runtime remains `NOSUPERUSER NOBYPASSRLS` with no direct
 outbox-table privileges. This keeps cross-user email lookup and outbox access
 out of ordinary RLS queries and employer APIs.
 
-Migration V14 restores the `SECURITY DEFINER` and fixed `search_path` settings
-for `auth_register_user`, which V12's function replacement had reset to
-`SECURITY INVOKER`. Execution remains revoked from `PUBLIC` and granted only
-to the migration principal/runtime role configured by the deployment.
+The older V14 registration-function repair is unnecessary after V13: the RBAC
+migration defines the restricted function with the same `SECURITY DEFINER`,
+fixed `search_path`, and `PUBLIC` revocation. V15 is reserved for notification
+outbox schema and functions.
 
 The current development credentials are `POSTGRES_DB`, `POSTGRES_USER`,
 `POSTGRES_PASSWORD`, `POSTGRES_RUNTIME_USER`, and
@@ -103,9 +108,10 @@ The current development credentials are `POSTGRES_DB`, `POSTGRES_USER`,
 `db` service, and JWT configuration uses `JWT_SECRET_BASE64` with optional
 `JWT_ISSUER` and `JWT_AUDIENCE`. Do not display or commit `.env` values.
 
-For an existing database with V1-V3 applied, make a protected backup before
-starting the updated backend; Flyway will apply the pending migrations through
-V14. These migrations preserve existing data. Do not use `docker compose down -v`.
+For an existing database, inspect its Flyway history and make a protected
+backup before starting the updated backend. Flyway applies pending migrations
+in order through V15. These migrations preserve existing application data. Do
+not use `docker compose down -v`.
 
 ## Local database
 
