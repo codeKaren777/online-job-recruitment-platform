@@ -5,8 +5,9 @@
 Authentication is under `com.groupcc2.recruitment.auth`. Passwords are
 BCrypt-hashed and limited to 72 UTF-8 bytes (BCrypt's input limit); request
 validation requires 12-72 characters for new passwords. Public registration
-accepts `JOB_SEEKER` and `EMPLOYER` only. Administrator creation is deliberately
-not exposed.
+always creates a `JOB_SEEKER`; the client cannot select an account role.
+Administrator and employer creation/upgrade are not exposed through public
+registration.
 
 Access tokens are HS256 JWTs with a 30-minute expiry, issuer, audience, UUID
 subject, role, and account `tokenVersion`. Spring Security verifies signature,
@@ -19,7 +20,11 @@ existing token for that account (not just one device/session).
 The verified subject and role are never taken from request parameters. JWT
 validation sets `app.user_id` and `app.role` transaction-locally before checking
 the account row; `/api/auth/me` repeats that context before its safe identity
-query. Other feature services must do likewise in their own transactions.
+query. `/api/users/me` establishes self-only RLS visibility for the validated
+subject. Administrative user operations first query the administrator using
+self-only context, verify the persisted active `ADMIN` role, and only then set
+`ADMIN` context in the same transaction for the protected operation. Other
+feature services must establish their verified transaction context likewise.
 
 Other modules can inject the verified principal with
 `@AuthenticationPrincipal Jwt principal`, read the UUID from
@@ -52,8 +57,7 @@ Request:
 ```json
 {
   "email": "applicant@example.com",
-  "password": "ApplicantPassword123!",
-  "role": "JOB_SEEKER"
+  "password": "ApplicantPassword123!"
 }
 ```
 
@@ -68,9 +72,31 @@ Response (`201`):
 }
 ```
 
-`EMPLOYER` is also accepted. `ADMIN`, missing/invalid fields, and passwords
-outside the validation limits return `400 Bad Request`; an existing email
-returns `409 Conflict`. Password hashes are never returned.
+Missing/invalid fields and passwords outside the validation limits return
+`400 Bad Request`; an existing email returns `409 Conflict`. A legacy or
+optional `role` field is accepted only when omitted or set to `JOB_SEEKER`;
+explicit `EMPLOYER` and `ADMIN` values return `400 Bad Request`. The service
+and database registration function also enforce this rule (migration V13).
+Password hashes are never returned.
+
+Employer upgrades use the protected employer-request workflow; an administrator
+must approve a request before the user receives the employer role. Public
+registration cannot grant `EMPLOYER` or `ADMIN`. Administrative user-role
+changes are protected, and administrative role promotions are audit-recorded.
+
+## Current authorization scope and dependencies
+
+- `/api/admin/users` operations require `ADMIN` at the HTTP boundary and
+  verify the persisted active administrator through the user service. Role
+  changes use the protected admin workflow; promotion to `ADMIN` is audit-recorded.
+- Employers can manage companies only when they own them. Jobs are associated
+  with an owned company, and employer job operations verify the authenticated
+  employer/company relationship as well as job ownership.
+- Employer application reads and status decisions are limited to applications
+  for their own postings. Job seekers can read their own applications and
+  cannot change review status; forced RLS remains a second boundary.
+- Administrator role changes are available only through the protected admin
+  user workflow and retain the administrative role-change audit record.
 
 ### Login
 
@@ -191,7 +217,8 @@ returns `400`.
 
 1. Set `baseUrl` to `http://localhost:8080`.
 2. Send the register example to `POST {{baseUrl}}/api/auth/register`; expect
-   `201`. Repeat it to verify `409`, and try `"role":"ADMIN"` to verify `400`.
+   `201`. Repeat it to verify `409`, and try `"role":"ADMIN"` or
+   `"role":"EMPLOYER"` to verify the response still assigns `JOB_SEEKER`.
 3. Send login to `POST {{baseUrl}}/api/auth/login`; save `accessToken` in a
    Postman variable such as `accessToken`.
 4. For `GET {{baseUrl}}/api/auth/me`, select Bearer Token authorization and
@@ -210,28 +237,20 @@ returns `400`.
 
 ## Database and local environment
 
-The local Compose development setup intentionally uses the existing
-`POSTGRES_USER` and `POSTGRES_PASSWORD` for database initialization, Spring Boot
-runtime, and Flyway. No additional PostgreSQL accounts are provisioned.
-`DB_URL` is set by Compose for the backend. `JWT_SECRET_BASE64` is required;
-`JWT_ISSUER` and `JWT_AUDIENCE` have documented defaults. Keep values in the
-ignored `.env`; do not print or commit secrets.
+Compose uses the `POSTGRES_USER` bootstrap account for Flyway and a separate
+`POSTGRES_RUNTIME_USER` account for Spring Boot. The runtime role is created
+with `NOSUPERUSER NOBYPASSRLS` and receives explicit schema, table, sequence,
+and authentication-function grants. `DB_URL` is set by Compose; JWT uses
+`JWT_SECRET_BASE64`, with documented defaults for `JWT_ISSUER` and
+`JWT_AUDIENCE`. Keep values in the ignored `.env`; do not print or commit
+secrets. See `docs/database.md` for the RLS and database-account design.
 
-The current existing database was inspected read-only: the account is
-`recruitment`, is a superuser with `BYPASSRLS`, and Flyway history is V1-V3.
-Thus current local runtime access bypasses RLS even though policies remain
-enabled. No production RLS protection is claimed. The updated backend will
-apply V4, V5, and V6 at startup. V4, V5, and V6 are pending in this development database.
-adds `token_version` and hashed reset-token columns/index. These migrations do
-not delete rows, but make a protected backup before applying them. No migration
-has been run against the existing volume as part of this change.
-
-V5's invoker functions and the password-reset/change SQL are not a complete
-pre-authentication access design for a non-superuser. The forced users policy
-has no anonymous lookup context, and no additional database account/policy
-path is configured. Use the existing superuser only for this local development
-setup; a least-privilege deployment requires a separately reviewed,
-RLS-compatible auth data-access design.
+The migration history extends through V14. V13 limits the registration
+function to JOB_SEEKER and rejects elevated role values while preserving the
+forced RLS policies. V14 prevents deleting jobs that have submitted
+applications, preserving applicant and review history. Back up existing data
+before applying pending migrations.
+Do not run `docker compose down -v`.
 
 The Compose database volume remains named `postgres_data`. Do not run
 `docker compose down -v`.
@@ -246,8 +265,7 @@ registration, login/account status, `/me`, reset expiry/reuse, password changes,
 logout revocation, and the existing RLS policy tests through a temporary
 non-superuser role.
 
-The regular integration datasource uses the PostgreSQL container's default
-superuser account to match local single-account development, so those auth
-flows do not demonstrate RLS isolation. The existing local Docker stack has
-not been restarted or migrated; end-to-end results below must distinguish
-disposable test verification from that existing database.
+The regular integration datasource uses the PostgreSQL container's bootstrap
+account for Flyway and integration fixtures; dedicated RLS tests create and
+exercise separate non-superuser runtime roles. Testcontainers verification
+does not migrate the existing local Docker database.

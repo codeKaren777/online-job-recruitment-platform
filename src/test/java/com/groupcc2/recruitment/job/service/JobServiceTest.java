@@ -31,6 +31,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.hibernate.exception.ConstraintViolationException;
+import java.sql.SQLException;
 
 @ExtendWith(MockitoExtension.class)
 class JobServiceTest {
@@ -57,8 +60,6 @@ class JobServiceTest {
     void setUp() {
         Clock clock = Clock.fixed(TODAY.atStartOfDay().toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
         service = new JobService(jobRepository, rlsTransactionContext, companyDirectory, clock);
-        when(companyDirectory.findOwnedByEmployer(COMPANY_ID, EMPLOYER))
-                .thenReturn(Optional.of(new CompanyReference(COMPANY_ID, EMPLOYER)));
     }
 
     private JobRequest request(LocalDate due) {
@@ -68,6 +69,7 @@ class JobServiceTest {
     private Job ownedJob(LocalDate due) {
         Job job = new Job();
         job.setEmployerId(EMPLOYER);
+        job.setCompanyId(COMPANY_ID);
         job.setStatus(JobStatus.ACTIVE);
         job.setTitle("t");
         job.setDescription("d");
@@ -94,8 +96,6 @@ class JobServiceTest {
 
     @Test
     void createJob_rejectsDueDateOfTodayOrEarlier() {
-        when(companyDirectory.findOwnedByEmployer(COMPANY_ID, EMPLOYER))
-                .thenReturn(Optional.of(new CompanyReference(COMPANY_ID, EMPLOYER)));
         assertThatThrownBy(() -> service.createJob(EMPLOYER, UserRole.EMPLOYER, request(TODAY)))
                 .isInstanceOf(ResponseStatusException.class);
         assertThatThrownBy(() -> service.createJob(EMPLOYER, UserRole.EMPLOYER, request(TODAY.minusDays(1))))
@@ -125,6 +125,8 @@ class JobServiceTest {
 
     @Test
     void updateJob_ofAnotherEmployer_isNotFound() {
+        when(companyDirectory.findOwnedByEmployer(COMPANY_ID, OTHER_EMPLOYER))
+                .thenReturn(Optional.of(new CompanyReference(COMPANY_ID, OTHER_EMPLOYER)));
         when(jobRepository.findByIdAndEmployerId(JOB_ID, OTHER_EMPLOYER)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.updateJob(
@@ -153,6 +155,55 @@ class JobServiceTest {
 
         assertThatThrownBy(() -> service.closeJob(OTHER_EMPLOYER, UserRole.EMPLOYER, JOB_ID))
                 .isInstanceOf(ResponseStatusException.class);
+    }
+
+    @Test
+    void deleteJob_requiresOwnedJobAndCompanyBeforeDeleting() {
+        Job job = ownedJob(TODAY.plusDays(5));
+        when(jobRepository.findByIdAndEmployerId(JOB_ID, EMPLOYER)).thenReturn(Optional.of(job));
+        when(companyDirectory.findOwnedByEmployer(COMPANY_ID, EMPLOYER))
+                .thenReturn(Optional.of(new CompanyReference(COMPANY_ID, EMPLOYER)));
+
+        service.deleteJob(EMPLOYER, UserRole.EMPLOYER, JOB_ID);
+
+        verify(jobRepository).delete(job);
+        verify(jobRepository).flush();
+    }
+
+    @Test
+    void deleteJob_cannotDeleteAnotherEmployersJobOrCompany() {
+        when(jobRepository.findByIdAndEmployerId(JOB_ID, OTHER_EMPLOYER)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.deleteJob(OTHER_EMPLOYER, UserRole.EMPLOYER, JOB_ID))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("404");
+        verify(jobRepository, never()).delete(any(Job.class));
+
+        Job job = ownedJob(TODAY.plusDays(5));
+        job.setCompanyId(UUID.randomUUID());
+        when(jobRepository.findByIdAndEmployerId(JOB_ID, EMPLOYER)).thenReturn(Optional.of(job));
+        when(companyDirectory.findOwnedByEmployer(job.getCompanyId(), EMPLOYER)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.deleteJob(EMPLOYER, UserRole.EMPLOYER, JOB_ID))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("404");
+        verify(jobRepository, never()).delete(any(Job.class));
+    }
+
+    @Test
+    void deleteJobPreservesJobsWithApplications() {
+        Job job = ownedJob(TODAY.plusDays(5));
+        when(jobRepository.findByIdAndEmployerId(JOB_ID, EMPLOYER)).thenReturn(Optional.of(job));
+        when(companyDirectory.findOwnedByEmployer(COMPANY_ID, EMPLOYER))
+                .thenReturn(Optional.of(new CompanyReference(COMPANY_ID, EMPLOYER)));
+        SQLException sqlException = new SQLException("foreign key violation", "23503");
+        ConstraintViolationException constraint = new ConstraintViolationException(
+                "foreign key violation", sqlException, "applications_job_id_fkey");
+        org.mockito.Mockito.doThrow(new DataIntegrityViolationException("delete rejected", constraint))
+                .when(jobRepository).flush();
+
+        assertThatThrownBy(() -> service.deleteJob(EMPLOYER, UserRole.EMPLOYER, JOB_ID))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("409")
+                .hasMessageContaining("submitted applications");
     }
 
     @Test

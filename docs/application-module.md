@@ -14,6 +14,10 @@ Job seeker submission/tracking and employer review of applications for owned job
 | `GET /api/employer/applications/{applicationId}` | 200, or 404 if it is not for one of the caller's jobs |
 | `PATCH /api/employer/applications/{applicationId}/status` body `{"status":"SHORTLISTED"}` | 200, shortlist or reject an application for an owned job |
 
+Employers may delete a job only when they own its associated company. Jobs
+with applications are retained so application and decision history cannot be
+removed as a side effect; deleting such a job returns `409 Conflict`.
+
 Errors are `{"code": "..."}`: 400 `INVALID_REQUEST`, 403 `FORBIDDEN`, 404 `NOT_FOUND`,
 409 `DUPLICATE_APPLICATION`, 409 `JOB_NOT_ACCEPTING_APPLICATIONS`, 409 `INVALID_STATUS_TRANSITION`,
 503 `INTEGRATION_UNAVAILABLE`.

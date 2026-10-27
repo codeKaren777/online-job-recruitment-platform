@@ -86,17 +86,17 @@ class SecurityBoundaryTest {
 
         mvc.perform(post("/api/jobs").contentType("application/json")
                 .content("""
-                        {"title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
+                        {"companyId":"11111111-1111-1111-1111-111111111111","title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
                         """))
                 .andExpect(status().isUnauthorized());
         mvc.perform(post("/api/jobs").with(seekerToken).contentType("application/json")
                 .content("""
-                        {"title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
+                        {"companyId":"11111111-1111-1111-1111-111111111111","title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
                         """))
                 .andExpect(status().isForbidden());
         mvc.perform(post("/api/jobs").with(employerToken).contentType("application/json")
                 .content("""
-                        {"title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
+                        {"companyId":"11111111-1111-1111-1111-111111111111","title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
                         """))
                 .andExpect(status().isCreated());
 
@@ -111,28 +111,34 @@ class SecurityBoundaryTest {
 
         mvc.perform(put("/api/jobs/{jobId}", jobId).contentType("application/json")
                 .content("""
-                        {"title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
+                        {"companyId":"11111111-1111-1111-1111-111111111111","title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
                         """))
                 .andExpect(status().isUnauthorized());
         mvc.perform(put("/api/jobs/{jobId}", jobId).with(seekerToken).contentType("application/json")
                 .content("""
-                        {"title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
+                        {"companyId":"11111111-1111-1111-1111-111111111111","title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
                         """))
                 .andExpect(status().isForbidden());
         mvc.perform(put("/api/jobs/{jobId}", jobId).with(employerToken).contentType("application/json")
                 .content("""
-                        {"title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
+                        {"companyId":"11111111-1111-1111-1111-111111111111","title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
                         """))
                 .andExpect(status().isNotFound());
 
         mvc.perform(patch("/api/jobs/{jobId}/close", jobId)).andExpect(status().isUnauthorized());
         mvc.perform(patch("/api/jobs/{jobId}/close", jobId).with(seekerToken)).andExpect(status().isForbidden());
         mvc.perform(patch("/api/jobs/{jobId}/close", jobId).with(employerToken)).andExpect(status().isNotFound());
+
+        mvc.perform(delete("/api/jobs/{jobId}", jobId)).andExpect(status().isUnauthorized());
+        mvc.perform(delete("/api/jobs/{jobId}", jobId).with(seekerToken)).andExpect(status().isForbidden());
+        mvc.perform(delete("/api/jobs/{jobId}", jobId).with(adminToken)).andExpect(status().isForbidden());
+        mvc.perform(delete("/api/jobs/{jobId}", jobId).with(employerToken)).andExpect(status().isNoContent());
     }
 
     @Test
     void closedRoutesRejectAnonymousAndAuthenticatedRequests() throws Exception {
-        for (String path : new String[] {"/api/jobs", "/api/profiles/me", "/api/applications", "/api/admin/users"}) {
+        for (String path : new String[] {"/api/jobs", "/api/profiles/me", "/api/applications",
+                "/api/admin/users", "/api/users/register"}) {
             mvc.perform(get(path)).andExpect(status().isUnauthorized());
             mvc.perform(get(path).with(jwt())).andExpect(status().isForbidden());
         }

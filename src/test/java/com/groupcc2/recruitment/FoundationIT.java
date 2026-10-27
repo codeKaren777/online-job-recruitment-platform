@@ -11,6 +11,7 @@ import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterAll;
 import com.groupcc2.recruitment.auth.dto.CurrentUserResponse;
+import com.groupcc2.recruitment.auth.dto.LoginRequest;
 import com.groupcc2.recruitment.users.entity.AccountStatus;
 import com.groupcc2.recruitment.users.entity.UserRole;
 import com.groupcc2.recruitment.auth.service.AuthService;
@@ -31,6 +32,7 @@ import org.springframework.http.MediaType;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -108,7 +110,7 @@ class FoundationIT {
     @Test
     void bootsAgainstPostgresAndAppliesMigrationOnlyOnce() throws Exception {
         assertThat(flyway.getConfiguration().getDefaultSchema()).isEqualTo("public");
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("12");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("14");
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
         try (var connection = dataSource.getConnection(); var statement = connection.createStatement();
@@ -185,7 +187,7 @@ class FoundationIT {
                     INSERT INTO recruitment.jobs (id, employer_id, company_id, title, description, due_date)
                     SELECT '%s', '%s', id, 'RLS test job', 'RLS test description', CURRENT_DATE + 1
                     FROM recruitment.companies WHERE employer_id = '%s'
-                    """.formatted(jobId, employerId));
+                    """.formatted(jobId, employerId, employerId));
             statement.execute("""
                     INSERT INTO recruitment.applications (id, job_id, job_seeker_id)
                     VALUES
@@ -214,7 +216,9 @@ class FoundationIT {
             setRlsIdentity(connection, employerId, "EMPLOYER");
             try (Statement statement = connection.createStatement()) {
                 assertThat(statement.executeUpdate("""
-                        UPDATE recruitment.applications SET status = 'SHORTLISTED' WHERE id = '%s'
+                        UPDATE recruitment.applications
+                        SET status = 'SHORTLISTED', shortlisted_at = CURRENT_TIMESTAMP
+                        WHERE id = '%s'
                         """.formatted(applicationId))).isEqualTo(1);
             }
             connection.commit();
@@ -301,8 +305,8 @@ class FoundationIT {
                 .andExpect(jsonPath("$.paths['/api/admin/users/{id}/role'].patch.responses['403']").exists())
                 .andExpect(jsonPath("$.paths['/api/admin/users/{id}/role'].patch.requestBody.content['application/json'].schema.$ref")
                         .value("#/components/schemas/AssignAdminRoleRequest"))
-                .andExpect(jsonPath("$.tags[?(@.name == 'Administration')]").doesNotExist())
-                .andExpect(jsonPath("$.tags[?(@.name == 'Users')].length()").value(1))
+                .andExpect(jsonPath("$.tags[?(@.name == 'Administration')]").exists())
+                .andExpect(jsonPath("$.tags[?(@.name == 'Users')]").exists())
                 .andExpect(jsonPath("$.paths['/api/employer/applications'].get").exists())
                 .andExpect(jsonPath("$.paths['/api/employer/applications/{applicationId}'].get").exists())
                 .andExpect(jsonPath("$.paths['/api/applications'].post.security[0].bearerAuth").exists())
@@ -407,25 +411,25 @@ class FoundationIT {
         String email = "auth-flow-" + UUID.randomUUID() + "@example.com";
         String password = "StrongPassword123!";
 
+        mvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"%s","role":"ADMIN"}
+                                """.formatted(email, password)))
+                .andExpect(status().isBadRequest());
+
         var registration = mvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"email":"%s","password":"%s","role":"JOB_SEEKER"}
+                                {"email":"%s","password":"%s"}
                                 """.formatted(email, password)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.email").value(email))
                 .andExpect(jsonPath("$.role").value("JOB_SEEKER"))
                 .andExpect(jsonPath("$.passwordHash").doesNotExist())
                 .andReturn();
-        UUID userId = UUID.fromString(
-                com.jayway.jsonpath.JsonPath.read(registration.getResponse().getContentAsString(), "$.id"));
-
-        mvc.perform(post("/api/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"email":"%s","password":"%s","role":"JOB_SEEKER"}
-                                """.formatted(email, password)))
-                .andExpect(status().isConflict());
+        UUID userId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(
+                registration.getResponse().getContentAsString(), "$.id"));
 
         mvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -472,6 +476,33 @@ class FoundationIT {
                                 {"email":"%s","password":"EmployerPassword123!","role":"EMPLOYER"}
                                 """.formatted(employerEmail)))
                 .andExpect(status().isBadRequest());
+
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT * FROM recruitment.auth_register_user(?, ?, ?)")) {
+            statement.setString(1, "db-employer-" + UUID.randomUUID() + "@example.com");
+            statement.setString(2, passwordHashingService.hash(password));
+            statement.setString(3, UserRole.EMPLOYER.name());
+            try {
+                statement.executeQuery();
+                throw new AssertionError("The public registration database contract must reject EMPLOYER");
+            } catch (java.sql.SQLException exception) {
+                assertThat(exception.getSQLState()).isEqualTo("22023");
+            }
+        }
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT * FROM recruitment.auth_register_user(?, ?, ?)")) {
+            statement.setString(1, "db-admin-" + UUID.randomUUID() + "@example.com");
+            statement.setString(2, passwordHashingService.hash(password));
+            statement.setString(3, UserRole.ADMIN.name());
+            try {
+                statement.executeQuery();
+                throw new AssertionError("The public registration database contract must reject ADMIN");
+            } catch (java.sql.SQLException exception) {
+                assertThat(exception.getSQLState()).isEqualTo("22023");
+            }
+        }
     }
 
     @Test
@@ -482,9 +513,9 @@ class FoundationIT {
         String otherEmployerEmail = "workflow-other-employer-" + suffix + "@example.com";
         String password = "WorkflowPassword123!";
 
-        UUID seekerId = register(seekerEmail, password, "JOB_SEEKER");
-        register(employerEmail, password, "EMPLOYER");
-        register(otherEmployerEmail, password, "EMPLOYER");
+        UUID seekerId = register(seekerEmail, password);
+        createAccount(employerEmail, password, UserRole.EMPLOYER);
+        createAccount(otherEmployerEmail, password, UserRole.EMPLOYER);
         String seekerToken = loginAndGetToken(seekerEmail, password);
         String employerToken = loginAndGetToken(employerEmail, password);
         String otherEmployerToken = loginAndGetToken(otherEmployerEmail, password);
@@ -505,9 +536,11 @@ class FoundationIT {
                         .header("Authorization", "Bearer " + seekerToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"displayName\":\"Workflow Applicant\",\"phone\":\"+265999000111\","
-                                + "\"biography\":\"Integration test profile\"}"))
+                                + "\"biography\":\"Integration test profile\",\"role\":\"ADMIN\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.displayName").value("Workflow Applicant"));
+
+        assertThat(userRole(seekerId)).isEqualTo(UserRole.JOB_SEEKER.name());
 
         var jobResponse = mvc.perform(post("/api/jobs")
                         .header("Authorization", "Bearer " + employerToken)
@@ -560,24 +593,129 @@ class FoundationIT {
                 .andExpect(status().isUnauthorized());
     }
 
-    private UUID register(String email, String password, String role) throws Exception {
+    private UUID register(String email, String password) throws Exception {
         var response = mvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"" + email + "\",\"password\":\"" + password
-                                + "\",\"role\":\"JOB_SEEKER\"}"))
+                        .content("{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}"))
                 .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.role").value("JOB_SEEKER"))
                 .andReturn();
         UUID userId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(
                 response.getResponse().getContentAsString(), "$.id"));
-        if ("EMPLOYER".equals(role)) {
-            try (Connection connection = adminConnection();
-                 PreparedStatement statement = connection.prepareStatement(
-                         "UPDATE recruitment.users SET role = 'EMPLOYER' WHERE id = ?")) {
-                statement.setObject(1, userId);
-                assertThat(statement.executeUpdate()).isEqualTo(1);
-            }
+        return userId;
+    }
+
+    private UUID createAccount(String email, String password, UserRole role) throws Exception {
+        UUID userId = UUID.randomUUID();
+        try (Connection connection = adminConnection();
+             PreparedStatement statement = connection.prepareStatement("""
+                     INSERT INTO recruitment.users (id, email, password_hash, role)
+                     VALUES (?, ?, ?, ?::recruitment.user_role)
+                     """)) {
+            statement.setObject(1, userId);
+            statement.setString(2, email);
+            statement.setString(3, passwordHashingService.hash(password));
+            statement.setString(4, role.name());
+            statement.executeUpdate();
         }
         return userId;
+    }
+
+    private String userRole(UUID userId) throws Exception {
+        try (Connection connection = adminConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT role::text FROM recruitment.users WHERE id = ?")) {
+            statement.setObject(1, userId);
+            try (var result = statement.executeQuery()) {
+                assertThat(result.next()).isTrue();
+                return result.getString(1);
+            }
+        }
+    }
+
+    @Test
+    void adminAccountOperationsUseVerifiedRoleAndRestrictedRlsContext() throws Exception {
+        String password = "StrongPassword123!";
+        String adminEmail = "rbac-admin-" + UUID.randomUUID() + "@example.com";
+        String seekerEmail = "rbac-seeker-" + UUID.randomUUID() + "@example.com";
+        String employerEmail = "rbac-employer-" + UUID.randomUUID() + "@example.com";
+        String targetEmail = "rbac-target-" + UUID.randomUUID() + "@example.com";
+        UUID adminId = createAccount(adminEmail, password, UserRole.ADMIN);
+        UUID seekerId = createAccount(seekerEmail, password, UserRole.JOB_SEEKER);
+        UUID employerId = createAccount(employerEmail, password, UserRole.EMPLOYER);
+        UUID targetId = createAccount(targetEmail, password, UserRole.JOB_SEEKER);
+
+        String adminToken = authService.login(new LoginRequest(adminEmail, password)).accessToken();
+        String seekerToken = authService.login(new LoginRequest(seekerEmail, password)).accessToken();
+        String employerToken = authService.login(new LoginRequest(employerEmail, password)).accessToken();
+        String targetToken = authService.login(new LoginRequest(targetEmail, password)).accessToken();
+
+        mvc.perform(get("/api/users/me").header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value(adminEmail));
+        mvc.perform(get("/api/users/me").header("Authorization", "Bearer " + seekerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value(seekerEmail));
+        mvc.perform(get("/api/users/me").header("Authorization", "Bearer " + employerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value(employerEmail));
+
+        mvc.perform(get("/api/admin/users"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/admin/users").header("Authorization", "Bearer " + seekerToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/admin/users").header("Authorization", "Bearer " + employerToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/admin/users").header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .content().string(org.hamcrest.Matchers.containsString(targetEmail)));
+
+        mvc.perform(get("/api/admin/users/{id}", targetId))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/admin/users/{id}", targetId)
+                        .header("Authorization", "Bearer " + seekerToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/admin/users/{id}", targetId)
+                        .header("Authorization", "Bearer " + employerToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/admin/users/{id}", targetId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value(targetEmail));
+
+        mvc.perform(patch("/api/admin/users/{id}/suspend", targetId)
+                        .header("Authorization", "Bearer " + seekerToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(patch("/api/admin/users/{id}/suspend", targetId)
+                        .header("Authorization", "Bearer " + employerToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(patch("/api/admin/users/{id}/suspend", targetId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accountStatus").value("SUSPENDED"));
+
+        assertThat(userRole(adminId)).isEqualTo(UserRole.ADMIN.name());
+        assertThat(userRole(seekerId)).isEqualTo(UserRole.JOB_SEEKER.name());
+        assertThat(userRole(employerId)).isEqualTo(UserRole.EMPLOYER.name());
+        try (Connection connection = adminConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT status::text FROM recruitment.users WHERE id = ?")) {
+            statement.setObject(1, targetId);
+            try (var result = statement.executeQuery()) {
+                assertThat(result.next()).isTrue();
+                assertThat(result.getString(1)).isEqualTo("SUSPENDED");
+            }
+        }
+        mvc.perform(get("/api/users/me").header("Authorization", "Bearer " + targetToken))
+                .andExpect(status().isUnauthorized());
+
+        try (Connection connection = dataSource.getConnection();
+             Statement statement = connection.createStatement();
+             var result = statement.executeQuery("SELECT count(*) FROM recruitment.users")) {
+            assertThat(result.next()).isTrue();
+            assertThat(result.getLong(1)).isZero();
+        }
     }
 
     @Test
@@ -804,7 +942,7 @@ class FoundationIT {
     }
 
     @Test
-    void featureRoutesRemainClosedAndAuthenticationDoesNotExposeAdminRegistration() throws Exception {
+    void featureRoutesRemainClosedAndRegistrationCannotChooseAnAdminRole() throws Exception {
         for (String path : new String[] {"/api/auth/login", "/api/jobs",
                 "/api/profiles/me", "/api/applications", "/api/admin/users", "/actuator/env"}) {
             mvc.perform(get(path)).andExpect(status().isUnauthorized());

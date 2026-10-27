@@ -33,6 +33,14 @@ SELECT set_config('app.role', 'JOB_SEEKER', true);
 
 Use `EMPLOYER` or `ADMIN` as appropriate. Use `set_config(..., true)` or `SET LOCAL` inside the same database transaction as the protected queries. Do not use session-scoped `SET` with a connection pool: the connection can be reused for a different request. Transaction-local settings reset at transaction end. The application must derive identity and role from verified server-side authentication, never from HTTP input. Missing settings result in no rows passing the policies; an invalid identity does not authorize another user's rows.
 
+Administrative services that need broader visibility first set a minimal
+self-only context and verify the caller's active persisted role. Only after
+that check may the same transaction set `app.role` to `ADMIN` and query or
+mutate administrative records. Public registration assigns `JOB_SEEKER` in
+the service, and the database registration function rejects any other role.
+Do not set `ADMIN` context based only on a request value or an unverified role
+claim.
+
 The policies enforce that:
 
 - Job seekers see their own profile and jobs that are currently available.
@@ -84,11 +92,15 @@ The current development credentials are `POSTGRES_DB`, `POSTGRES_USER`,
 `db` service, and JWT configuration uses `JWT_SECRET_BASE64` with optional
 `JWT_ISSUER` and `JWT_AUDIENCE`. Do not display or commit `.env` values.
 
-The existing database has V1-V3 applied and has not been changed by this work.
-Before starting the updated backend, make a protected backup. Startup will run
-the pending V4, V5, V6, V7, and V8 Flyway migrations using the existing account. V6 adds
-columns and an index; it does not delete application data. Do not use
-`docker compose down -v`.
+The migration history now includes V1-V14. V9 records administrative role
+changes; V13 restricts the database registration function to `JOB_SEEKER`
+accounts; V14 changes the applications-to-jobs foreign key to `ON DELETE
+RESTRICT` so a job deletion cannot cascade-delete application history.
+Compose grants the restricted runtime role execution of this
+function; its security-definer implementation uses a fixed `search_path`,
+rejects elevated role values, and does not grant general access to user rows.
+Before applying pending migrations to an existing database, make a protected
+backup. Do not use `docker compose down -v`.
 
 ## Local database
 
@@ -100,9 +112,9 @@ docker compose up -d db
 
 The detached flag belongs after `up`. If Docker socket permissions require elevated access, use `sudo docker compose up -d db` temporarily. The preferred permanent fix is to add your Linux user to the `docker` group and start a new login session.
 
-Compose starts PostgreSQL and then Spring Boot; Flyway runs V4, V5, V6, V7, and V8 during
-application startup using the same `recruitment` database account. No role
-provisioner or extra database account is used by this local development setup.
+Compose starts PostgreSQL, provisions its restricted runtime account, and then
+Spring Boot runs any pending Flyway migrations using the bootstrap account.
+The backend connects as the restricted non-superuser runtime account.
 
 ## Database commands
 
@@ -118,7 +130,7 @@ docker compose up -d db
 
 Start PostgreSQL, Flyway migrations, and the backend. This requires the existing
 database variables and JWT secret in `.env`. Back up the database before this
-command because it applies pending V4, V5, V6, V7, and V8 migrations:
+command because it applies pending V4, V5, V6, V7, V8, and V9 migrations:
 
 ```bash
 docker compose up --build -d

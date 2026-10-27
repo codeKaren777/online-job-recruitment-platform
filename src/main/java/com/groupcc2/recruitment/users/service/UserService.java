@@ -11,6 +11,8 @@ public interface UserService {
 
     User findById(UUID id);
 
+    User findOwnById(UUID id);
+
     List<User> findAllForAdministrator(UUID administratorId);
 
     User findForAdministrator(UUID administratorId, UUID id);

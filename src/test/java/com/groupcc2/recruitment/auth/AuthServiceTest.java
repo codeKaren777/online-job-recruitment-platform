@@ -54,21 +54,7 @@ class AuthServiceTest {
     @InjectMocks private AuthService authService;
 
     @Test
-    void registrationRejectsAdminEvenWhenRequestValidationWasBypassed() {
-        RegisterRequest request = new RegisterRequest("person@example.com", RAW_PASSWORD, UserRole.ADMIN);
-
-        assertThatThrownBy(() -> authService.register(request))
-                .isInstanceOf(IllegalArgumentException.class);
-
-        verify(passwordHashingService, never()).hash(RAW_PASSWORD);
-        verify(userRepository, never()).registerUser(
-                org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.anyString());
-    }
-
-    @Test
-    void registrationHashesPasswordAndReturnsSafeAccountDetails() {
+    void registrationAlwaysAssignsJobSeekerAndReturnsSafeAccountDetails() {
         UUID userId = UUID.randomUUID();
         AuthCredentialRepository.RegistrationResult stored = org.mockito.Mockito.mock(AuthCredentialRepository.RegistrationResult.class);
         when(stored.getId()).thenReturn(userId);
@@ -79,8 +65,7 @@ class AuthServiceTest {
         when(userRepository.registerUser("person@example.com", PASSWORD_HASH, "JOB_SEEKER"))
                 .thenReturn(Optional.of(stored));
 
-        RegisterResponse response = authService.register(
-                new RegisterRequest("person@example.com", RAW_PASSWORD, UserRole.JOB_SEEKER));
+        RegisterResponse response = authService.register(new RegisterRequest("person@example.com", RAW_PASSWORD));
 
         assertThat(response).isEqualTo(new RegisterResponse(
                 userId, "person@example.com", UserRole.JOB_SEEKER, AccountStatus.ACTIVE));
@@ -99,13 +84,25 @@ class AuthServiceTest {
     }
 
     @Test
+    void registrationRejectsElevatedRolesBeforeCreatingAnAccount() {
+        assertThatThrownBy(() -> authService.register(
+                new RegisterRequest("person@example.com", RAW_PASSWORD, UserRole.ADMIN)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Public registration is limited to JOB_SEEKER");
+        assertThatThrownBy(() -> authService.register(
+                new RegisterRequest("person@example.com", RAW_PASSWORD, UserRole.EMPLOYER)))
+                .isInstanceOf(IllegalArgumentException.class);
+        verifyNoInteractions(passwordHashingService, userRepository);
+    }
+
+    @Test
     void registrationDoesNotHideUnexpectedDatabaseErrors() {
         when(passwordHashingService.hash(RAW_PASSWORD)).thenReturn(PASSWORD_HASH);
         doThrow(new IllegalStateException("database unavailable"))
                 .when(userRepository).registerUser("person@example.com", PASSWORD_HASH, "JOB_SEEKER");
 
         assertThatThrownBy(() -> authService.register(
-                new RegisterRequest("person@example.com", RAW_PASSWORD, UserRole.JOB_SEEKER)))
+                new RegisterRequest("person@example.com", RAW_PASSWORD)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("database unavailable");
     }
