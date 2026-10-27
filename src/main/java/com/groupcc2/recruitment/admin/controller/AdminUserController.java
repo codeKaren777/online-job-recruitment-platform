@@ -5,6 +5,8 @@ import com.groupcc2.recruitment.users.dto.UserResponse;
 import com.groupcc2.recruitment.users.service.UserService;
 import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
@@ -22,8 +24,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/admin/users")
 @PreAuthorize("hasRole('ADMIN')")
-@Tag(name = "Administration", description = "Administrative account management")
+@Tag(name = "Users", description = "User registration, identity, and account management")
 @SecurityRequirement(name = "bearerAuth")
+@ApiResponses({
+    @ApiResponse(responseCode = "401", description = "A valid bearer token is required"),
+    @ApiResponse(responseCode = "403", description = "The caller must have the ADMIN role")
+})
 public class AdminUserController {
     private final UserService users;
 
