@@ -26,4 +26,6 @@ public interface UserService {
     void remove(UUID administratorId, UUID id);
 
     User promoteToAdministrator(UUID administratorId, UUID id);
+
+    User promoteToEmployer(UUID administratorId, UUID id);
 }

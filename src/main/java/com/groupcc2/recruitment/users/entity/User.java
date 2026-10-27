@@ -117,6 +117,17 @@ public class User {
         tokenVersion++;
     }
 
+    public void promoteToEmployer() {
+        if (role != UserRole.JOB_SEEKER) {
+            throw new IllegalStateException("Only job seekers can become employers");
+        }
+        if (!canAuthenticate()) {
+            throw new IllegalStateException("Only active users can become employers");
+        }
+        role = UserRole.EMPLOYER;
+        tokenVersion++;
+    }
+
     public void suspend() {
         if (accountStatus == AccountStatus.REMOVED) {
             throw new IllegalStateException("Removed accounts cannot be suspended");

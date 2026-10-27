@@ -50,6 +50,10 @@ Owns employer job postings. Every posting references a company represented by th
 
 Owns company identity and contact information for employers. An employer may manage only companies they own, and a job may reference only one of those companies. Existing jobs are assigned a migration-created legacy company so the relationship can become mandatory without losing data.
 
+### Employer approval
+
+Public registration creates `JOB_SEEKER` accounts only. Job seekers submit employer upgrade requests through the users module; administrators review those requests, and approval atomically changes the account role to `EMPLOYER`. Pending or rejected requests never grant employer permissions.
+
 ### Applications
 
 Owns job submissions and application statuses. A job seeker can apply to a particular job only once. New applications start as `PENDING`; employers may review their own applications as `SHORTLISTED` or `REJECTED`.

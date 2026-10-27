@@ -108,7 +108,7 @@ class FoundationIT {
     @Test
     void bootsAgainstPostgresAndAppliesMigrationOnlyOnce() throws Exception {
         assertThat(flyway.getConfiguration().getDefaultSchema()).isEqualTo("public");
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("10");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("12");
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
         try (var connection = dataSource.getConnection(); var statement = connection.createStatement();
@@ -288,6 +288,9 @@ class FoundationIT {
                 .andExpect(jsonPath("$.paths['/api/admin/users/{id}/suspend'].patch.responses['401']").exists())
                 .andExpect(jsonPath("$.paths['/api/admin/users/{id}/suspend'].patch.responses['403']").exists())
                 .andExpect(jsonPath("$.paths['/api/admin/users/{id}/remove'].patch").exists())
+                .andExpect(jsonPath("$.paths['/api/employer-requests'].post.security[0].bearerAuth").exists())
+                .andExpect(jsonPath("$.paths['/api/admin/employer-requests'].get.security[0].bearerAuth").exists())
+                .andExpect(jsonPath("$.paths['/api/admin/employer-requests/{requestId}/approve'].patch").exists())
                 .andExpect(jsonPath("$.paths['/api/admin/users/{id}/remove'].patch.tags[0]").value("Users"))
                 .andExpect(jsonPath("$.paths['/api/admin/users/{id}/remove'].patch.security[0].bearerAuth").exists())
                 .andExpect(jsonPath("$.paths['/api/admin/users/{id}/remove'].patch.responses['401']").exists())
@@ -468,12 +471,7 @@ class FoundationIT {
                         .content("""
                                 {"email":"%s","password":"EmployerPassword123!","role":"EMPLOYER"}
                                 """.formatted(employerEmail)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.role").value("EMPLOYER"));
-        String employerToken = loginAndGetToken(employerEmail, "EmployerPassword123!");
-        mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + employerToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.role").value("EMPLOYER"));
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -566,11 +564,20 @@ class FoundationIT {
         var response = mvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"" + email + "\",\"password\":\"" + password
-                                + "\",\"role\":\"" + role + "\"}"))
+                                + "\",\"role\":\"JOB_SEEKER\"}"))
                 .andExpect(status().isCreated())
                 .andReturn();
-        return UUID.fromString(com.jayway.jsonpath.JsonPath.read(
+        UUID userId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(
                 response.getResponse().getContentAsString(), "$.id"));
+        if ("EMPLOYER".equals(role)) {
+            try (Connection connection = adminConnection();
+                 PreparedStatement statement = connection.prepareStatement(
+                         "UPDATE recruitment.users SET role = 'EMPLOYER' WHERE id = ?")) {
+                statement.setObject(1, userId);
+                assertThat(statement.executeUpdate()).isEqualTo(1);
+            }
+        }
+        return userId;
     }
 
     @Test

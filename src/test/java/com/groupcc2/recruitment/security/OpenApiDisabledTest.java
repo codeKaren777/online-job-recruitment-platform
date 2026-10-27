@@ -24,6 +24,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 @Import({SecurityConfig.class, OpenApiConfiguration.class})
 class OpenApiDisabledTest {
+    @MockitoBean com.groupcc2.recruitment.company.service.CompanyService companyService;
+    @MockitoBean com.groupcc2.recruitment.users.employer.service.EmployerUpgradeService employerUpgradeService;
     @Autowired MockMvc mvc;
     @MockitoBean UserService userService;
     @MockitoBean JobService jobService;

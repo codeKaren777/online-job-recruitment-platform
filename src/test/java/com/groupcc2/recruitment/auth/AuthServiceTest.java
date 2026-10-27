@@ -90,11 +90,11 @@ class AuthServiceTest {
     @Test
     void registrationMapsUniqueEmailConflictToConflictWithoutPrechecking() {
         when(passwordHashingService.hash(RAW_PASSWORD)).thenReturn(PASSWORD_HASH);
-        when(userRepository.registerUser("person@example.com", PASSWORD_HASH, "EMPLOYER"))
+        when(userRepository.registerUser("person@example.com", PASSWORD_HASH, "JOB_SEEKER"))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> authService.register(
-                new RegisterRequest("person@example.com", RAW_PASSWORD, UserRole.EMPLOYER)))
+                new RegisterRequest("person@example.com", RAW_PASSWORD, UserRole.JOB_SEEKER)))
                 .isInstanceOf(EmailAlreadyRegisteredException.class);
     }
 

@@ -34,11 +34,11 @@ class AuthDtoValidationTest {
     }
 
     @Test
-    void acceptsValidRegistrationForSupportedPublicRoles() {
-        for (UserRole role : new UserRole[] {UserRole.JOB_SEEKER, UserRole.EMPLOYER}) {
-            assertThat(validator.validate(new RegisterRequest("person@example.com",
-                    "StrongPassword123!", role))).isEmpty();
-        }
+    void acceptsOnlyJobSeekerRegistration() {
+        assertThat(validator.validate(new RegisterRequest("person@example.com",
+                "StrongPassword123!", UserRole.JOB_SEEKER))).isEmpty();
+        assertThat(validator.validate(new RegisterRequest("person@example.com",
+                "StrongPassword123!", null))).isEmpty();
     }
 
     @Test
@@ -46,7 +46,9 @@ class AuthDtoValidationTest {
         Set<ConstraintViolation<RegisterRequest>> adminViolations = validator.validate(
                 new RegisterRequest("person@example.com", "StrongPassword123!", UserRole.ADMIN));
         assertThat(adminViolations).extracting(ConstraintViolation::getMessage)
-                .contains("ADMIN role cannot be selected during registration");
+                .contains("Only JOB_SEEKER role can be selected during registration");
+        assertThat(validator.validate(new RegisterRequest(
+                "person@example.com", "StrongPassword123!", UserRole.EMPLOYER))).isNotEmpty();
 
         Set<ConstraintViolation<RegisterRequest>> fieldViolations = validator.validate(
                 new RegisterRequest("not-an-email", "short", null));

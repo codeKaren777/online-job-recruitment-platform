@@ -48,11 +48,11 @@ public class AuthService {
 
     @Transactional
     public RegisterResponse register(RegisterRequest request) {
-        if (request.role() != UserRole.JOB_SEEKER && request.role() != UserRole.EMPLOYER) {
-            throw new IllegalArgumentException("Public registration is limited to JOB_SEEKER and EMPLOYER");
+        if (request.role() != null && request.role() != UserRole.JOB_SEEKER) {
+            throw new IllegalArgumentException("Public registration is limited to JOB_SEEKER");
         }
         String passwordHash = passwordHashingService.hash(request.password());
-        return userRepository.registerUser(request.email(), passwordHash, request.role().name())
+        return userRepository.registerUser(request.email(), passwordHash, UserRole.JOB_SEEKER.name())
                 .map(user -> new RegisterResponse(user.getId(), user.getEmail(),
                         UserRole.valueOf(user.getRole()), AccountStatus.valueOf(user.getStatus())))
                 .orElseThrow(EmailAlreadyRegisteredException::new);

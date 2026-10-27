@@ -128,6 +128,22 @@ public class UserServiceImpl implements UserService {
         return user;
     }
 
+    @Override
+    @Transactional
+    public User promoteToEmployer(UUID administratorId, UUID id) {
+        requireAdministrator(administratorId);
+        if (administratorId.equals(id)) {
+            throw new InvalidRoleChangeException("Administrators cannot change their own role");
+        }
+        User user = findById(id);
+        try {
+            user.promoteToEmployer();
+        } catch (IllegalStateException exception) {
+            throw new InvalidRoleChangeException(exception.getMessage());
+        }
+        return user;
+    }
+
     private void requireAdministrator(UUID administratorId) {
         rlsTransactionContext.setAuthenticatedUser(administratorId, UserRole.ADMIN);
         if (findById(administratorId).getRole() != UserRole.ADMIN) {

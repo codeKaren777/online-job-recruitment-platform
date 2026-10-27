@@ -31,6 +31,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 @Import(SecurityConfig.class)
 class UserControllerTest {
+    @MockitoBean com.groupcc2.recruitment.company.service.CompanyService companyService;
+    @MockitoBean com.groupcc2.recruitment.users.employer.service.EmployerUpgradeService employerUpgradeService;
     @Autowired MockMvc mvc;
     @MockitoBean UserService users;
     @MockitoBean AccountJwtValidator accountJwtValidator;

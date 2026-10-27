@@ -121,4 +121,33 @@ class UserServiceTest {
                 .isInstanceOf(InvalidRoleChangeException.class);
         verifyNoInteractions(roleChanges);
     }
+
+    @Test
+    void administratorCanPromoteAnActiveJobSeekerToEmployer() {
+        User administrator = new User("admin@example.com", "hash", UserRole.ADMIN);
+        User user = new User("person@example.com", "hash", UserRole.JOB_SEEKER);
+        when(repository.findById(administrator.getId())).thenReturn(Optional.of(administrator));
+        when(repository.findById(user.getId())).thenReturn(Optional.of(user));
+
+        User promoted = service.promoteToEmployer(administrator.getId(), user.getId());
+
+        assertThat(promoted.getRole()).isEqualTo(UserRole.EMPLOYER);
+        assertThat(promoted.getTokenVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void employerPromotionRejectsInactiveOrAlreadyPrivilegedUsers() {
+        User administrator = new User("admin@example.com", "hash", UserRole.ADMIN);
+        User suspended = new User("suspended@example.com", "hash", UserRole.JOB_SEEKER);
+        suspended.suspend();
+        User employer = new User("employer@example.com", "hash", UserRole.EMPLOYER);
+        when(repository.findById(administrator.getId())).thenReturn(Optional.of(administrator));
+        when(repository.findById(suspended.getId())).thenReturn(Optional.of(suspended));
+        when(repository.findById(employer.getId())).thenReturn(Optional.of(employer));
+
+        assertThatThrownBy(() -> service.promoteToEmployer(administrator.getId(), suspended.getId()))
+                .isInstanceOf(InvalidRoleChangeException.class);
+        assertThatThrownBy(() -> service.promoteToEmployer(administrator.getId(), employer.getId()))
+                .isInstanceOf(InvalidRoleChangeException.class);
+    }
 }

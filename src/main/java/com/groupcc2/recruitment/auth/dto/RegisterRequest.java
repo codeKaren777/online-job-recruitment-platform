@@ -6,7 +6,6 @@ import com.groupcc2.recruitment.users.entity.UserRole;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -19,14 +18,13 @@ public record RegisterRequest(
         @Schema(description = "Account password, 12–72 characters", requiredMode = Schema.RequiredMode.REQUIRED,
                 example = "StrongPassword123!")
         String password,
-        @NotNull
-        @Schema(description = "Self-registration role; ADMIN is not allowed", requiredMode = Schema.RequiredMode.REQUIRED,
-                allowableValues = {"JOB_SEEKER", "EMPLOYER"}, example = "JOB_SEEKER")
+        @Schema(description = "Only JOB_SEEKER is permitted during public registration",
+                allowableValues = {"JOB_SEEKER"}, example = "JOB_SEEKER")
         UserRole role) {
 
-    @AssertTrue(message = "ADMIN role cannot be selected during registration")
+    @AssertTrue(message = "Only JOB_SEEKER role can be selected during registration")
     public boolean isRoleAllowed() {
-        return role == null || role != UserRole.ADMIN;
+        return role == null || role == UserRole.JOB_SEEKER;
     }
 
     @AssertTrue(message = "Password must be at most 72 UTF-8 bytes")
