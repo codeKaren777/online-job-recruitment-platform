@@ -37,6 +37,12 @@ ownership contract. A client-supplied job or application ID cannot grant access 
   constraint, which also catches two concurrent requests (BR-01).
 - Profile sharing (BR-05) needs no copy: the existing RLS policies let the employer read the seeker's
   profile and documents as soon as an application row exists.
+- Successful application submissions and employer decisions atomically enqueue email notifications.
+  Submission IDs are the application UUID; decision IDs are the decision-audit UUID, so an idempotency
+  constraint prevents creating the same event twice without restricting future status events.
+- The outbox snapshots the applicant's registered email, optional profile display name, job title,
+  company name and event timestamp from trusted database records. Employer API responses continue to
+  omit applicant email addresses.
 
 ## Open dependencies (what other owners must supply)
 
@@ -54,6 +60,37 @@ ownership contract. A client-supplied job or application ID cannot grant access 
    helper function. Do not edit V1-V3; add V4 and update the `FoundationIT` version check ("3").
 5. **Employer profile access**: `profile.service.EmployerApplicationAccess` is meant to be implemented by
    the application owner. It is only needed for employer profile/document access and is not implemented here.
+
+## Application email notifications
+
+Email delivery is disabled by default (`APP_MAIL_ENABLED=false`), so local startup and tests do not
+need SMTP. To enable it, configure `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT`,
+`SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` and `APP_MAIL_FROM`. SMTP authentication and STARTTLS
+default to enabled; configure provider-specific values only where necessary. Credentials belong in
+the deployment secret store or an ignored local `.env`, never in Git.
+
+The scheduled dispatcher polls the durable `application_notification_outbox` every 30 seconds. It
+claims rows in small batches with `FOR UPDATE SKIP LOCKED` and a five-minute lease, which supports
+multiple instances and recovers abandoned claims. Transient delivery errors retry after exponential
+backoff beginning at 30 seconds, for up to five attempts. Authentication, invalid address, missing
+company information, and template errors are marked permanently failed. Only safe error codes are
+stored or logged, never SMTP exception contents or applicant addresses. Sent rows are retained 90 days;
+failed rows 365 days, then cleaned by the dispatcher.
+
+Migration V15 gives the runtime database account no direct outbox table access. A small set of
+`SECURITY DEFINER` functions with a fixed `search_path` captures minimum event details after checking
+the verified transaction-local role, applicant/job relationship or employer-owned decision audit.
+Only the runtime account may execute them. The dispatcher obtains recipient details only through its
+internal claim function; those details are not part of employer-facing APIs.
+
+SMTP plus PostgreSQL cannot provide exactly-once external delivery. If a mail server accepts a
+message and the process crashes before marking it sent, recovery can deliver a duplicate. Missing
+company information is marked failed rather than sending an inaccurate company name. Inspect failed
+outbox rows and safe error codes for operations; do not retry permanent failures without fixing their
+underlying cause.
+
+Run unit tests with `.\mvnw.cmd -B -ntp test`. Restricted-role PostgreSQL migration and outbox tests
+run under `.\mvnw.cmd -B -ntp verify` and require Docker.
 
 ## Decisions to confirm
 

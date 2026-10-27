@@ -56,6 +56,10 @@ public class ApplicationDecisionAudit {
         this.decidedAt = decidedAt;
     }
 
+    public UUID getId() {
+        return id;
+    }
+
     @PrePersist
     void initializeIdAndTimestamp() {
         if (id == null) {

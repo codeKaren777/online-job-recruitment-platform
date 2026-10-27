@@ -78,6 +78,7 @@ class SecurityBoundaryTest {
                 .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Job not found"));
         when(jobService.closeJob(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
                 .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Job not found"));
+        String companyId = UUID.randomUUID().toString();
 
         mvc.perform(get("/api/jobs")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/jobs").with(seekerToken)).andExpect(status().isOk());
@@ -86,18 +87,18 @@ class SecurityBoundaryTest {
 
         mvc.perform(post("/api/jobs").contentType("application/json")
                 .content("""
-                        {"title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
-                        """))
+                {"companyId":"%s","title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
+                """.formatted(companyId)))
                 .andExpect(status().isUnauthorized());
         mvc.perform(post("/api/jobs").with(seekerToken).contentType("application/json")
                 .content("""
-                        {"title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
-                        """))
+                {"companyId":"%s","title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
+                """.formatted(companyId)))
                 .andExpect(status().isForbidden());
         mvc.perform(post("/api/jobs").with(employerToken).contentType("application/json")
                 .content("""
-                        {"title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
-                        """))
+                {"companyId":"%s","title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
+                """.formatted(companyId)))
                 .andExpect(status().isCreated());
 
         mvc.perform(get("/api/jobs/{jobId}", jobId)).andExpect(status().isUnauthorized());
@@ -111,18 +112,18 @@ class SecurityBoundaryTest {
 
         mvc.perform(put("/api/jobs/{jobId}", jobId).contentType("application/json")
                 .content("""
-                        {"title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
-                        """))
+                        {"companyId":"%s","title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
+                        """.formatted(companyId)))
                 .andExpect(status().isUnauthorized());
         mvc.perform(put("/api/jobs/{jobId}", jobId).with(seekerToken).contentType("application/json")
                 .content("""
-                        {"title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
-                        """))
+                        {"companyId":"%s","title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
+                        """.formatted(companyId)))
                 .andExpect(status().isForbidden());
         mvc.perform(put("/api/jobs/{jobId}", jobId).with(employerToken).contentType("application/json")
                 .content("""
-                        {"title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
-                        """))
+                        {"companyId":"%s","title":"Backend Engineer","description":"Build APIs","requiredQualifications":"BSc CS","dueDate":"2099-12-31","location":"Zomba"}
+                        """.formatted(companyId)))
                 .andExpect(status().isNotFound());
 
         mvc.perform(patch("/api/jobs/{jobId}/close", jobId)).andExpect(status().isUnauthorized());

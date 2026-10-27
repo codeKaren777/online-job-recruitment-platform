@@ -57,8 +57,6 @@ class JobServiceTest {
     void setUp() {
         Clock clock = Clock.fixed(TODAY.atStartOfDay().toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
         service = new JobService(jobRepository, rlsTransactionContext, companyDirectory, clock);
-        when(companyDirectory.findOwnedByEmployer(COMPANY_ID, EMPLOYER))
-                .thenReturn(Optional.of(new CompanyReference(COMPANY_ID, EMPLOYER)));
     }
 
     private JobRequest request(LocalDate due) {
@@ -94,8 +92,6 @@ class JobServiceTest {
 
     @Test
     void createJob_rejectsDueDateOfTodayOrEarlier() {
-        when(companyDirectory.findOwnedByEmployer(COMPANY_ID, EMPLOYER))
-                .thenReturn(Optional.of(new CompanyReference(COMPANY_ID, EMPLOYER)));
         assertThatThrownBy(() -> service.createJob(EMPLOYER, UserRole.EMPLOYER, request(TODAY)))
                 .isInstanceOf(ResponseStatusException.class);
         assertThatThrownBy(() -> service.createJob(EMPLOYER, UserRole.EMPLOYER, request(TODAY.minusDays(1))))
@@ -125,6 +121,8 @@ class JobServiceTest {
 
     @Test
     void updateJob_ofAnotherEmployer_isNotFound() {
+        when(companyDirectory.findOwnedByEmployer(COMPANY_ID, OTHER_EMPLOYER))
+                .thenReturn(Optional.of(new CompanyReference(COMPANY_ID, OTHER_EMPLOYER)));
         when(jobRepository.findByIdAndEmployerId(JOB_ID, OTHER_EMPLOYER)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.updateJob(

@@ -29,6 +29,7 @@ The project uses:
 - Docker Compose
 - Flyway database migrations
 - JWT authentication
+- Optional Spring Boot Mail delivery for application notifications
 
 ### Before continuing
 
@@ -75,6 +76,12 @@ docker compose version
 ```
 
 Check that Java reports version 21 and that Docker can communicate with its running engine.
+
+Application email delivery is disabled unless `APP_MAIL_ENABLED=true`. For a production deployment,
+set `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT`, `SPRING_MAIL_USERNAME`,
+`SPRING_MAIL_PASSWORD`, and `APP_MAIL_FROM` in the deployment's secret/configuration store.
+Authentication and STARTTLS are enabled by default. Never commit SMTP credentials. Notification
+events remain durably queued while delivery is disabled and are processed after it is enabled.
 
 If `docker version` reports a connection error, start Docker Desktop on Windows or the Docker service on Linux before continuing.
 
@@ -249,8 +256,8 @@ Starting the full stack allows Docker Compose to start the database and backend 
 
 First, check your existing containers and volumes as described in Section 3.
 
-The current database has V4, V5, V6, V7, and V8 pending. Before starting the updated
-backend, make a protected backup outside the repository:
+Before starting the updated backend, make a protected backup outside the
+repository; Flyway applies any pending migrations through V15:
 
 ```bash
 backup="$HOME/recruitment-before-auth-$(date +%Y%m%d-%H%M%S).dump"
@@ -273,10 +280,8 @@ What this command does:
 - `--build` builds or rebuilds images when necessary.
 - `-d` runs the containers in the background.
 
-This runs pending Flyway migrations V4, V5, V6, V7, and V8. They add authentication
-functions, token-version and password-reset fields/indexes, and harden the
-authentication functions for restricted runtime roles; they do not delete
-existing rows. The named `postgres_data` volume is preserved. Never use
+This runs all pending Flyway migrations through V15. They preserve existing
+application rows and the named `postgres_data` volume. Never use
 `docker compose down -v` for this update.
 
 Compose enables the `local` Spring profile so the forgot-password endpoint can

@@ -77,7 +77,7 @@ class JobsRlsIT {
 
             app.setAutoCommit(false);
             setContext(app, employer, "EMPLOYER");
-            insertJob(app, ownJob, employer);
+            insertJob(app, ownJob, employer, company);
             assertThat(jobCount(app, ownJob)).isEqualTo(1);
             assertThat(jobCount(app, otherActiveJob)).isZero();
             assertThat(updateTitle(app, otherActiveJob)).isZero();
@@ -87,7 +87,7 @@ class JobsRlsIT {
             app.commit();
 
             setContext(app, employer, "EMPLOYER");
-            assertThatThrownBySql(() -> insertJob(app, rejectedInsert, otherEmployer));
+            assertThatThrownBySql(() -> insertJob(app, rejectedInsert, otherEmployer, company));
             app.rollback();
 
             setContext(app, employer, "EMPLOYER");
@@ -147,13 +147,14 @@ class JobsRlsIT {
         }
     }
 
-    private void insertJob(Connection connection, UUID jobId, UUID employerId) throws SQLException {
+    private void insertJob(Connection connection, UUID jobId, UUID employerId, UUID companyId) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("""
-                INSERT INTO recruitment.jobs (id, employer_id, title, description, due_date)
-                VALUES (?, ?, 'Restricted role job', 'Description', CURRENT_DATE + 5)
+                INSERT INTO recruitment.jobs (id, employer_id, company_id, title, description, due_date)
+                VALUES (?, ?, ?, 'Restricted role job', 'Description', CURRENT_DATE + 5)
                 """)) {
             statement.setObject(1, jobId);
             statement.setObject(2, employerId);
+            statement.setObject(3, companyId);
             statement.executeUpdate();
         }
     }
