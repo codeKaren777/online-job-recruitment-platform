@@ -178,8 +178,13 @@ class FoundationIT {
                       ('%s', 'rls-other-applicant@example.com', 'test-hash', 'JOB_SEEKER')
                     """.formatted(employerId, applicantId, otherApplicantId));
             statement.execute("""
-                    INSERT INTO recruitment.jobs (id, employer_id, title, description, due_date)
-                    VALUES ('%s', '%s', 'RLS test job', 'RLS test description', CURRENT_DATE + 1)
+                    INSERT INTO recruitment.companies (id, employer_id, name)
+                    VALUES ('%s', '%s', 'RLS test company')
+                    """.formatted(UUID.randomUUID(), employerId));
+            statement.execute("""
+                    INSERT INTO recruitment.jobs (id, employer_id, company_id, title, description, due_date)
+                    SELECT '%s', '%s', id, 'RLS test job', 'RLS test description', CURRENT_DATE + 1
+                    FROM recruitment.companies WHERE employer_id = '%s'
                     """.formatted(jobId, employerId));
             statement.execute("""
                     INSERT INTO recruitment.applications (id, job_id, job_seeker_id)
@@ -255,6 +260,8 @@ class FoundationIT {
                 .andExpect(jsonPath("$.paths['/api/auth/register'].post").exists())
                 .andExpect(jsonPath("$.paths['/api/jobs'].get.tags[0]").value("Jobs"))
                 .andExpect(jsonPath("$.paths['/api/jobs'].post.security[0].bearerAuth").exists())
+                .andExpect(jsonPath("$.paths['/api/companies'].post.security[0].bearerAuth").exists())
+                .andExpect(jsonPath("$.components.schemas.JobRequest.properties.companyId").exists())
                 .andExpect(jsonPath("$.paths['/api/applications'].post.tags[0]").value("Applications"))
                 .andExpect(jsonPath("$.paths['/api/applications'].get.tags[0]").value("Applications"))
                 .andExpect(jsonPath("$.paths['/api/employer/applications'].get.tags[0]").value("Applications"))
@@ -484,6 +491,18 @@ class FoundationIT {
         String employerToken = loginAndGetToken(employerEmail, password);
         String otherEmployerToken = loginAndGetToken(otherEmployerEmail, password);
 
+        var companyResponse = mvc.perform(post("/api/companies")
+                        .header("Authorization", "Bearer " + employerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Workflow Company\",\"location\":\"Blantyre\"}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        UUID companyId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(
+                companyResponse.getResponse().getContentAsString(), "$.id"));
+        mvc.perform(get("/api/companies/" + companyId)
+                        .header("Authorization", "Bearer " + otherEmployerToken))
+                .andExpect(status().isNotFound());
+
         mvc.perform(put("/api/profile")
                         .header("Authorization", "Bearer " + seekerToken)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -496,11 +515,12 @@ class FoundationIT {
                         .header("Authorization", "Bearer " + employerToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"title":"Integration Engineer","description":"Build secure APIs",
+                                {"companyId":"%s","title":"Integration Engineer","description":"Build secure APIs",
                                  "requiredQualifications":"Java","dueDate":"2099-12-31","location":"Blantyre"}
-                                """))
+                                """.formatted(companyId)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.employerId").value(org.hamcrest.Matchers.not(seekerId.toString())))
+                .andExpect(jsonPath("$.companyId").value(companyId.toString()))
                 .andReturn();
         UUID jobId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(
                 jobResponse.getResponse().getContentAsString(), "$.id"));

@@ -9,6 +9,7 @@ import java.util.UUID;
 public record JobResponse(
         UUID id,
         UUID employerId,
+        UUID companyId,
         String title,
         String description,
         String requiredQualifications,
@@ -22,7 +23,7 @@ public record JobResponse(
     public static JobResponse from(Job job, JobStatus effectiveStatus) {
         return new JobResponse(
                 job.getId(),
-                job.getEmployerId(),
+                job.getEmployerId(), job.getCompanyId(),
                 job.getTitle(),
                 job.getDescription(),
                 job.getRequiredQualifications(),

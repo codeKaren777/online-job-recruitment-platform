@@ -35,6 +35,8 @@ class JobsRlsIT {
         UUID closedJob = UUID.randomUUID();
         UUID expiredJob = UUID.randomUUID();
         UUID rejectedInsert = UUID.randomUUID();
+        UUID company = UUID.randomUUID();
+        UUID otherCompany = UUID.randomUUID();
 
         try (Connection admin = adminConnection(); Statement statement = admin.createStatement()) {
             statement.execute("""
@@ -43,6 +45,7 @@ class JobsRlsIT {
                     """);
             statement.execute("GRANT USAGE ON SCHEMA recruitment TO jobs_rls_runtime");
             statement.execute("GRANT SELECT ON recruitment.users TO jobs_rls_runtime");
+            statement.execute("GRANT SELECT ON recruitment.companies TO jobs_rls_runtime");
             statement.execute("GRANT SELECT, INSERT, UPDATE ON recruitment.jobs TO jobs_rls_runtime");
             statement.execute("""
                     INSERT INTO recruitment.users (id, email, password_hash, role)
@@ -51,12 +54,18 @@ class JobsRlsIT {
                       ('%s', '%s@test.example', 'test-hash', 'EMPLOYER')
                     """.formatted(employer, employer, otherEmployer, otherEmployer));
             statement.execute("""
-                    INSERT INTO recruitment.jobs (id, employer_id, title, description, due_date, status)
+                    INSERT INTO recruitment.companies (id, employer_id, name)
                     VALUES
-                      ('%s', '%s', 'Other active job', 'Description', CURRENT_DATE + 5, 'ACTIVE'),
-                      ('%s', '%s', 'Closed job', 'Description', CURRENT_DATE + 5, 'CLOSED'),
-                      ('%s', '%s', 'Expired job', 'Description', CURRENT_DATE, 'ACTIVE')
-                    """.formatted(otherActiveJob, otherEmployer, closedJob, otherEmployer, expiredJob, otherEmployer));
+                      ('%s', '%s', 'RLS company'),
+                      ('%s', '%s', 'Other RLS company')
+                    """.formatted(company, employer, otherCompany, otherEmployer));
+            statement.execute("""
+                    INSERT INTO recruitment.jobs (id, employer_id, company_id, title, description, due_date, status)
+                    VALUES
+                      ('%s', '%s', '%s', 'Other active job', 'Description', CURRENT_DATE + 5, 'ACTIVE'),
+                      ('%s', '%s', '%s', 'Closed job', 'Description', CURRENT_DATE + 5, 'CLOSED'),
+                      ('%s', '%s', '%s', 'Expired job', 'Description', CURRENT_DATE, 'ACTIVE')
+                    """.formatted(otherActiveJob, otherEmployer, otherCompany, closedJob, otherEmployer, otherCompany, expiredJob, otherEmployer, otherCompany));
         }
 
         try (Connection app = DriverManager.getConnection(

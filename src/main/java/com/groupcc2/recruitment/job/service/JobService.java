@@ -30,17 +30,21 @@ public class JobService {
 
     private final JobRepository jobRepository;
     private final RlsTransactionContext rlsTransactionContext;
+    private final CompanyDirectory companies;
     private final Clock clock;
 
     @Autowired
-    public JobService(JobRepository jobRepository, RlsTransactionContext rlsTransactionContext) {
+    public JobService(JobRepository jobRepository, RlsTransactionContext rlsTransactionContext,
+                      CompanyDirectory companies) {
         // UTC to match the Postgres container's CURRENT_DATE used by the DB rules.
-        this(jobRepository, rlsTransactionContext, Clock.systemUTC());
+        this(jobRepository, rlsTransactionContext, companies, Clock.systemUTC());
     }
 
-    JobService(JobRepository jobRepository, RlsTransactionContext rlsTransactionContext, Clock clock) {
+    JobService(JobRepository jobRepository, RlsTransactionContext rlsTransactionContext,
+               CompanyDirectory companies, Clock clock) {
         this.jobRepository = jobRepository;
         this.rlsTransactionContext = rlsTransactionContext;
+        this.companies = companies;
         this.clock = clock;
     }
 
@@ -48,8 +52,10 @@ public class JobService {
     public JobResponse createJob(UUID employerId, UserRole role, JobRequest request) {
         establishContext(employerId, role, UserRole.EMPLOYER);
         requireDueDateAfterToday(request.dueDate());
+        requireOwnedCompany(request.companyId(), employerId);
         Job job = new Job();
         job.setEmployerId(employerId); // always from the authenticated principal
+        job.setCompanyId(request.companyId());
         apply(job, request);
         job.setStatus(JobStatus.ACTIVE);
         return toResponse(jobRepository.save(job));
@@ -59,6 +65,7 @@ public class JobService {
     public JobResponse updateJob(UUID employerId, UserRole role, UUID jobId, JobRequest request) {
         establishContext(employerId, role, UserRole.EMPLOYER);
         requireDueDateAfterToday(request.dueDate());
+        requireOwnedCompany(request.companyId(), employerId);
         Job job = findOwnedJob(jobId, employerId);
         apply(job, request);
         return toResponse(job);
@@ -117,11 +124,18 @@ public class JobService {
     }
 
     private void apply(Job job, JobRequest request) {
+        job.setCompanyId(request.companyId());
         job.setTitle(request.title().trim());
         job.setDescription(request.description().trim());
         job.setRequiredQualifications(request.requiredQualifications().trim());
         job.setDueDate(request.dueDate());
         job.setLocation(request.location().trim());
+    }
+
+    private void requireOwnedCompany(UUID companyId, UUID employerId) {
+        if (companyId == null || companies.findOwnedByEmployer(companyId, employerId).isEmpty()) {
+            throw notFound();
+        }
     }
 
     private JobResponse toResponse(Job job) {

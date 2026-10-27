@@ -14,7 +14,7 @@ The Online Job Recruitment Platform is a Spring Boot modular monolith. It is dep
 │                 Spring Boot Backend                      │
 │                                                          │
 │  ┌──────────┐  ┌─────────┐  ┌────────┐  ┌─────────────┐ │
-│  │  Users   │  │ Profile │  │  Jobs  │  │ Applications│ │
+│  │  Users   │  │ Profile │  │Company │  │    Jobs     │ │
 │  └──────────┘  └─────────┘  └────────┘  └─────────────┘ │
 │                                                          │
 │        Shared Security, Validation and Exceptions        │
@@ -44,7 +44,11 @@ Owns job seeker profiles and private document metadata. A job seeker's profile a
 
 ### Jobs
 
-Owns employer job postings. Employers can manage their own postings. A posting is considered expired when its due date is reached or has passed.
+Owns employer job postings. Every posting references a company represented by the authenticated employer. Employers can manage their own postings. A posting is considered expired when its due date is reached or has passed.
+
+### Companies
+
+Owns company identity and contact information for employers. An employer may manage only companies they own, and a job may reference only one of those companies. Existing jobs are assigned a migration-created legacy company so the relationship can become mandatory without losing data.
 
 ### Applications
 
@@ -76,6 +80,7 @@ com.groupcc2.recruitment/
 ├── users/         user identity, registration, and account state
 ├── auth/          credential verification and token issuance
 ├── profile/       profiles and documents
+├── company/       employer companies and company ownership
 ├── job/           job postings
 ├── application/  job applications and statuses
 ├── admin/         administrative orchestration
@@ -115,6 +120,7 @@ Controllers handle HTTP concerns. Services enforce role and ownership rules. Rep
   version. Spring Security validates signature, issuer, audience, expiry,
   account status, role, and current version before accepting a token.
 - Employers can access only applications belonging to their own job postings.
+- Employers can create or update jobs only for companies they represent.
 - Database row-level security is enabled for application tables; its connection settings must be derived from verified authentication, never from client input.
 
 ## Deployment

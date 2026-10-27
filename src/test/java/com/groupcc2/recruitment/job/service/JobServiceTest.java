@@ -40,6 +40,7 @@ class JobServiceTest {
     private static final UUID OTHER_EMPLOYER = UUID.randomUUID();
     private static final UUID SEEKER = UUID.randomUUID();
     private static final UUID JOB_ID = UUID.randomUUID();
+    private static final UUID COMPANY_ID = UUID.randomUUID();
 
     @Mock
     private JobRepository jobRepository;
@@ -47,16 +48,21 @@ class JobServiceTest {
     @Mock
     private RlsTransactionContext rlsTransactionContext;
 
+    @Mock
+    private CompanyDirectory companyDirectory;
+
     private JobService service;
 
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(TODAY.atStartOfDay().toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
-        service = new JobService(jobRepository, rlsTransactionContext, clock);
+        service = new JobService(jobRepository, rlsTransactionContext, companyDirectory, clock);
+        when(companyDirectory.findOwnedByEmployer(COMPANY_ID, EMPLOYER))
+                .thenReturn(Optional.of(new CompanyReference(COMPANY_ID, EMPLOYER)));
     }
 
     private JobRequest request(LocalDate due) {
-        return new JobRequest("Backend Dev", "Build APIs", "BSc IS", due, "Zomba");
+        return new JobRequest(COMPANY_ID, "Backend Dev", "Build APIs", "BSc IS", due, "Zomba");
     }
 
     private Job ownedJob(LocalDate due) {
@@ -74,6 +80,8 @@ class JobServiceTest {
     @Test
     void createJob_usesEmployerFromPrincipal_andStartsActive() {
         when(jobRepository.save(any(Job.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(companyDirectory.findOwnedByEmployer(COMPANY_ID, EMPLOYER))
+                .thenReturn(Optional.of(new CompanyReference(COMPANY_ID, EMPLOYER)));
 
         JobResponse response = service.createJob(EMPLOYER, UserRole.EMPLOYER, request(TODAY.plusDays(3)));
 
@@ -86,6 +94,8 @@ class JobServiceTest {
 
     @Test
     void createJob_rejectsDueDateOfTodayOrEarlier() {
+        when(companyDirectory.findOwnedByEmployer(COMPANY_ID, EMPLOYER))
+                .thenReturn(Optional.of(new CompanyReference(COMPANY_ID, EMPLOYER)));
         assertThatThrownBy(() -> service.createJob(EMPLOYER, UserRole.EMPLOYER, request(TODAY)))
                 .isInstanceOf(ResponseStatusException.class);
         assertThatThrownBy(() -> service.createJob(EMPLOYER, UserRole.EMPLOYER, request(TODAY.minusDays(1))))
@@ -99,6 +109,17 @@ class JobServiceTest {
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("403");
         verify(rlsTransactionContext, never()).setAuthenticatedUser(any(), any());
+        verify(jobRepository, never()).save(any(Job.class));
+    }
+
+    @Test
+    void createJob_rejectsCompanyOwnedByAnotherEmployer() {
+        when(companyDirectory.findOwnedByEmployer(COMPANY_ID, EMPLOYER)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.createJob(EMPLOYER, UserRole.EMPLOYER,
+                request(TODAY.plusDays(2))))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("404");
         verify(jobRepository, never()).save(any(Job.class));
     }
 
