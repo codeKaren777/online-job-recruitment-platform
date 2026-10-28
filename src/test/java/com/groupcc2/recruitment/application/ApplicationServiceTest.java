@@ -16,6 +16,7 @@ import com.groupcc2.recruitment.application.dto.ApplicationResponse;
 import com.groupcc2.recruitment.application.repository.ApplicationRepository;
 import com.groupcc2.recruitment.application.repository.ApplicationDecisionAuditRepository;
 import com.groupcc2.recruitment.application.service.ApplicationFailure;
+import com.groupcc2.recruitment.application.notification.ApplicationNotificationOutboxRepository;
 import com.groupcc2.recruitment.application.service.ApplicationRls;
 import com.groupcc2.recruitment.application.service.ApplicationService;
 import com.groupcc2.recruitment.application.service.JobDirectory;
@@ -52,6 +53,7 @@ class ApplicationServiceTest {
     @Mock UserService users;
     @Mock ApplicationRls rls;
     @Mock ApplicationDecisionAuditRepository decisionAudits;
+    @Mock ApplicationNotificationOutboxRepository notifications;
     @Mock ObjectProvider<JobDirectory> directoryProvider;
     @Mock JobDirectory directory;
 
@@ -62,10 +64,12 @@ class ApplicationServiceTest {
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(TODAY.atTime(9, 0).toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
-        service = new ApplicationService(repository, users, rls, directoryProvider, decisionAudits, clock);
+        service = new ApplicationService(repository, users, rls, directoryProvider,
+                decisionAudits, notifications, clock);
         when(directoryProvider.getIfAvailable()).thenReturn(directory);
         when(users.findById(seeker.getId())).thenReturn(seeker);
         when(repository.saveAndFlush(any(Application.class))).thenAnswer(call -> call.getArgument(0));
+        when(decisionAudits.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
     }
 
     private JobSnapshot job(LocalDate due, JobSnapshot.State state) {
@@ -81,6 +85,7 @@ class ApplicationServiceTest {
         assertThat(response.status()).isEqualTo(ApplicationStatus.PENDING);
         assertThat(response.jobId()).isEqualTo(jobId);
         assertThat(response.job().title()).isEqualTo("Backend Developer");
+        verify(notifications).enqueue(response.id(), response.id(), "SUBMITTED");
         verify(rls).establish(seeker.getId(), "JOB_SEEKER");
     }
 
@@ -93,6 +98,7 @@ class ApplicationServiceTest {
                 .isInstanceOfSatisfying(ApplicationFailure.class,
                         e -> assertThat(e.code()).isEqualTo(ApplicationFailure.Code.DUPLICATE_APPLICATION));
         verify(repository, never()).saveAndFlush(any());
+        verifyNoInteractions(notifications);
     }
 
     @Test
@@ -288,7 +294,10 @@ class ApplicationServiceTest {
 
         assertThat(response.status()).isEqualTo(ApplicationStatus.SHORTLISTED);
         assertThat(response.shortlistedAt()).isNotNull();
-        verify(decisionAudits).save(any());
+        var audit = org.mockito.ArgumentCaptor.forClass(
+                com.groupcc2.recruitment.application.entity.ApplicationDecisionAudit.class);
+        verify(decisionAudits).saveAndFlush(audit.capture());
+        verify(notifications).enqueue(audit.getValue().getId(), application.getId(), "SHORTLISTED");
     }
 
     @Test
@@ -309,6 +318,23 @@ class ApplicationServiceTest {
                 employer.getId(), application.getId(), ApplicationStatus.PENDING))
                 .isInstanceOfSatisfying(ApplicationFailure.class,
                         e -> assertThat(e.code()).isEqualTo(ApplicationFailure.Code.INVALID_STATUS_TRANSITION));
-        verifyNoInteractions(decisionAudits);
+        verifyNoInteractions(decisionAudits, notifications);
+    }
+
+    @Test
+    void employerCanRejectOwnedPendingApplicationAndCreateOneNotificationEvent() {
+        User employer = new User("employer@example.com", "hash", UserRole.EMPLOYER);
+        Application application = Application.submit(jobId, seeker.getId());
+        when(users.findById(employer.getId())).thenReturn(employer);
+        when(directory.findAllForEmployer(employer.getId())).thenReturn(
+                Map.of(jobId, job(TODAY.plusDays(2), JobSnapshot.State.ACTIVE)));
+        when(repository.findByIdAndJobIdIn(application.getId(), Set.of(jobId))).thenReturn(Optional.of(application));
+
+        service.changeStatus(employer.getId(), application.getId(), ApplicationStatus.REJECTED);
+
+        var audit = org.mockito.ArgumentCaptor.forClass(
+                com.groupcc2.recruitment.application.entity.ApplicationDecisionAudit.class);
+        verify(decisionAudits).saveAndFlush(audit.capture());
+        verify(notifications).enqueue(audit.getValue().getId(), application.getId(), "REJECTED");
     }
 }

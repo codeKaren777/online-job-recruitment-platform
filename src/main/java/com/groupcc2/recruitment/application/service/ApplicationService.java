@@ -13,6 +13,7 @@ import com.groupcc2.recruitment.application.dto.ApplicationResponse;
 import com.groupcc2.recruitment.application.entity.ApplicationDecisionAudit;
 import com.groupcc2.recruitment.application.entity.Application;
 import com.groupcc2.recruitment.application.entity.ApplicationStatus;
+import com.groupcc2.recruitment.application.notification.ApplicationNotificationOutboxRepository;
 import com.groupcc2.recruitment.application.repository.ApplicationDecisionAuditRepository;
 import com.groupcc2.recruitment.application.repository.ApplicationRepository;
 import com.groupcc2.recruitment.users.entity.User;
@@ -37,23 +38,27 @@ public class ApplicationService {
     private final ApplicationRls rls;
     private final ObjectProvider<JobDirectory> jobDirectory;
     private final ApplicationDecisionAuditRepository decisionAudits;
+    private final ApplicationNotificationOutboxRepository notifications;
     private final Clock clock;
 
     @Autowired
     public ApplicationService(ApplicationRepository applications, UserService users, ApplicationRls rls,
                               ObjectProvider<JobDirectory> jobDirectory,
-                              ApplicationDecisionAuditRepository decisionAudits) {
-        this(applications, users, rls, jobDirectory, decisionAudits, Clock.systemUTC());
+                              ApplicationDecisionAuditRepository decisionAudits,
+                              ApplicationNotificationOutboxRepository notifications) {
+        this(applications, users, rls, jobDirectory, decisionAudits, notifications, Clock.systemUTC());
     }
 
     public ApplicationService(ApplicationRepository applications, UserService users, ApplicationRls rls,
                        ObjectProvider<JobDirectory> jobDirectory,
-                       ApplicationDecisionAuditRepository decisionAudits, Clock clock) {
+                       ApplicationDecisionAuditRepository decisionAudits,
+                       ApplicationNotificationOutboxRepository notifications, Clock clock) {
         this.applications = applications;
         this.users = users;
         this.rls = rls;
         this.jobDirectory = jobDirectory;
         this.decisionAudits = decisionAudits;
+        this.notifications = notifications;
         this.clock = clock;
     }
 
@@ -75,6 +80,7 @@ public class ApplicationService {
         }
         try {
             Application saved = applications.saveAndFlush(Application.submit(jobId, userId));
+            notifications.enqueue(saved.getId(), saved.getId(), "SUBMITTED");
             return ApplicationResponse.from(saved, job);
         } catch (DataIntegrityViolationException exception) {
             if (violatesOnePerSeekerConstraint(exception)) {
@@ -156,8 +162,9 @@ public class ApplicationService {
         } catch (IllegalStateException exception) {
             throw new ApplicationFailure(ApplicationFailure.Code.INVALID_STATUS_TRANSITION);
         }
-        decisionAudits.save(new ApplicationDecisionAudit(application.getId(), application.getJobId(),
-                employerId, previousStatus, newStatus, changedAt));
+        ApplicationDecisionAudit audit = decisionAudits.saveAndFlush(new ApplicationDecisionAudit(
+                application.getId(), application.getJobId(), employerId, previousStatus, newStatus, changedAt));
+        notifications.enqueue(audit.getId(), application.getId(), newStatus.name());
         return ApplicationResponse.from(application, jobs.get(application.getJobId()));
     }
 

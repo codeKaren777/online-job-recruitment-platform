@@ -82,7 +82,6 @@ class JobsRlsIT {
             app.setAutoCommit(false);
             setContext(app, employer, "EMPLOYER");
             insertJob(app, ownJob, employer, company);
-            insertJob(app, deletableJob, employer, company);
             assertThat(jobCount(app, ownJob)).isEqualTo(1);
             assertThat(jobCount(app, otherActiveJob)).isZero();
             assertThat(updateTitle(app, otherActiveJob)).isZero();
@@ -102,7 +101,7 @@ class JobsRlsIT {
             }
 
             setContext(app, employer, "EMPLOYER");
-            assertThatDeleteBlockedByApplications(() -> deleteJob(app, ownJob));
+                        assertThatDeleteBlockedByApplications(() -> deleteJob(app, ownJob));
             app.rollback();
 
             setContext(app, employer, "EMPLOYER");
@@ -111,7 +110,7 @@ class JobsRlsIT {
             app.commit();
 
             setContext(app, employer, "EMPLOYER");
-            assertThatThrownBySql(() -> insertJob(app, rejectedInsert, otherEmployer, otherCompany));
+            assertThatThrownBySql(() -> insertJob(app, rejectedInsert, otherEmployer, company));
             app.rollback();
 
             setContext(app, employer, "EMPLOYER");

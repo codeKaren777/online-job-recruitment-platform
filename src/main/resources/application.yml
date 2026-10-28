@@ -22,6 +22,20 @@ spring:
     locations: classpath:db/migration
     clean-disabled: true
     validate-on-migrate: true
+  mail:
+    host: ${SPRING_MAIL_HOST:}
+    port: ${SPRING_MAIL_PORT:587}
+    username: ${SPRING_MAIL_USERNAME:}
+    password: ${SPRING_MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${SPRING_MAIL_AUTH:true}
+          starttls:
+            enable: ${SPRING_MAIL_STARTTLS_ENABLE:true}
+          connectiontimeout: 5000
+          timeout: 10000
+          writetimeout: 10000
   servlet:
     multipart:
       enabled: true
@@ -43,11 +57,18 @@ management:
     web:
       exposure:
         include: health
+  health:
+    mail:
+      enabled: false
   endpoint:
     health:
       show-details: never
       show-components: never
 app:
+  mail:
+    enabled: ${APP_MAIL_ENABLED:false}
+    from: ${APP_MAIL_FROM:}
+    poll-interval-ms: ${APP_MAIL_POLL_INTERVAL_MS:30000}
   openapi:
     enabled: ${APP_OPENAPI_ENABLED:false}
     public-in-local: false

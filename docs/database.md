@@ -11,6 +11,7 @@ The model is in third normal form:
 - `documents` stores private document metadata and a storage key. File contents are not stored in PostgreSQL.
 - `jobs` stores employer-owned job postings and due dates.
 - `applications` links one job seeker to one job and stores the application status.
+- `application_notification_outbox` durably records application notification events and delivery state.
 
 Applications have a database-enforced `UNIQUE (job_id, job_seeker_id)` constraint, so a job seeker cannot apply to the same job twice. New applications default to `PENDING`. Employers can change applications for their own jobs to `SHORTLISTED` or `REJECTED`; the application service must enforce the allowed transition rules. Migration V4 separates application SELECT and UPDATE policies so applicants can read their own submissions but cannot update review status.
 
@@ -86,21 +87,39 @@ feature operations run with forced RLS. Local Compose now follows the same
 separation: the bootstrap account runs Flyway, while the backend uses the
 restricted runtime role.
 
+Migration V13 limits public registration to `JOB_SEEKER`; it retains the
+`SECURITY DEFINER`, fixed `search_path = pg_catalog`, and restricted execution
+permissions required for registration under forced RLS. Employer access is
+available only through the approved upgrade workflow. V14 changes the
+application-to-job foreign key to `ON DELETE RESTRICT`, preserving application
+records when jobs are deleted. V15 adds the notification outbox with forced
+RLS. The runtime account has no direct table grants. Only four `SECURITY DEFINER` functions
+are executable by that account: enqueue validates the transaction-local
+actor, status/decision, application, and employer ownership before capturing
+the registered applicant address and job/company display fields; claim uses
+`FOR UPDATE SKIP LOCKED` and leases; mark-sent and failure-recording require
+the matching claim token. Each function sets a fixed `search_path`, and
+`PUBLIC` execution is revoked. The Flyway principal owns the functions and
+must retain the source-table access required to capture the validated event;
+the application runtime remains `NOSUPERUSER NOBYPASSRLS` with no direct
+outbox-table privileges. This keeps cross-user email lookup and outbox access
+out of ordinary RLS queries and employer APIs.
+
+The older V14 registration-function repair is unnecessary after V13: the RBAC
+migration defines the restricted function with the same `SECURITY DEFINER`,
+fixed `search_path`, and `PUBLIC` revocation. V15 is reserved for notification
+outbox schema and functions.
+
 The current development credentials are `POSTGRES_DB`, `POSTGRES_USER`,
 `POSTGRES_PASSWORD`, `POSTGRES_RUNTIME_USER`, and
 `POSTGRES_RUNTIME_PASSWORD`; `DB_URL` is overridden inside Compose to use the
 `db` service, and JWT configuration uses `JWT_SECRET_BASE64` with optional
 `JWT_ISSUER` and `JWT_AUDIENCE`. Do not display or commit `.env` values.
 
-The migration history now includes V1-V14. V9 records administrative role
-changes; V13 restricts the database registration function to `JOB_SEEKER`
-accounts; V14 changes the applications-to-jobs foreign key to `ON DELETE
-RESTRICT` so a job deletion cannot cascade-delete application history.
-Compose grants the restricted runtime role execution of this
-function; its security-definer implementation uses a fixed `search_path`,
-rejects elevated role values, and does not grant general access to user rows.
-Before applying pending migrations to an existing database, make a protected
-backup. Do not use `docker compose down -v`.
+For an existing database, inspect its Flyway history and make a protected
+backup before starting the updated backend. Flyway applies pending migrations
+in order through V15. These migrations preserve existing application data. Do
+not use `docker compose down -v`.
 
 ## Local database
 
@@ -112,9 +131,9 @@ docker compose up -d db
 
 The detached flag belongs after `up`. If Docker socket permissions require elevated access, use `sudo docker compose up -d db` temporarily. The preferred permanent fix is to add your Linux user to the `docker` group and start a new login session.
 
-Compose starts PostgreSQL, provisions its restricted runtime account, and then
-Spring Boot runs any pending Flyway migrations using the bootstrap account.
-The backend connects as the restricted non-superuser runtime account.
+Compose starts PostgreSQL and then Spring Boot; Flyway runs pending migrations
+during application startup. The bootstrap account runs Flyway while the backend
+uses the restricted runtime account provisioned by Compose.
 
 ## Database commands
 
@@ -130,7 +149,7 @@ docker compose up -d db
 
 Start PostgreSQL, Flyway migrations, and the backend. This requires the existing
 database variables and JWT secret in `.env`. Back up the database before this
-command because it applies pending V4, V5, V6, V7, V8, and V9 migrations:
+command because it applies pending Flyway migrations:
 
 ```bash
 docker compose up --build -d
