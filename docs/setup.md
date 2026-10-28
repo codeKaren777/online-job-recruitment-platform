@@ -284,6 +284,12 @@ This runs all pending Flyway migrations through V15. They preserve existing
 application rows and the named `postgres_data` volume. Never use
 `docker compose down -v` for this update.
 
+The `db-runtime-init` service is safe to run against an older persisted
+database. It grants the runtime account access to objects that already exist
+and configures PostgreSQL default privileges for objects created by pending
+Flyway migrations. This allows the backend to start Flyway before the complete
+runtime grant set is present, without requiring a volume reset.
+
 Compose enables the `local` Spring profile so the forgot-password endpoint can
 return a reset token in Postman for local testing. Do not use this profile for
 deployment; no email delivery provider is configured.
