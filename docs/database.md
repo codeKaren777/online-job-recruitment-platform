@@ -34,6 +34,14 @@ SELECT set_config('app.role', 'JOB_SEEKER', true);
 
 Use `EMPLOYER` or `ADMIN` as appropriate. Use `set_config(..., true)` or `SET LOCAL` inside the same database transaction as the protected queries. Do not use session-scoped `SET` with a connection pool: the connection can be reused for a different request. Transaction-local settings reset at transaction end. The application must derive identity and role from verified server-side authentication, never from HTTP input. Missing settings result in no rows passing the policies; an invalid identity does not authorize another user's rows.
 
+Administrative services that need broader visibility first set a minimal
+self-only context and verify the caller's active persisted role. Only after
+that check may the same transaction set `app.role` to `ADMIN` and query or
+mutate administrative records. Public registration assigns `JOB_SEEKER` in
+the service, and the database registration function rejects any other role.
+Do not set `ADMIN` context based only on a request value or an unverified role
+claim.
+
 The policies enforce that:
 
 - Job seekers see their own profile and jobs that are currently available.

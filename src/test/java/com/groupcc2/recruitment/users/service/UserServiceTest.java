@@ -39,12 +39,14 @@ class UserServiceTest {
     }
 
     @Test
-    void rejectsAdministratorRegistrationAndDuplicateEmail() {
+    void rejectsElevatedRoleRegistrationAndDuplicateEmail() {
         assertThatThrownBy(() -> service.register("admin@example.com", "correct horse battery", UserRole.ADMIN))
-                .isInstanceOf(AdminRegistrationNotAllowedException.class);
+                .isInstanceOf(RoleRegistrationNotAllowedException.class);
+        assertThatThrownBy(() -> service.register("employer@example.com", "correct horse battery", UserRole.EMPLOYER))
+                .isInstanceOf(RoleRegistrationNotAllowedException.class);
 
         when(repository.existsByEmail("person@example.com")).thenReturn(true);
-        assertThatThrownBy(() -> service.register("person@example.com", "correct horse battery", UserRole.EMPLOYER))
+        assertThatThrownBy(() -> service.register("person@example.com", "correct horse battery", UserRole.JOB_SEEKER))
                 .isInstanceOf(DuplicateEmailException.class);
     }
 
@@ -83,6 +85,8 @@ class UserServiceTest {
         assertThat(service.findAllForAdministrator(administrator.getId())).containsExactly(administrator, user);
         assertThat(service.findForAdministrator(administrator.getId(), user.getId())).isSameAs(user);
         verify(repository).findAll();
+        verify(rls, times(2)).setSelfOnlyUser(administrator.getId());
+        verify(rls, times(2)).setAuthenticatedUser(administrator.getId(), UserRole.ADMIN);
     }
 
     @Test
@@ -91,6 +95,18 @@ class UserServiceTest {
         when(repository.findById(user.getId())).thenReturn(Optional.of(user));
         assertThatThrownBy(() -> service.suspend(user.getId(), user.getId()))
                 .isInstanceOf(AuthorizationDeniedException.class);
+        verify(rls).setSelfOnlyUser(user.getId());
+        verify(rls, never()).setAuthenticatedUser(user.getId(), UserRole.ADMIN);
+    }
+
+    @Test
+    void ownUserReadEstablishesSelfOnlyContextAndRequiresAnActiveAccount() {
+        User user = new User("person@example.com", "hash", UserRole.EMPLOYER);
+        when(repository.findById(user.getId())).thenReturn(Optional.of(user));
+
+        assertThat(service.findOwnById(user.getId())).isSameAs(user);
+
+        verify(rls).setSelfOnlyUser(user.getId());
     }
 
     @Test

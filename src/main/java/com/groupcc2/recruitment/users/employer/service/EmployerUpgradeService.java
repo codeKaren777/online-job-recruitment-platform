@@ -90,10 +90,11 @@ public class EmployerUpgradeService {
 
     private void requireAdministrator(UUID administratorId) {
         if (administratorId == null) throw forbidden();
-        rls.setAuthenticatedUser(administratorId, UserRole.ADMIN);
+        rls.setSelfOnlyUser(administratorId);
         User administrator = users.findById(administratorId);
         users.requireActive(administrator);
         if (administrator.getRole() != UserRole.ADMIN) throw forbidden();
+        rls.setAuthenticatedUser(administratorId, UserRole.ADMIN);
     }
 
     private EmployerUpgradeRequest findRequest(UUID requestId) {

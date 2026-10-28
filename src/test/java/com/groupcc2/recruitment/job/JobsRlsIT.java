@@ -30,7 +30,9 @@ class JobsRlsIT {
 
         UUID employer = UUID.randomUUID();
         UUID otherEmployer = UUID.randomUUID();
+        UUID applicant = UUID.randomUUID();
         UUID ownJob = UUID.randomUUID();
+        UUID deletableJob = UUID.randomUUID();
         UUID otherActiveJob = UUID.randomUUID();
         UUID closedJob = UUID.randomUUID();
         UUID expiredJob = UUID.randomUUID();
@@ -46,13 +48,14 @@ class JobsRlsIT {
             statement.execute("GRANT USAGE ON SCHEMA recruitment TO jobs_rls_runtime");
             statement.execute("GRANT SELECT ON recruitment.users TO jobs_rls_runtime");
             statement.execute("GRANT SELECT ON recruitment.companies TO jobs_rls_runtime");
-            statement.execute("GRANT SELECT, INSERT, UPDATE ON recruitment.jobs TO jobs_rls_runtime");
+            statement.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON recruitment.jobs TO jobs_rls_runtime");
             statement.execute("""
                     INSERT INTO recruitment.users (id, email, password_hash, role)
                     VALUES
                       ('%s', '%s@test.example', 'test-hash', 'EMPLOYER'),
-                      ('%s', '%s@test.example', 'test-hash', 'EMPLOYER')
-                    """.formatted(employer, employer, otherEmployer, otherEmployer));
+                      ('%s', '%s@test.example', 'test-hash', 'EMPLOYER'),
+                      ('%s', '%s@test.example', 'test-hash', 'JOB_SEEKER')
+                    """.formatted(employer, employer, otherEmployer, otherEmployer, applicant, applicant));
             statement.execute("""
                     INSERT INTO recruitment.companies (id, employer_id, name)
                     VALUES
@@ -74,6 +77,7 @@ class JobsRlsIT {
             assertThat(hasTablePrivilege(app, "recruitment.jobs", "SELECT")).isTrue();
             assertThat(hasTablePrivilege(app, "recruitment.jobs", "INSERT")).isTrue();
             assertThat(hasTablePrivilege(app, "recruitment.jobs", "UPDATE")).isTrue();
+            assertThat(hasTablePrivilege(app, "recruitment.jobs", "DELETE")).isTrue();
 
             app.setAutoCommit(false);
             setContext(app, employer, "EMPLOYER");
@@ -84,6 +88,25 @@ class JobsRlsIT {
             app.commit();
 
             assertThat(jobCount(app, ownJob)).isZero();
+            app.commit();
+
+            try (Connection admin = adminConnection();
+                 PreparedStatement statement = admin.prepareStatement("""
+                         INSERT INTO recruitment.applications (job_id, job_seeker_id)
+                         VALUES (?, ?)
+                         """)) {
+                statement.setObject(1, ownJob);
+                statement.setObject(2, applicant);
+                statement.executeUpdate();
+            }
+
+            setContext(app, employer, "EMPLOYER");
+                        assertThatDeleteBlockedByApplications(() -> deleteJob(app, ownJob));
+            app.rollback();
+
+            setContext(app, employer, "EMPLOYER");
+            assertThat(deleteJob(app, deletableJob)).isEqualTo(1);
+            assertThat(deleteJob(app, otherActiveJob)).isZero();
             app.commit();
 
             setContext(app, employer, "EMPLOYER");
@@ -104,6 +127,7 @@ class JobsRlsIT {
 
         try (Connection admin = adminConnection()) {
             assertThat(adminJobCount(admin, ownJob)).isEqualTo(1);
+            assertThat(adminJobCount(admin, deletableJob)).isZero();
             assertThat(adminJobCount(admin, rejectedInsert)).isZero();
             assertThat(adminJobOwner(admin, ownJob)).isEqualTo(employer);
         }
@@ -178,6 +202,14 @@ class JobsRlsIT {
         }
     }
 
+    private int deleteJob(Connection connection, UUID jobId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "DELETE FROM recruitment.jobs WHERE id = ?")) {
+            statement.setObject(1, jobId);
+            return statement.executeUpdate();
+        }
+    }
+
     private void changeOwner(Connection connection, UUID jobId, UUID newOwner) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
                 "UPDATE recruitment.jobs SET employer_id = ? WHERE id = ?")) {
@@ -215,6 +247,16 @@ class JobsRlsIT {
             throw new AssertionError("RLS must reject an employer write for another owner");
         } catch (SQLException expected) {
             assertThat(expected.getSQLState()).isIn("42501", "P0001");
+        }
+    }
+
+    private void assertThatDeleteBlockedByApplications(SqlOperation operation) {
+        try {
+            operation.run();
+            throw new AssertionError("A job with applications must be retained");
+        } catch (SQLException expected) {
+            assertThat(expected.getSQLState()).isEqualTo("23503");
+            assertThat(expected.getMessage()).contains("applications_job_id_fkey");
         }
     }
 

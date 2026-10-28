@@ -26,7 +26,7 @@ public class UserController {
     @GetMapping("/me")
     @Operation(summary = "Get the current user")
     public UserResponse currentUser(@AuthenticationPrincipal Jwt principal) {
-        return UserResponse.from(users.findById(userId(principal)));
+        return UserResponse.from(users.findOwnById(userId(principal)));
     }
 
     private static UUID userId(Jwt principal) {

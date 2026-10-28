@@ -13,10 +13,12 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -78,6 +80,23 @@ public class JobService {
         Job job = findOwnedJob(jobId, employerId);
         job.setStatus(JobStatus.CLOSED);
         return toResponse(job);
+    }
+
+    @Transactional
+    public void deleteJob(UUID employerId, UserRole role, UUID jobId) {
+        establishContext(employerId, role, UserRole.EMPLOYER);
+        Job job = findOwnedJob(jobId, employerId);
+        requireOwnedCompany(job.getCompanyId(), employerId);
+        try {
+            jobRepository.delete(job);
+            jobRepository.flush();
+        } catch (DataIntegrityViolationException exception) {
+            if (violatesApplicationForeignKey(exception)) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT, "Jobs with submitted applications cannot be deleted", exception);
+            }
+            throw exception;
+        }
     }
 
     @Transactional(readOnly = true)
@@ -165,5 +184,18 @@ public class JobService {
 
     private static ResponseStatusException forbidden() {
         return new ResponseStatusException(HttpStatus.FORBIDDEN, "Insufficient role for job operation");
+    }
+
+    private static boolean violatesApplicationForeignKey(Throwable failure) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            if (cause instanceof ConstraintViolationException violation
+                    && "applications_job_id_fkey".equals(violation.getConstraintName())) {
+                return true;
+            }
+            if (cause.getCause() == cause) {
+                break;
+            }
+        }
+        return false;
     }
 }

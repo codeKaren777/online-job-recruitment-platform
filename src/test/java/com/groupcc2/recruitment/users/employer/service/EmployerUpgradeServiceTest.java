@@ -18,6 +18,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.server.ResponseStatusException;
@@ -71,6 +72,12 @@ class EmployerUpgradeServiceTest {
 
         assertThat(result.getStatus()).isEqualTo(EmployerRequestStatus.APPROVED);
         verify(users).promoteToEmployer(adminId, seekerId);
+        InOrder authorization = inOrder(rls, users, requests);
+        authorization.verify(rls).setSelfOnlyUser(adminId);
+        authorization.verify(users).findById(adminId);
+        authorization.verify(users).requireActive(admin);
+        authorization.verify(rls).setAuthenticatedUser(adminId, UserRole.ADMIN);
+        authorization.verify(requests).findById(requestId);
     }
 
     @Test
@@ -81,6 +88,21 @@ class EmployerUpgradeServiceTest {
         assertThatThrownBy(() -> service.pending(seekerId))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("403");
+        verify(rls).setSelfOnlyUser(seekerId);
+        verify(rls, never()).setAuthenticatedUser(any(), any());
+        verifyNoInteractions(requests);
+    }
+
+    @Test
+    void employerCannotUseAdminReviewService() {
+        User employer = new User("employer@example.com", "hash", UserRole.EMPLOYER);
+        when(users.findById(seekerId)).thenReturn(employer);
+
+        assertThatThrownBy(() -> service.pending(seekerId))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("403");
+        verify(rls).setSelfOnlyUser(seekerId);
+        verify(rls, never()).setAuthenticatedUser(any(), any());
         verifyNoInteractions(requests);
     }
 }
