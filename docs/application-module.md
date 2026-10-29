@@ -25,6 +25,11 @@ Errors are `{"code": "..."}`: 400 `INVALID_REQUEST`, 403 `FORBIDDEN`, 404 `NOT_F
 The applicant is always the token subject. The role is read from the persisted, active user
 (like ProfileService), never from token claims or the request body.
 
+`jobId` is the only required client-supplied field. Profile/CV details are not required by FR-08.
+Application IDs, applicant identity, status, and timestamps are server-managed and are not part of
+the request contract. The endpoint requires an authenticated `JOB_SEEKER`; unknown identity or
+server-managed fields in the JSON body cannot affect ownership or application state.
+
 Employer reads derive the employer from the token subject and filter through the Jobs module's
 ownership contract. A client-supplied job or application ID cannot grant access to another employer's data.
 
