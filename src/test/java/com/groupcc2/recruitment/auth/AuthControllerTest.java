@@ -76,6 +76,24 @@ class AuthControllerTest {
     }
 
     @Test
+    void registrationRejectsElevatedRolesBeforeCallingService() throws Exception {
+        mvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"admin@example.com","password":"StrongPassword123!","role":"ADMIN"}
+                                """))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"employer@example.com","password":"StrongPassword123!","role":"EMPLOYER"}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        verify(authService, never()).register(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void registrationRejectsInvalidInputBeforeCallingService() throws Exception {
         mvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -95,7 +113,7 @@ class AuthControllerTest {
         mvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"email":"person@example.com","password":"StrongPassword123!","role":"JOB_SEEKER"}
+                                {"email":"person@example.com","password":"StrongPassword123!"}
                                 """))
                 .andExpect(status().isConflict());
     }

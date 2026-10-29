@@ -16,16 +16,27 @@ public class RlsTransactionContext {
     }
 
     public void setAuthenticatedUser(UUID userId, UserRole role) {
+        if (role == null) {
+            throw new IllegalArgumentException("A verified user role is required");
+        }
+        setContext(userId, role.name());
+    }
+
+    public void setSelfOnlyUser(UUID userId) {
+        setContext(userId, "");
+    }
+
+    private void setContext(UUID userId, String role) {
         if (!TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("RLS identity must be set inside an active database transaction");
         }
-        if (userId == null || role == null) {
-            throw new IllegalArgumentException("A verified user ID and role are required");
+        if (userId == null) {
+            throw new IllegalArgumentException("A verified user ID is required");
         }
 
         jdbcTemplate.queryForObject(
                 "SELECT set_config('app.user_id', ?, true), set_config('app.role', ?, true)",
                 (resultSet, rowNumber) -> resultSet.getString(1),
-                userId.toString(), role.name());
+                userId.toString(), role);
     }
 }

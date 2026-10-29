@@ -34,8 +34,8 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public User register(String email, String rawPassword, UserRole role) {
-        if (role == null || role == UserRole.ADMIN) {
-            throw new AdminRegistrationNotAllowedException();
+        if (role != UserRole.JOB_SEEKER) {
+            throw new RoleRegistrationNotAllowedException();
         }
         String normalizedEmail = normalizeEmail(email);
         if (users.existsByEmail(normalizedEmail)) {
@@ -57,6 +57,18 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public User findById(UUID id) {
         return users.findById(id).orElseThrow(UserNotFoundException::new);
+    }
+
+    @Override
+    @Transactional
+    public User findOwnById(UUID id) {
+        if (id == null) {
+            throw new AuthorizationDeniedException();
+        }
+        rlsTransactionContext.setSelfOnlyUser(id);
+        User user = findById(id);
+        requireActive(user);
+        return user;
     }
 
     @Override
@@ -145,10 +157,16 @@ public class UserServiceImpl implements UserService {
     }
 
     private void requireAdministrator(UUID administratorId) {
-        rlsTransactionContext.setAuthenticatedUser(administratorId, UserRole.ADMIN);
-        if (findById(administratorId).getRole() != UserRole.ADMIN) {
+        if (administratorId == null) {
             throw new AuthorizationDeniedException();
         }
+        rlsTransactionContext.setSelfOnlyUser(administratorId);
+        User administrator = findById(administratorId);
+        requireActive(administrator);
+        if (administrator.getRole() != UserRole.ADMIN) {
+            throw new AuthorizationDeniedException();
+        }
+        rlsTransactionContext.setAuthenticatedUser(administratorId, UserRole.ADMIN);
     }
 
     static String normalizeEmail(String email) {

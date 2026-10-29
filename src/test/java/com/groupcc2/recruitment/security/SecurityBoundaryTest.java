@@ -129,11 +129,17 @@ class SecurityBoundaryTest {
         mvc.perform(patch("/api/jobs/{jobId}/close", jobId)).andExpect(status().isUnauthorized());
         mvc.perform(patch("/api/jobs/{jobId}/close", jobId).with(seekerToken)).andExpect(status().isForbidden());
         mvc.perform(patch("/api/jobs/{jobId}/close", jobId).with(employerToken)).andExpect(status().isNotFound());
+
+        mvc.perform(delete("/api/jobs/{jobId}", jobId)).andExpect(status().isUnauthorized());
+        mvc.perform(delete("/api/jobs/{jobId}", jobId).with(seekerToken)).andExpect(status().isForbidden());
+        mvc.perform(delete("/api/jobs/{jobId}", jobId).with(adminToken)).andExpect(status().isForbidden());
+        mvc.perform(delete("/api/jobs/{jobId}", jobId).with(employerToken)).andExpect(status().isNoContent());
     }
 
     @Test
     void closedRoutesRejectAnonymousAndAuthenticatedRequests() throws Exception {
-        for (String path : new String[] {"/api/jobs", "/api/profiles/me", "/api/applications", "/api/admin/users"}) {
+        for (String path : new String[] {"/api/jobs", "/api/profiles/me", "/api/applications",
+                "/api/admin/users", "/api/users/register"}) {
             mvc.perform(get(path)).andExpect(status().isUnauthorized());
             mvc.perform(get(path).with(jwt())).andExpect(status().isForbidden());
         }

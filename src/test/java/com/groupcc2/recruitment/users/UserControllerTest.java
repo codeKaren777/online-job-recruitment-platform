@@ -45,7 +45,7 @@ class UserControllerTest {
     void currentUserUsesTheAuthenticatedPrincipalSubject() throws Exception {
         UUID id = UUID.randomUUID();
         User user = new User("person@example.com", "hash", UserRole.JOB_SEEKER);
-        when(users.findById(id)).thenReturn(user);
+        when(users.findOwnById(id)).thenReturn(user);
 
         mvc.perform(get("/api/users/me").with(jwt().jwt(token -> token.subject(id.toString()))))
                 .andExpect(status().isOk())
@@ -53,6 +53,6 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.role").value("JOB_SEEKER"))
                 .andExpect(jsonPath("$.passwordHash").doesNotExist());
 
-        verify(users).findById(eq(id));
+        verify(users).findOwnById(eq(id));
     }
 }

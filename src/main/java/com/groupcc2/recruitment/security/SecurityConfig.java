@@ -96,6 +96,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/employer/jobs").hasRole("EMPLOYER")
                         .requestMatchers(HttpMethod.PUT, "/api/jobs/{jobId}").hasRole("EMPLOYER")
                         .requestMatchers(HttpMethod.PATCH, "/api/jobs/{jobId}/close").hasRole("EMPLOYER")
+                        .requestMatchers(HttpMethod.DELETE, "/api/jobs/{jobId}").hasRole("EMPLOYER")
                         // Open routes deliberately as each feature gains authorization tests.
                         .anyRequest().denyAll();
                 })

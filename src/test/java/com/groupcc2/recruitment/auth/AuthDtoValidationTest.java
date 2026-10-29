@@ -34,15 +34,15 @@ class AuthDtoValidationTest {
     }
 
     @Test
-    void acceptsOnlyJobSeekerRegistration() {
+    void acceptsJobSeekerOrUnspecifiedRegistrationRole() {
         assertThat(validator.validate(new RegisterRequest("person@example.com",
                 "StrongPassword123!", UserRole.JOB_SEEKER))).isEmpty();
         assertThat(validator.validate(new RegisterRequest("person@example.com",
-                "StrongPassword123!", null))).isEmpty();
+                "StrongPassword123!"))).isEmpty();
     }
 
     @Test
-    void rejectsAdminRoleAndInvalidRegistrationFields() {
+    void rejectsElevatedRegistrationRolesAndInvalidFields() {
         Set<ConstraintViolation<RegisterRequest>> adminViolations = validator.validate(
                 new RegisterRequest("person@example.com", "StrongPassword123!", UserRole.ADMIN));
         assertThat(adminViolations).extracting(ConstraintViolation::getMessage)
@@ -51,10 +51,10 @@ class AuthDtoValidationTest {
                 "person@example.com", "StrongPassword123!", UserRole.EMPLOYER))).isNotEmpty();
 
         Set<ConstraintViolation<RegisterRequest>> fieldViolations = validator.validate(
-                new RegisterRequest("not-an-email", "short", null));
+                new RegisterRequest("not-an-email", "short"));
         assertThat(fieldViolations).isNotEmpty();
         assertThat(validator.validate(new RegisterRequest(
-                "person@example.com", "é".repeat(37), UserRole.JOB_SEEKER))).isNotEmpty();
+                "person@example.com", "é".repeat(37)))).isNotEmpty();
     }
 
     @Test

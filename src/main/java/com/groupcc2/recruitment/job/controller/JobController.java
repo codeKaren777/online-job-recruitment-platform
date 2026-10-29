@@ -16,6 +16,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -81,6 +82,13 @@ public class JobController {
     @PreAuthorize("hasRole('EMPLOYER')")
     public JobResponse close(@PathVariable UUID jobId, @AuthenticationPrincipal Jwt jwt) {
         return jobService.closeJob(userId(jwt), userRole(jwt), jobId);
+    }
+
+    @DeleteMapping("/jobs/{jobId}")
+    @PreAuthorize("hasRole('EMPLOYER')")
+    @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable UUID jobId, @AuthenticationPrincipal Jwt jwt) {
+        jobService.deleteJob(userId(jwt), userRole(jwt), jobId);
     }
 
     private static UUID userId(Jwt jwt) {

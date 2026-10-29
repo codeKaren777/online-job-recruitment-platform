@@ -44,7 +44,7 @@ Owns job seeker profiles and private document metadata. A job seeker's profile a
 
 ### Jobs
 
-Owns employer job postings. Every posting references a company represented by the authenticated employer. Employers can manage their own postings. A posting is considered expired when its due date is reached or has passed.
+Owns employer job postings. Every posting references a company represented by the authenticated employer. Employers can manage their own postings. A posting is considered expired when its due date is reached or has passed. An employer may delete only a job for an owned company, and a job with submitted applications cannot be deleted so application history is retained.
 
 ### Companies
 
@@ -126,13 +126,19 @@ Controllers handle HTTP concerns. Services enforce role and ownership rules. Rep
 - Employers can access only applications belonging to their own job postings.
 - Employers can create or update jobs only for companies they represent.
 - Database row-level security is enabled for application tables; its connection settings must be derived from verified authentication, never from client input.
+- Public registration assigns `JOB_SEEKER` only. Employer upgrades are reviewed
+  by administrators; approval changes the applicant's role through the users
+  service. Administrative role grants use the protected admin workflow and
+  retain an audit record.
+- Administrative account operations bootstrap only the caller's own RLS
+  visibility, verify the persisted active `ADMIN` account, then set transaction-
+  local `ADMIN` context for the protected operation.
 
 ## Deployment
 
-The local Docker Compose setup uses the existing `POSTGRES_USER` account for
-both the backend and Flyway. If that account is a PostgreSQL superuser, it
-bypasses RLS; this is explicitly a local-development compromise, not a
-production database security model. See [database.md](database.md) for details.
+Docker Compose uses the bootstrap database account for Flyway and a separate
+restricted `POSTGRES_RUNTIME_USER` for the backend. See [database.md](database.md)
+for the RLS and database-account design.
 
 For database tables, enums, indexes, constraints, expiry handling, and RLS
 details, see [database.md](database.md). For local commands, see [setup.md](setup.md).
