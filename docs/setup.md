@@ -80,6 +80,9 @@ Check that Java reports version 21 and that Docker can communicate with its runn
 Application email delivery is disabled unless `APP_MAIL_ENABLED=true`. For a production deployment,
 set `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT`, `SPRING_MAIL_USERNAME`,
 `SPRING_MAIL_PASSWORD`, and `APP_MAIL_FROM` in the deployment's secret/configuration store.
+This enables password-reset, employer-review, and application-status emails. Set
+`PASSWORD_RESET_URL` to the frontend reset form URL (including the `token=` query prefix)
+so reset emails contain a clickable link; the raw token is included when it is not set.
 Authentication and STARTTLS are enabled by default. Never commit SMTP credentials. Notification
 events remain durably queued while delivery is disabled and are processed after it is enabled.
 
@@ -292,7 +295,7 @@ runtime grant set is present, without requiring a volume reset.
 
 Compose enables the `local` Spring profile so the forgot-password endpoint can
 return a reset token in Postman for local testing. Do not use this profile for
-deployment; no email delivery provider is configured.
+deployment; SMTP delivery must be configured and `APP_MAIL_ENABLED=true`.
 
 Wait for the services to start. The first build may take several minutes.
 

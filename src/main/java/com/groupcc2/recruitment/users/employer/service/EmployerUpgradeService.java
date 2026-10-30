@@ -1,6 +1,7 @@
 package com.groupcc2.recruitment.users.employer.service;
 
 import com.groupcc2.recruitment.security.RlsTransactionContext;
+import com.groupcc2.recruitment.common.notification.NotificationEmailSender;
 import com.groupcc2.recruitment.users.employer.dto.EmployerUpgradeRequestBody;
 import com.groupcc2.recruitment.users.employer.entity.EmployerRequestStatus;
 import com.groupcc2.recruitment.users.employer.entity.EmployerUpgradeRequest;
@@ -12,6 +13,8 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -20,12 +23,21 @@ public class EmployerUpgradeService {
     private final EmployerUpgradeRequestRepository requests;
     private final UserService users;
     private final RlsTransactionContext rls;
+    private final ObjectProvider<NotificationEmailSender> notificationEmails;
 
     public EmployerUpgradeService(EmployerUpgradeRequestRepository requests, UserService users,
                                   RlsTransactionContext rls) {
+        this(requests, users, rls, null);
+    }
+
+    @Autowired
+    public EmployerUpgradeService(EmployerUpgradeRequestRepository requests, UserService users,
+                                  RlsTransactionContext rls,
+                                  ObjectProvider<NotificationEmailSender> notificationEmails) {
         this.requests = requests;
         this.users = users;
         this.rls = rls;
+        this.notificationEmails = notificationEmails;
     }
 
     @Transactional
@@ -57,7 +69,9 @@ public class EmployerUpgradeService {
         EmployerUpgradeRequest request = findRequest(requestId);
         request.approve(administratorId);
         users.promoteToEmployer(administratorId, request.getUserId());
-        return requests.save(request);
+        EmployerUpgradeRequest saved = requests.save(request);
+        notifyDecision(saved);
+        return saved;
     }
 
     @Transactional
@@ -65,7 +79,18 @@ public class EmployerUpgradeService {
         requireAdministrator(administratorId);
         EmployerUpgradeRequest request = findRequest(requestId);
         request.reject(administratorId, clean(reason));
-        return requests.save(request);
+        EmployerUpgradeRequest saved = requests.save(request);
+        notifyDecision(saved);
+        return saved;
+    }
+
+    private void notifyDecision(EmployerUpgradeRequest request) {
+        NotificationEmailSender sender = notificationEmails == null
+                ? null : notificationEmails.getIfAvailable();
+        if (sender != null) {
+            sender.sendEmployerDecision(users.findById(request.getUserId()).getEmail(),
+                    request.getCompanyName(), request.getStatus().name(), request.getRejectionReason());
+        }
     }
 
     private User requireUser(UUID userId, UserRole role) {
