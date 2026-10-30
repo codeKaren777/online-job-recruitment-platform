@@ -10,30 +10,28 @@ its existing ownership. The Applications module registers the
 `EmployerApplicationAccess` adapter and verifies employer-owned jobs and
 persisted applicant submissions.
 
-**The five own-profile HTTP routes are authorized for authenticated job seekers.**
-This is an implementation for review, not a completed deployable feature.
-Employer visibility and runtime database integration remain separate concerns.
-`docs/decisions.md`, `docs/backlog.md` and SRS/API contracts are absent in this
-checkout; no JWT lifecycle or employer route decision was invented.
+Job seekers manage their own profile and private documents. Employer read/list/
+download routes are also exposed under `/api/employer/jobs/{jobId}/applicants/`
+and are authorized for EMPLOYER only. The application contract verifies ownership
+and a persisted application to that specific job before profile data is read.
 
 To finish integration:
 
 1. `SecurityContextProfileIdentity` supplies the UUID from validated JWT
    authentication, and its subject mapping is covered by focused tests. Do not
    accept a request owner/role parameter.
-2. Employer profile visibility is service-only. The Applications-owned
-   `EmployerApplicationAccess` adapter verifies a persisted application by the
-   applicant to the specified job AND job ownership by this employer. Failure
-   denies access; no employer profile HTTP route exists.
+2. Employer profile visibility uses the Applications-owned
+   `EmployerApplicationAccess` contract. It verifies a persisted application by
+   the applicant to the specified job AND job ownership by this employer. Failure
+   denies profile reads, document listings, and signed downloads.
 3. Provision a NOSUPERUSER NOBYPASSRLS runtime role, separate migration credentials,
    schema/type usage and required table grants. Existing Compose credentials are
    PostgreSQL bootstrap superuser credentials. ProfileRls rejects them, even with
    FORCE RLS. Coordinate shared auth/bootstrap RLS requirements before changing
    database credentials. No migration creates hard-coded runtime credentials.
-4. Add HTTP ownership/role tests using real authentication and restricted runtime
-   DB credentials BEFORE deliberately registering profile route permissions and
-   enabling multipart. Suggested limits: max-file-size 5MB, max-request-size 6MB.
-   Keep every unrelated feature route's security unchanged.
+4. Keep employer profile reads limited to the registered routes and specific-job
+   application check. Suggested upload limits: max-file-size 5MB,
+   max-request-size 6MB. Keep unrelated feature routes closed.
 
 ## HTTP adapter and service contracts
 
@@ -41,13 +39,16 @@ All responses are DTOs (plain JSON, matching Users; no existing envelope).
 No request accepts an owner UUID. Service authorization checks active persisted
 account status and expected role on every call, including employer calls.
 
-| Route (currently denied) | JOB_SEEKER behavior |
+| Route | Authorization and behavior |
 |---|---|
 | GET /api/profile | Own profile; 404 if absent |
 | PUT /api/profile | Create/update own profile; 200 |
 | POST /api/profile/documents | Multipart part `file`; own existing profile required; 201 |
 | GET /api/profile/documents | Own metadata only; profile required |
 | DELETE /api/profile/documents/{documentId} | Own document only; 204; foreign/missing ID gives 404 |
+| GET /api/employer/jobs/{jobId}/applicants/{applicantId}/profile | EMPLOYER owning jobId, applicant must have applied to jobId |
+| GET /api/employer/jobs/{jobId}/applicants/{applicantId}/profile/documents | Same specific-job application check |
+| GET /api/employer/jobs/{jobId}/applicants/{applicantId}/profile/documents/{documentId}/download | Same check; document must belong to applicant |
 
 Profile fields: displayName (nonblank, max 200), phone (optional, max 50), biography
 (optional, max 10000); timestamps are server controlled. PUT replaces optional
@@ -55,9 +56,9 @@ fields. Missing profile is never implicitly created by read/upload/list.
 Documents return id, originalFilename, contentType, byteSize, createdAt;
 no bucket, object key, owner override or stored/public URL is returned.
 
-Service-only `readForEmployer`, `listForEmployer`, `downloadForEmployer` require
-specific job/applicant relationships through EmployerApplicationAccess.
-`downloadOwn` validates owner before signing. Download DTO contains a GET-only
+`readForEmployer`, `listForEmployer`, `downloadForEmployer` back the employer
+HTTP routes and require specific job/applicant relationships through
+EmployerApplicationAccess. `downloadOwn` validates owner before signing. Download DTO contains a GET-only
 URL plus expiresAt. URLs are bearer capabilities: do not log or persist them.
 Expiry defaults to 120 seconds and accepts only 30..300 seconds.
 

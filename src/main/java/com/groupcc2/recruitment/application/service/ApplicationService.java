@@ -16,6 +16,7 @@ import com.groupcc2.recruitment.application.entity.ApplicationStatus;
 import com.groupcc2.recruitment.application.notification.ApplicationNotificationOutboxRepository;
 import com.groupcc2.recruitment.application.repository.ApplicationDecisionAuditRepository;
 import com.groupcc2.recruitment.application.repository.ApplicationRepository;
+import com.groupcc2.recruitment.profile.service.JobSeekerProfileAccess;
 import com.groupcc2.recruitment.users.entity.User;
 import com.groupcc2.recruitment.users.entity.UserRole;
 import com.groupcc2.recruitment.users.service.UserService;
@@ -37,6 +38,7 @@ public class ApplicationService {
     private final UserService users;
     private final ApplicationRls rls;
     private final ObjectProvider<JobDirectory> jobDirectory;
+    private final ObjectProvider<JobSeekerProfileAccess> profileAccess;
     private final ApplicationDecisionAuditRepository decisionAudits;
     private final ApplicationNotificationOutboxRepository notifications;
     private final Clock clock;
@@ -44,19 +46,22 @@ public class ApplicationService {
     @Autowired
     public ApplicationService(ApplicationRepository applications, UserService users, ApplicationRls rls,
                               ObjectProvider<JobDirectory> jobDirectory,
+                              ObjectProvider<JobSeekerProfileAccess> profileAccess,
                               ApplicationDecisionAuditRepository decisionAudits,
                               ApplicationNotificationOutboxRepository notifications) {
-        this(applications, users, rls, jobDirectory, decisionAudits, notifications, Clock.systemUTC());
+        this(applications, users, rls, jobDirectory, profileAccess, decisionAudits, notifications, Clock.systemUTC());
     }
 
     public ApplicationService(ApplicationRepository applications, UserService users, ApplicationRls rls,
                        ObjectProvider<JobDirectory> jobDirectory,
+                       ObjectProvider<JobSeekerProfileAccess> profileAccess,
                        ApplicationDecisionAuditRepository decisionAudits,
                        ApplicationNotificationOutboxRepository notifications, Clock clock) {
         this.applications = applications;
         this.users = users;
         this.rls = rls;
         this.jobDirectory = jobDirectory;
+        this.profileAccess = profileAccess;
         this.decisionAudits = decisionAudits;
         this.notifications = notifications;
         this.clock = clock;
@@ -73,6 +78,13 @@ public class ApplicationService {
                 .orElseThrow(() -> new ApplicationFailure(ApplicationFailure.Code.NOT_FOUND));
         if (!job.acceptsApplications(LocalDate.now(clock))) {
             throw new ApplicationFailure(ApplicationFailure.Code.JOB_NOT_ACCEPTING_APPLICATIONS);
+        }
+        JobSeekerProfileAccess profileService = profileAccess.getIfAvailable();
+        if (profileService == null) {
+            throw new ApplicationFailure(ApplicationFailure.Code.INTEGRATION_UNAVAILABLE);
+        }
+        if (!profileService.hasProfile(userId)) {
+            throw new ApplicationFailure(ApplicationFailure.Code.PROFILE_REQUIRED);
         }
         // Friendly check first; the UNIQUE (job_id, job_seeker_id) constraint is the real guarantee.
         if (applications.existsByJobIdAndJobSeekerId(jobId, userId)) {

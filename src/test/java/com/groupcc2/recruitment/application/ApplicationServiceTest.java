@@ -21,6 +21,7 @@ import com.groupcc2.recruitment.application.service.ApplicationRls;
 import com.groupcc2.recruitment.application.service.ApplicationService;
 import com.groupcc2.recruitment.application.service.JobDirectory;
 import com.groupcc2.recruitment.application.service.JobSnapshot;
+import com.groupcc2.recruitment.profile.service.JobSeekerProfileAccess;
 import com.groupcc2.recruitment.users.entity.User;
 import com.groupcc2.recruitment.users.entity.UserRole;
 import com.groupcc2.recruitment.users.service.InactiveAccountException;
@@ -55,7 +56,9 @@ class ApplicationServiceTest {
     @Mock ApplicationDecisionAuditRepository decisionAudits;
     @Mock ApplicationNotificationOutboxRepository notifications;
     @Mock ObjectProvider<JobDirectory> directoryProvider;
+    @Mock ObjectProvider<JobSeekerProfileAccess> profileAccessProvider;
     @Mock JobDirectory directory;
+    @Mock JobSeekerProfileAccess profileAccess;
 
     ApplicationService service;
     User seeker = new User("seeker@example.com", "hash", UserRole.JOB_SEEKER);
@@ -64,9 +67,11 @@ class ApplicationServiceTest {
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(TODAY.atTime(9, 0).toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
-        service = new ApplicationService(repository, users, rls, directoryProvider,
+        service = new ApplicationService(repository, users, rls, directoryProvider, profileAccessProvider,
                 decisionAudits, notifications, clock);
         when(directoryProvider.getIfAvailable()).thenReturn(directory);
+        when(profileAccessProvider.getIfAvailable()).thenReturn(profileAccess);
+        when(profileAccess.hasProfile(seeker.getId())).thenReturn(true);
         when(users.findById(seeker.getId())).thenReturn(seeker);
         when(repository.saveAndFlush(any(Application.class))).thenAnswer(call -> call.getArgument(0));
         when(decisionAudits.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
@@ -91,6 +96,19 @@ class ApplicationServiceTest {
         assertThat(savedApplication.getValue().getStatus()).isEqualTo(ApplicationStatus.PENDING);
         verify(notifications).enqueue(response.id(), response.id(), "SUBMITTED");
         verify(rls).establish(seeker.getId(), "JOB_SEEKER");
+    }
+
+    @Test
+    void requiresProfileBeforeSubmittingApplication() {
+        when(directory.findById(jobId)).thenReturn(Optional.of(job(TODAY.plusDays(3), JobSnapshot.State.ACTIVE)));
+        when(profileAccess.hasProfile(seeker.getId())).thenReturn(false);
+
+        assertThatThrownBy(() -> service.apply(seeker.getId(), jobId))
+                .isInstanceOfSatisfying(ApplicationFailure.class,
+                        e -> assertThat(e.code()).isEqualTo(ApplicationFailure.Code.PROFILE_REQUIRED));
+
+        verify(repository, never()).saveAndFlush(any());
+        verifyNoInteractions(notifications);
     }
 
     @Test

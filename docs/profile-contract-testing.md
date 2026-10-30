@@ -100,7 +100,7 @@ deletes. Do not infer extra application status restrictions or transitions.
 ## Final HTTP workflow and acceptance gates
 
 After verified adapters, a non-bypass runtime DB role, private bucket/account and
-role mapping exist, add authentic HTTP tests before deliberately opening routes:
+role mapping exist, run authentic HTTP checks for the opened routes:
 
 1. Authenticate active seeker A; PUT profile (200), GET profile (200).
 2. Upload a valid allowed PDF (201), list metadata (200) with no storage key/public
@@ -114,12 +114,10 @@ role mapping exist, add authentic HTTP tests before deliberately opening routes:
    failure recovery as documented in profile-module.md.
 8. Check expired/invalid tokens and inactive accounts across the workflow.
 
-Own profile/document route conventions exist in profile-module.md. Employer HTTP
-routes and a download HTTP adapter are not exposed on this base; agree those
-contracts with their owners before writing route examples. Service download
-methods are available for integration tests. Record PASS/FAIL/BLOCKED for each
-check with executed test evidence. Health UP or manual mc uploads alone do not
-prove these contracts or full HTTP acceptance.
+Own and employer profile/document routes are listed in profile-endpoints.md.
+Employer routes use the exact job/application authorization contract. Record
+PASS/FAIL/BLOCKED for each check with executed evidence. Health UP or manual mc
+uploads alone do not prove these contracts or full HTTP acceptance.
 
 For the actual HTTP routes, Postman setup, curl requests and response/error
 contracts, see [Profile and document endpoints](profile-endpoints.md).

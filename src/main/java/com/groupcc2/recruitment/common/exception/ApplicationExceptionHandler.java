@@ -25,7 +25,8 @@ public class ApplicationExceptionHandler {
         HttpStatus status = switch (failure.code()) {
             case FORBIDDEN -> HttpStatus.FORBIDDEN;
             case NOT_FOUND -> HttpStatus.NOT_FOUND;
-            case DUPLICATE_APPLICATION, JOB_NOT_ACCEPTING_APPLICATIONS, INVALID_STATUS_TRANSITION -> HttpStatus.CONFLICT;
+            case DUPLICATE_APPLICATION, JOB_NOT_ACCEPTING_APPLICATIONS, PROFILE_REQUIRED,
+                    INVALID_STATUS_TRANSITION -> HttpStatus.CONFLICT;
             case INTEGRATION_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
         };
         return ResponseEntity.status(status).body(new ErrorResponse(failure.code().name()));

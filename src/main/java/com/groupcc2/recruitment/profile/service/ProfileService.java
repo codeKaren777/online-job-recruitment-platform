@@ -15,7 +15,7 @@ import com.groupcc2.recruitment.profile.repository.*;
 import com.groupcc2.recruitment.profile.storage.*;
 import org.springframework.web.multipart.MultipartFile;
 @Service
-public class ProfileService {
+public class ProfileService implements JobSeekerProfileAccess {
  private static final Logger log=LoggerFactory.getLogger(ProfileService.class);
  private final ObjectProvider<ProfileIdentity> identities;
  private final ObjectProvider<EmployerApplicationAccess> employerAccess;
@@ -42,6 +42,12 @@ public class ProfileService {
  if(user.getRole()!=role)throw failure(ProfileFailure.Code.FORBIDDEN);rls.establish(id,role.name());return id;
  }
  public ProfileResponse readOwn() {return tx.execute(s->profile(actor(UserRole.JOB_SEEKER)).response());}
+ @Override public boolean hasProfile(UUID jobSeekerId) {
+  return Boolean.TRUE.equals(tx.execute(s->{UUID current=actor(UserRole.JOB_SEEKER);
+   if(!current.equals(jobSeekerId))throw failure(ProfileFailure.Code.FORBIDDEN);
+   return profiles.existsById(current);
+  }));
+ }
  public ProfileResponse upsert(ProfileRequest request) {
  if(request==null || !validator.validate(request).isEmpty())throw new IllegalArgumentException("Invalid profile fields");
  return tx.execute(s->{UUID id=actor(UserRole.JOB_SEEKER);Profile p=profiles.findById(id).orElseGet(()->new Profile(id,request));

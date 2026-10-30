@@ -61,7 +61,7 @@ public class ApplicationController {
                     content = @Content(schema = @Schema(implementation = ApplicationExceptionHandler.ErrorResponse.class))),
             @ApiResponse(responseCode = "404", description = "Job posting does not exist",
                     content = @Content(schema = @Schema(implementation = ApplicationExceptionHandler.ErrorResponse.class))),
-            @ApiResponse(responseCode = "409", description = "Job is not accepting applications or this seeker already applied",
+            @ApiResponse(responseCode = "409", description = "A profile is required, the job is not accepting applications, or this seeker already applied",
                     content = @Content(schema = @Schema(implementation = ApplicationExceptionHandler.ErrorResponse.class))),
             @ApiResponse(responseCode = "503", description = "Job posting service is unavailable",
                     content = @Content(schema = @Schema(implementation = ApplicationExceptionHandler.ErrorResponse.class)))

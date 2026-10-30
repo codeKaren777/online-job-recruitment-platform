@@ -2,9 +2,10 @@ package com.groupcc2.recruitment.common.exception;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.*;
 import com.groupcc2.recruitment.profile.controller.ProfileController;
+import com.groupcc2.recruitment.profile.controller.EmployerProfileController;
 import com.groupcc2.recruitment.profile.service.ProfileFailure;
 import com.groupcc2.recruitment.users.service.*;
-@RestControllerAdvice(assignableTypes=ProfileController.class)
+@RestControllerAdvice(assignableTypes={ProfileController.class, EmployerProfileController.class})
 public class ProfileExceptionHandler {
  public record ErrorResponse(String code) {}
  @ExceptionHandler(ProfileFailure.class) ResponseEntity<ErrorResponse> profile(ProfileFailure e){

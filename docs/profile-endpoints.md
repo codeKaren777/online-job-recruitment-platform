@@ -1,14 +1,15 @@
 # Profile and document-upload endpoints
 
-Base URL: http://localhost:8080. These five routes exist in ProfileController.
-All require an active JOB_SEEKER acting on their own records. No request accepts
-a userId or role to choose an owner.
+Base URL: http://localhost:8080. Job seekers manage their own profile and documents.
+Employers can read an applicant's profile and documents only for a job they own
+after that applicant has submitted an application to that specific job. No request
+accepts a userId or role to choose the acting owner.
 
-**Current checkout:** SecurityConfig authorizes these routes only for
-`JOB_SEEKER` tokens. Without a token expect 401; other roles expect 403.
-Controller authorization and JWT-subject identity resolution are covered by
-focused tests. Profile service operations still require the configured runtime
-database and private storage integrations.
+**Authorization:** Own-profile routes require a `JOB_SEEKER` token. Employer
+applicant-profile routes require an `EMPLOYER` token and enforce ownership of the
+specific job plus a persisted application from that applicant. Without a token
+expect 401; a wrong role or relationship is denied. Profile service operations
+require the configured runtime database and private storage integrations.
 
 | Method | Endpoint | Input | Success after integration |
 |---|---|---|---|
@@ -18,6 +19,9 @@ database and private storage integrations.
 | GET | /api/profile/documents | None | 200, own document metadata array |
 | GET | /api/profile/documents/{documentId}/download | None | 200, short-lived signed GET URL |
 | DELETE | /api/profile/documents/{documentId} | Document UUID from upload/list | 204, empty body |
+| GET | /api/employer/jobs/{jobId}/applicants/{applicantId}/profile | Employer owns job and applicant applied to it | 200, profile |
+| GET | /api/employer/jobs/{jobId}/applicants/{applicantId}/profile/documents | Same exact job/application check | 200, private metadata |
+| GET | /api/employer/jobs/{jobId}/applicants/{applicantId}/profile/documents/{documentId}/download | Same check and document belongs to applicant | 200, expiring signed URL |
 
 ## Postman setup
 
@@ -137,20 +141,19 @@ After the integration gate opens, check these cases with real tokens:
 | Upload beyond multipart limit | 413 FILE_TOO_LARGE |
 | Missing profile or foreign/missing document ID | 404 NOT_FOUND |
 | Storage/database service failure | Safe 503 code, no credentials/storage paths |
+| Apply without an existing profile | 409 `PROFILE_REQUIRED`; create it with `PUT /api/profile` |
 
 Security-filter errors need not use the controller's JSON error format. Application
 errors use {"code":"..."}.
 
-## Download and employer endpoints
+## Employer applicant-profile access
 
-There is currently **no employer-profile HTTP endpoint**. `downloadOwn` is
-available at `/api/profile/documents/{documentId}/download`; it verifies
-ownership before issuing a short-lived signed URL. `readForEmployer`,
-`listForEmployer`, and `downloadForEmployer` remain service methods only.
-Employer route contracts require the Jobs/Applications owner to supply real
-specific-job/application authorization; download routes must be deliberately
-registered and tested. The [contract-testing checklist](profile-contract-testing.md)
-records this remaining work.
+An employer can call these routes after a job seeker applies to a job owned by
+that employer. Each request verifies the authenticated employer owns `jobId`,
+the applicant has a persisted application to that exact job, and any requested
+document belongs to that applicant. Other employers and applications to other
+jobs do not grant access. Downloads use short-lived signed URLs; employers cannot
+upload, delete, or change applicant profile data.
 
 ## What you can test before auth is ready
 
