@@ -1,6 +1,6 @@
-package com.groupcc2.recruitment.admin.repository;
+package com.groupcc2.recruitment.users.repository;
 
-import com.groupcc2.recruitment.admin.entity.AdminRoleChange;
+import com.groupcc2.recruitment.users.entity.AdminRoleChange;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 

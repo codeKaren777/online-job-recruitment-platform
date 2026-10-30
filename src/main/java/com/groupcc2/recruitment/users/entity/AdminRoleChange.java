@@ -1,4 +1,4 @@
-package com.groupcc2.recruitment.admin.entity;
+package com.groupcc2.recruitment.users.entity;
 
 import java.time.Instant;
 import java.util.UUID;

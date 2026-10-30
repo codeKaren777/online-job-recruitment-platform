@@ -1,6 +1,6 @@
 package com.groupcc2.recruitment.common.exception;
 
-import com.groupcc2.recruitment.admin.controller.AdminUserController;
+import com.groupcc2.recruitment.users.controller.AdminUserController;
 import com.groupcc2.recruitment.users.controller.UserController;
 import com.groupcc2.recruitment.users.service.AuthorizationDeniedException;
 import com.groupcc2.recruitment.users.service.InvalidRoleChangeException;

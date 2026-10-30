@@ -1,6 +1,5 @@
-package com.groupcc2.recruitment.admin;
+package com.groupcc2.recruitment.users.controller;
 
-import com.groupcc2.recruitment.admin.controller.AdminUserController;
 import com.groupcc2.recruitment.application.service.ApplicationService;
 import com.groupcc2.recruitment.users.entity.User;
 import com.groupcc2.recruitment.users.entity.UserRole;
@@ -56,6 +55,22 @@ class AdminUserControllerTest {
                 .andExpect(jsonPath("$[0].email").value("person@example.com"));
 
         verify(users).findAllForAdministrator(administratorId);
+    }
+
+    @Test
+    void administratorCanRetrieveAUserById() throws Exception {
+        UUID administratorId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        User user = new User("person@example.com", "hash", UserRole.JOB_SEEKER);
+        when(users.findForAdministrator(administratorId, userId)).thenReturn(user);
+
+        mvc.perform(get("/api/admin/users/{id}", userId).with(jwt()
+                        .authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))
+                        .jwt(token -> token.subject(administratorId.toString()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("person@example.com"));
+
+        verify(users).findForAdministrator(administratorId, userId);
     }
 
     @Test
