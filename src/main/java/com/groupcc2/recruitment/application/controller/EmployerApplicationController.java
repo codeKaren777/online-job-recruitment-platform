@@ -26,7 +26,7 @@ import jakarta.validation.Valid;
 /** Employer reads are scoped to jobs owned by the authenticated employer. */
 @RestController
 @RequestMapping("/api/employer/applications")
-@Tag(name = "Applications", description = "Application submission and access-controlled review")
+@Tag(name = "Application", description = "Submit applications and review applications for employer-owned jobs")
 @SecurityRequirement(name = "bearerAuth")
 public class EmployerApplicationController {
     private final ApplicationService service;

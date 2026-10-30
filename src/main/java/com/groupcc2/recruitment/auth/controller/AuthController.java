@@ -36,7 +36,7 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 
 @RestController
 @RequestMapping("/api/auth")
-@Tag(name = "Authentication", description = "Login, token lifecycle, and password recovery")
+@Tag(name = "Auth", description = "Registration, login, password changes, and password recovery")
 public class AuthController {
     private final AuthService authService;
 

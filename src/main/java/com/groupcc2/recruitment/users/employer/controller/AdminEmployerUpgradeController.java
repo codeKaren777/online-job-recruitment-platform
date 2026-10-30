@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/admin/employer-requests")
 @PreAuthorize("hasRole('ADMIN')")
-@Tag(name = "Administration", description = "Administrative account management")
+@Tag(name = "Users", description = "User accounts, employer upgrade requests, and administrator account operations")
 @SecurityRequirement(name = "bearerAuth")
 public class AdminEmployerUpgradeController {
     private final EmployerUpgradeService service;

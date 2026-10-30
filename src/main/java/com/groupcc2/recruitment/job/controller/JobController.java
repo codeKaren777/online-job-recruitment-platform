@@ -33,7 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api")
-@Tag(name = "Jobs", description = "Job postings")
+@Tag(name = "Job", description = "Browse and manage job postings")
 @SecurityRequirement(name = "bearerAuth")
 public class JobController {
 
