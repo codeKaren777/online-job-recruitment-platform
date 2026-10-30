@@ -5,6 +5,7 @@ import com.groupcc2.recruitment.company.dto.CompanyResponse;
 import com.groupcc2.recruitment.company.service.CompanyService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -25,21 +26,25 @@ public class CompanyController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Create a company", description = "Creates a company owned by the authenticated employer using the request body.")
     public CompanyResponse create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody CompanyRequest request) {
         return CompanyResponse.from(service.create(userId(jwt), request));
     }
 
     @GetMapping
+    @Operation(summary = "List my companies", description = "Returns companies owned by the authenticated employer.")
     public List<CompanyResponse> list(@AuthenticationPrincipal Jwt jwt) {
         return service.list(userId(jwt)).stream().map(CompanyResponse::from).toList();
     }
 
     @GetMapping("/{companyId}")
+    @Operation(summary = "Get my company", description = "Returns the company with this ID if it is owned by the authenticated employer.")
     public CompanyResponse get(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID companyId) {
         return CompanyResponse.from(service.get(userId(jwt), companyId));
     }
 
     @PutMapping("/{companyId}")
+    @Operation(summary = "Update my company", description = "Replaces company details using the request body if the company is owned by the authenticated employer.")
     public CompanyResponse update(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID companyId,
                                   @Valid @RequestBody CompanyRequest request) {
         return CompanyResponse.from(service.update(userId(jwt), companyId, request));

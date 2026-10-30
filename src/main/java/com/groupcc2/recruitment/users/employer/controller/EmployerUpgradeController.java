@@ -27,14 +27,14 @@ public class EmployerUpgradeController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Submit an employer upgrade request")
+    @Operation(summary = "Submit an employer upgrade request", description = "Submits an employer upgrade request using the request body. The request is reviewed by an administrator.")
     public EmployerUpgradeResponse submit(@AuthenticationPrincipal Jwt jwt,
                                            @Valid @RequestBody EmployerUpgradeRequestBody body) {
         return EmployerUpgradeResponse.from(service.submit(userId(jwt), body));
     }
 
     @GetMapping
-    @Operation(summary = "List my employer upgrade requests")
+    @Operation(summary = "List my employer upgrade requests", description = "Returns employer upgrade requests submitted by the authenticated user.")
     public List<EmployerUpgradeResponse> own(@AuthenticationPrincipal Jwt jwt) {
         return service.ownRequests(userId(jwt)).stream().map(EmployerUpgradeResponse::from).toList();
     }

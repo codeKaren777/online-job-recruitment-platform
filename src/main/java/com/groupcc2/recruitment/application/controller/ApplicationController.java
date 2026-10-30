@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.Operation;
 
 /**
  * HTTP adapter for the job seeker's applications. The caller is the JWT subject (a user UUID);
@@ -38,16 +39,19 @@ public class ApplicationController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Apply for a job", description = "Submits an application for the job ID in the request body. Requires a job seeker account.")
     public ApplicationResponse apply(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody ApplyRequest request) {
         return service.apply(userId(jwt), request.jobId());
     }
 
     @GetMapping
+    @Operation(summary = "List my applications", description = "Returns applications submitted by the authenticated job seeker.")
     public List<ApplicationResponse> mine(@AuthenticationPrincipal Jwt jwt) {
         return service.listOwn(userId(jwt));
     }
 
     @GetMapping("/{applicationId}")
+    @Operation(summary = "Get my application", description = "Returns the application identified by its ID if it belongs to the authenticated job seeker.")
     public ApplicationResponse one(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID applicationId) {
         return service.getOwn(userId(jwt), applicationId);
     }

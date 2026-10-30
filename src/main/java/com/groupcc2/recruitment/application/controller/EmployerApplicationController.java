@@ -6,6 +6,7 @@ import com.groupcc2.recruitment.application.service.ApplicationFailure;
 import com.groupcc2.recruitment.application.service.ApplicationService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.Operation;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -31,6 +32,7 @@ public class EmployerApplicationController {
     }
 
     @GetMapping
+    @Operation(summary = "List applications for my jobs", description = "Returns applications for the authenticated employer's jobs. Optionally filter by job ID or application status.")
     public List<ApplicationResponse> applications(@AuthenticationPrincipal Jwt jwt,
                                                    @org.springframework.web.bind.annotation.RequestParam(required = false) UUID jobId,
                                                    @org.springframework.web.bind.annotation.RequestParam(required = false)
@@ -39,12 +41,14 @@ public class EmployerApplicationController {
     }
 
     @GetMapping("/{applicationId}")
+    @Operation(summary = "Get an application for my jobs", description = "Returns the application with this ID when it belongs to one of the employer's jobs.")
     public ApplicationResponse application(@AuthenticationPrincipal Jwt jwt,
                                            @PathVariable UUID applicationId) {
         return service.getForEmployer(userId(jwt), applicationId);
     }
 
     @PatchMapping("/{applicationId}/status")
+    @Operation(summary = "Update an application status", description = "Sets the application status using the request body, for an application belonging to one of the employer's jobs.")
     public ApplicationResponse changeStatus(@AuthenticationPrincipal Jwt jwt,
                                              @PathVariable UUID applicationId,
                                              @Valid @RequestBody ApplicationStatusRequest request) {

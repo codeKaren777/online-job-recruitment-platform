@@ -38,34 +38,34 @@ public class AdminUserController {
     }
 
     @GetMapping
-    @Operation(summary = "List users")
+    @Operation(summary = "List users", description = "Returns user accounts visible to the administrator.")
     public List<UserResponse> list(@AuthenticationPrincipal Jwt principal) {
         UUID administratorId = userId(principal);
         return users.findAllForAdministrator(administratorId).stream().map(UserResponse::from).toList();
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "Get a user by ID")
+    @Operation(summary = "Get a user by ID", description = "Returns the account with the supplied user ID.")
     public UserResponse get(@AuthenticationPrincipal Jwt principal, @PathVariable UUID id) {
         return UserResponse.from(users.findForAdministrator(userId(principal), id));
     }
 
     @PatchMapping("/{id}/suspend")
-    @Operation(summary = "Suspend a user account")
+    @Operation(summary = "Suspend a user account", description = "Suspends the account identified by the user ID.")
     public UserResponse suspend(@AuthenticationPrincipal Jwt principal, @PathVariable UUID id) {
         users.suspend(userId(principal), id);
         return UserResponse.from(users.findForAdministrator(userId(principal), id));
     }
 
     @PatchMapping("/{id}/remove")
-    @Operation(summary = "Remove a user account")
+    @Operation(summary = "Remove a user account", description = "Removes the account identified by the user ID.")
     public UserResponse remove(@AuthenticationPrincipal Jwt principal, @PathVariable UUID id) {
         users.remove(userId(principal), id);
         return UserResponse.from(users.findForAdministrator(userId(principal), id));
     }
 
     @PatchMapping("/{id}/role")
-    @Operation(summary = "Assign administrator role")
+    @Operation(summary = "Assign administrator role", description = "Promotes the user identified by the user ID to administrator.")
     public UserResponse assignRole(
             @AuthenticationPrincipal Jwt principal,
             @PathVariable UUID id,

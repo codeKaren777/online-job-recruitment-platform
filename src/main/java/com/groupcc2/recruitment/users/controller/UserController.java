@@ -24,7 +24,7 @@ public class UserController {
     }
 
     @GetMapping("/me")
-    @Operation(summary = "Get the current user")
+    @Operation(summary = "Get the current user", description = "Returns the account associated with the authenticated bearer token.")
     public UserResponse currentUser(@AuthenticationPrincipal Jwt principal) {
         return UserResponse.from(users.findOwnById(userId(principal)));
     }

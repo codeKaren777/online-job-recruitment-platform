@@ -8,6 +8,7 @@ import com.groupcc2.recruitment.job.service.JobService;
 import com.groupcc2.recruitment.users.entity.UserRole;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
@@ -40,6 +41,7 @@ public class JobController {
 
     @PostMapping("/jobs")
     @PreAuthorize("hasRole('EMPLOYER')")
+    @Operation(summary = "Create a job posting", description = "Creates a job posting for a company represented by the authenticated employer using the request body.")
     public ResponseEntity<JobResponse> create(@Valid @RequestBody JobRequest request,
                                               @AuthenticationPrincipal Jwt jwt) {
         JobResponse created = jobService.createJob(userId(jwt), userRole(jwt), request);
@@ -48,6 +50,7 @@ public class JobController {
 
     @GetMapping("/jobs")
     @PreAuthorize("hasRole('JOB_SEEKER')")
+    @Operation(summary = "Browse job postings", description = "Returns a page of job postings for job seekers. Optionally filter by location or search text; page defaults to 0 and size to 20.")
     public PageResponse<JobResponse> browse(@RequestParam(required = false) String location,
                                             @RequestParam(required = false, name = "q") String text,
                                             @RequestParam(defaultValue = "0") int page,
@@ -58,12 +61,14 @@ public class JobController {
 
     @GetMapping("/jobs/{jobId}")
     @PreAuthorize("hasAnyRole('JOB_SEEKER','EMPLOYER')")
+    @Operation(summary = "Get a job posting", description = "Returns the job posting identified by jobId.")
     public JobResponse get(@PathVariable UUID jobId, @AuthenticationPrincipal Jwt jwt) {
         return jobService.getJob(jobId, userId(jwt), userRole(jwt));
     }
 
     @GetMapping("/employer/jobs")
     @PreAuthorize("hasRole('EMPLOYER')")
+    @Operation(summary = "List my job postings", description = "Returns a page of the authenticated employer's job postings. Optionally filter by status; page defaults to 0 and size to 20.")
     public PageResponse<JobResponse> myJobs(@RequestParam(required = false) JobStatus status,
                                             @RequestParam(defaultValue = "0") int page,
                                             @RequestParam(defaultValue = "20") int size,
@@ -73,6 +78,7 @@ public class JobController {
 
     @PutMapping("/jobs/{jobId}")
     @PreAuthorize("hasRole('EMPLOYER')")
+    @Operation(summary = "Update a job posting", description = "Replaces the job posting identified by jobId using the request body, if it belongs to the authenticated employer.")
     public JobResponse update(@PathVariable UUID jobId, @Valid @RequestBody JobRequest request,
                               @AuthenticationPrincipal Jwt jwt) {
         return jobService.updateJob(userId(jwt), userRole(jwt), jobId, request);
@@ -80,12 +86,14 @@ public class JobController {
 
     @PatchMapping("/jobs/{jobId}/close")
     @PreAuthorize("hasRole('EMPLOYER')")
+    @Operation(summary = "Close a job posting", description = "Closes the job posting identified by jobId if it belongs to the authenticated employer.")
     public JobResponse close(@PathVariable UUID jobId, @AuthenticationPrincipal Jwt jwt) {
         return jobService.closeJob(userId(jwt), userRole(jwt), jobId);
     }
 
     @DeleteMapping("/jobs/{jobId}")
     @PreAuthorize("hasRole('EMPLOYER')")
+    @Operation(summary = "Delete a job posting", description = "Deletes the job posting identified by jobId if it belongs to the authenticated employer.")
     @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
     public void delete(@PathVariable UUID jobId, @AuthenticationPrincipal Jwt jwt) {
         jobService.deleteJob(userId(jwt), userRole(jwt), jobId);

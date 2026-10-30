@@ -25,19 +25,19 @@ public class AdminEmployerUpgradeController {
     public AdminEmployerUpgradeController(EmployerUpgradeService service) { this.service = service; }
 
     @GetMapping
-    @Operation(summary = "List pending employer upgrade requests")
+    @Operation(summary = "List pending employer upgrade requests", description = "Returns employer upgrade requests awaiting an administrator decision.")
     public List<EmployerUpgradeResponse> pending(@AuthenticationPrincipal Jwt jwt) {
         return service.pending(userId(jwt)).stream().map(EmployerUpgradeResponse::from).toList();
     }
 
     @PatchMapping("/{requestId}/approve")
-    @Operation(summary = "Approve an employer upgrade request")
+    @Operation(summary = "Approve an employer upgrade request", description = "Approves the request identified by requestId and upgrades the applicant to employer.")
     public EmployerUpgradeResponse approve(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID requestId) {
         return EmployerUpgradeResponse.from(service.approve(userId(jwt), requestId));
     }
 
     @PatchMapping("/{requestId}/reject")
-    @Operation(summary = "Reject an employer upgrade request")
+    @Operation(summary = "Reject an employer upgrade request", description = "Rejects the request identified by requestId using the decision details in the request body.")
     public EmployerUpgradeResponse reject(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID requestId,
                                            @Valid @RequestBody EmployerUpgradeDecision decision) {
         return EmployerUpgradeResponse.from(service.reject(userId(jwt), requestId, decision.reason()));
