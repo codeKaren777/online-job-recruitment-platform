@@ -7,6 +7,7 @@ import com.groupcc2.recruitment.application.dto.ApplicationResponse;
 import com.groupcc2.recruitment.application.dto.ApplyRequest;
 import com.groupcc2.recruitment.application.service.ApplicationFailure;
 import com.groupcc2.recruitment.application.service.ApplicationService;
+import com.groupcc2.recruitment.common.exception.ApplicationExceptionHandler;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -18,6 +19,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,9 +48,34 @@ public class ApplicationController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Apply for a job", description = "Submits an application for the job ID in the request body. Requires a JOB_SEEKER bearer token.", requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(description="ID of the job to apply for.", required=true, content=@io.swagger.v3.oas.annotations.media.Content(examples=@ExampleObject(value="{\"jobId\":\"11111111-1111-1111-1111-111111111111\"}"))))
-    @ApiResponses({@ApiResponse(responseCode="201",description="Application submitted; returns the application."),@ApiResponse(responseCode="400",description="Request body is malformed or fails validation."),@ApiResponse(responseCode="401",description="A valid bearer token is required."),@ApiResponse(responseCode="403",description="The caller is not permitted to apply."),@ApiResponse(responseCode="404",description="Job was not found or is not available."),@ApiResponse(responseCode="409",description="An application already exists or the job is not accepting applications."),@ApiResponse(responseCode="503",description="Application service is unavailable.")})
-    public ApplicationResponse apply(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody ApplyRequest request) {
+    @Operation(summary = "Apply to a job",
+            description = "Creates a PENDING application for the authenticated job seeker. Applicant identity, "
+                    + "application ID, status, and timestamps are assigned by the server.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Application created",
+                    content = @Content(schema = @Schema(implementation = ApplicationResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Missing job ID or malformed request",
+                    content = @Content(schema = @Schema(implementation = ApplicationExceptionHandler.ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Authentication is required"),
+            @ApiResponse(responseCode = "403", description = "Only active job seekers may apply",
+                    content = @Content(schema = @Schema(implementation = ApplicationExceptionHandler.ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Job posting does not exist",
+                    content = @Content(schema = @Schema(implementation = ApplicationExceptionHandler.ErrorResponse.class))),
+            @ApiResponse(responseCode = "409", description = "Job is not accepting applications or this seeker already applied",
+                    content = @Content(schema = @Schema(implementation = ApplicationExceptionHandler.ErrorResponse.class))),
+            @ApiResponse(responseCode = "503", description = "Job posting service is unavailable",
+                    content = @Content(schema = @Schema(implementation = ApplicationExceptionHandler.ErrorResponse.class)))
+    })
+    public ApplicationResponse apply(
+            @AuthenticationPrincipal Jwt jwt,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    description = "The target job posting. Applicant identity and application state are server-managed.",
+                    required = true,
+                    content = @Content(schema = @Schema(implementation = ApplyRequest.class),
+                            examples = @io.swagger.v3.oas.annotations.media.ExampleObject(
+                                    name = "Valid application",
+                                    value = "{\"jobId\":\"7e2778ac-26fd-4a2d-b318-8e06e315a082\"}")))
+            @Valid @RequestBody ApplyRequest request) {
         return service.apply(userId(jwt), request.jobId());
     }
 

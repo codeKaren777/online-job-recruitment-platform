@@ -81,10 +81,14 @@ class ApplicationServiceTest {
         when(directory.findById(jobId)).thenReturn(Optional.of(job(TODAY.plusDays(3), JobSnapshot.State.ACTIVE)));
 
         var response = service.apply(seeker.getId(), jobId);
+        var savedApplication = org.mockito.ArgumentCaptor.forClass(Application.class);
 
         assertThat(response.status()).isEqualTo(ApplicationStatus.PENDING);
         assertThat(response.jobId()).isEqualTo(jobId);
         assertThat(response.job().title()).isEqualTo("Backend Developer");
+        verify(repository).saveAndFlush(savedApplication.capture());
+        assertThat(savedApplication.getValue().getJobSeekerId()).isEqualTo(seeker.getId());
+        assertThat(savedApplication.getValue().getStatus()).isEqualTo(ApplicationStatus.PENDING);
         verify(notifications).enqueue(response.id(), response.id(), "SUBMITTED");
         verify(rls).establish(seeker.getId(), "JOB_SEEKER");
     }

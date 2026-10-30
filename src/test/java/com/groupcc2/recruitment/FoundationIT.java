@@ -5,6 +5,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
+import java.time.Instant;
 import java.util.UUID;
 
 import org.flywaydb.core.Flyway;
@@ -456,6 +457,21 @@ class FoundationIT {
                 .andExpect(jsonPath("$.tags[?(@.name == 'Users')]").exists())
                 .andExpect(jsonPath("$.paths['/api/employer/applications'].get").exists())
                 .andExpect(jsonPath("$.paths['/api/employer/applications/{applicationId}'].get").exists())
+                .andExpect(jsonPath("$.paths['/api/applications'].post.requestBody.required").value(true))
+                .andExpect(jsonPath("$.paths['/api/applications'].post.requestBody.content['application/json'].schema.$ref")
+                        .value("#/components/schemas/ApplyRequest"))
+                .andExpect(jsonPath("$.components.schemas.ApplyRequest.required[0]").value("jobId"))
+                .andExpect(jsonPath("$.components.schemas.ApplyRequest.properties.jobId.format").value("uuid"))
+                .andExpect(jsonPath("$.components.schemas.ApplyRequest.properties.jobSeekerId").doesNotExist())
+                .andExpect(jsonPath("$.components.schemas.ApplyRequest.properties.id").doesNotExist())
+                .andExpect(jsonPath("$.components.schemas.ApplyRequest.properties.status").doesNotExist())
+                .andExpect(jsonPath("$.paths['/api/applications'].post.responses['201']").exists())
+                .andExpect(jsonPath("$.paths['/api/applications'].post.responses['400']").exists())
+                .andExpect(jsonPath("$.paths['/api/applications'].post.responses['401']").exists())
+                .andExpect(jsonPath("$.paths['/api/applications'].post.responses['403']").exists())
+                .andExpect(jsonPath("$.paths['/api/applications'].post.responses['404']").exists())
+                .andExpect(jsonPath("$.paths['/api/applications'].post.responses['409']").exists())
+                .andExpect(jsonPath("$.paths['/api/applications'].post.responses['503']").exists())
                 .andExpect(jsonPath("$.paths['/api/applications'].post.security[0].bearerAuth").exists())
                 .andExpect(jsonPath("$.paths['/api/employer/applications'].get.security[0].bearerAuth").exists())
                 .andExpect(jsonPath("$.paths['/api/profile'].put.security[0].bearerAuth").exists())
@@ -679,14 +695,6 @@ class FoundationIT {
                         .header("Authorization", "Bearer " + otherEmployerToken))
                 .andExpect(status().isNotFound());
 
-        mvc.perform(put("/api/profile")
-                        .header("Authorization", "Bearer " + seekerToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"displayName\":\"Workflow Applicant\",\"phone\":\"+265999000111\","
-                                + "\"biography\":\"Integration test profile\",\"role\":\"ADMIN\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.displayName").value("Workflow Applicant"));
-
         assertThat(userRole(seekerId)).isEqualTo(UserRole.JOB_SEEKER.name());
 
         var jobResponse = mvc.perform(post("/api/jobs")
@@ -707,16 +715,55 @@ class FoundationIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].id").value(jobId.toString()));
 
+        try (Connection connection = adminConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT count(*) FROM recruitment.profiles WHERE user_id = ?")) {
+            statement.setObject(1, seekerId);
+            try (var result = statement.executeQuery()) {
+                assertThat(result.next()).isTrue();
+                assertThat(result.getLong(1)).isZero();
+            }
+        }
+
+        UUID clientApplicationId = UUID.randomUUID();
         var applicationResponse = mvc.perform(post("/api/applications")
                         .header("Authorization", "Bearer " + seekerToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"jobId\":\"" + jobId + "\",\"jobSeekerId\":\""
-                                + UUID.randomUUID() + "\"}"))
+                        .content("""
+                                {"jobId":"%s","jobSeekerId":"%s","id":"%s","status":"REJECTED",
+                                 "submittedAt":"2000-01-01T00:00:00Z","updatedAt":"2000-01-01T00:00:00Z"}
+                                """.formatted(jobId, UUID.randomUUID(), clientApplicationId)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("PENDING"))
                 .andReturn();
         UUID applicationId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(
                 applicationResponse.getResponse().getContentAsString(), "$.id"));
+        assertThat(applicationId).isNotEqualTo(clientApplicationId);
+        try (Connection connection = adminConnection();
+             PreparedStatement statement = connection.prepareStatement("""
+                     SELECT job_id, job_seeker_id, status::text, submitted_at, updated_at
+                     FROM recruitment.applications WHERE id = ?
+                     """)) {
+            statement.setObject(1, applicationId);
+            try (var result = statement.executeQuery()) {
+                assertThat(result.next()).isTrue();
+                assertThat(result.getObject("job_id", UUID.class)).isEqualTo(jobId);
+                assertThat(result.getObject("job_seeker_id", UUID.class)).isEqualTo(seekerId);
+                assertThat(result.getString("status")).isEqualTo("PENDING");
+                assertThat(result.getTimestamp("submitted_at").toInstant())
+                        .isAfter(Instant.parse("2000-01-01T00:00:00Z"));
+                assertThat(result.getTimestamp("updated_at").toInstant())
+                        .isAfter(Instant.parse("2000-01-01T00:00:00Z"));
+            }
+        }
+
+        mvc.perform(put("/api/profile")
+                        .header("Authorization", "Bearer " + seekerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"displayName\":\"Workflow Applicant\",\"phone\":\"+265999000111\","
+                                + "\"biography\":\"Integration test profile\",\"role\":\"ADMIN\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.displayName").value("Workflow Applicant"));
 
         mvc.perform(get("/api/employer/applications").header("Authorization", "Bearer " + employerToken))
                 .andExpect(status().isOk())

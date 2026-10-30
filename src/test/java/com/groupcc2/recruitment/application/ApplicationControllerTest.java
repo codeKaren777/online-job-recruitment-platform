@@ -82,15 +82,29 @@ class ApplicationControllerTest {
     }
 
     @Test
+    void employersCannotCreateJobSeekerApplications() throws Exception {
+        mvc.perform(post("/api/applications").with(jwt()
+                        .authorities(new SimpleGrantedAuthority("ROLE_EMPLOYER"))
+                        .jwt(j -> j.subject(userId.toString())))
+                        .contentType("application/json")
+                        .content("{\"jobId\":\"" + jobId + "\"}"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(service);
+    }
+
+    @Test
     void applyUsesTheTokenSubjectAndIgnoresAnyApplicantInTheBody() throws Exception {
         when(service.apply(userId, jobId)).thenReturn(sample());
 
         mvc.perform(post("/api/applications").with(seekerToken(userId))
                         .contentType("application/json")
-                        .content("{\"jobId\":\"" + jobId + "\",\"jobSeekerId\":\"" + UUID.randomUUID() + "\"}"))
+                        .content("{\"jobId\":\"" + jobId + "\",\"jobSeekerId\":\"" + UUID.randomUUID()
+                                + "\",\"id\":\"" + UUID.randomUUID()
+                                + "\",\"status\":\"REJECTED\",\"submittedAt\":\"2000-01-01T00:00:00Z\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("PENDING"))
                 .andExpect(jsonPath("$.jobId").value(jobId.toString()));
+        org.mockito.Mockito.verify(service).apply(userId, jobId);
     }
 
     @Test
@@ -113,6 +127,8 @@ class ApplicationControllerTest {
         mvc.perform(post("/api/applications").with(token).contentType("application/json").content("{}"))
                 .andExpect(status().isBadRequest());
         mvc.perform(post("/api/applications").with(token).contentType("application/json").content("{\"jobId\":\"nope\"}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/applications").with(token).contentType("application/json").content("{\"jobId\":\"\"}"))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(service);
     }
