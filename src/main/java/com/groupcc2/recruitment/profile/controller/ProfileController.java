@@ -15,7 +15,7 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 @org.springframework.security.access.prepost.PreAuthorize("hasRole('JOB_SEEKER')")
 @RestController
 @RequestMapping("/api/profile")
-@io.swagger.v3.oas.annotations.tags.Tag(name = "Profiles", description = "Profile and private document operations")
+@io.swagger.v3.oas.annotations.tags.Tag(name = "Profile", description = "Manage job seeker profiles and private documents")
 @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 public class ProfileController {
  private final ProfileService service;

@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/admin/users")
 @PreAuthorize("hasRole('ADMIN')")
-@Tag(name = "Users", description = "User registration, identity, and account management")
+@Tag(name = "Users", description = "User accounts, employer upgrade requests, and administrator account operations")
 @SecurityRequirement(name = "bearerAuth")
 @ApiResponses({
     @ApiResponse(responseCode = "401", description = "A valid bearer token is required"),

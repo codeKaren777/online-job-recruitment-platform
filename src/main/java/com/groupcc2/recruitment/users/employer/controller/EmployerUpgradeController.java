@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/employer-requests")
 @PreAuthorize("hasAnyRole('JOB_SEEKER', 'EMPLOYER')")
-@Tag(name = "Employer Requests", description = "Requests to become an employer")
+@Tag(name = "Users", description = "User accounts, employer upgrade requests, and administrator account operations")
 @SecurityRequirement(name = "bearerAuth")
 public class EmployerUpgradeController {
     private final EmployerUpgradeService service;

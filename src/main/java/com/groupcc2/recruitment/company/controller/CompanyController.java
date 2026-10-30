@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/companies")
 @PreAuthorize("hasRole('EMPLOYER')")
-@Tag(name = "Companies", description = "Employer company management")
+@Tag(name = "Company", description = "Manage companies owned by the authenticated employer")
 @SecurityRequirement(name = "bearerAuth")
 public class CompanyController {
     private final CompanyService service;

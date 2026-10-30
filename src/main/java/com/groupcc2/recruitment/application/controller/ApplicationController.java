@@ -37,7 +37,7 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
  */
 @RestController
 @RequestMapping("/api/applications")
-@Tag(name = "Applications", description = "Job application submission and access")
+@Tag(name = "Application", description = "Submit applications and review applications for employer-owned jobs")
 @SecurityRequirement(name = "bearerAuth")
 public class ApplicationController {
     private final ApplicationService service;

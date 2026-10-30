@@ -31,11 +31,17 @@ public class OpenApiConfiguration {
                         .contact(new Contact().name("Group CC2")))
                 .tags(List.of(
                         new io.swagger.v3.oas.models.tags.Tag().name("Users")
-                                .description("User registration, identity, and account management"),
-                        new io.swagger.v3.oas.models.tags.Tag().name("Authentication").description("Login and token lifecycle"),
-                        new io.swagger.v3.oas.models.tags.Tag().name("Profiles").description("Profiles and private documents"),
-                        new io.swagger.v3.oas.models.tags.Tag().name("Jobs").description("Job postings"),
-                        new io.swagger.v3.oas.models.tags.Tag().name("Applications").description("Job applications"),
+                                .description("User accounts, employer upgrade requests, and administrator account operations"),
+                        new io.swagger.v3.oas.models.tags.Tag().name("Auth")
+                                .description("Registration, login, password changes, and password recovery"),
+                        new io.swagger.v3.oas.models.tags.Tag().name("Company")
+                                .description("Manage companies owned by the authenticated employer"),
+                        new io.swagger.v3.oas.models.tags.Tag().name("Job")
+                                .description("Browse and manage job postings"),
+                        new io.swagger.v3.oas.models.tags.Tag().name("Application")
+                                .description("Submit applications and review applications for employer-owned jobs"),
+                        new io.swagger.v3.oas.models.tags.Tag().name("Profile")
+                                .description("Manage job seeker profiles and private documents"),
                         new io.swagger.v3.oas.models.tags.Tag().name("Health").description("Application health")))
                 .components(new Components()
                         .addSecuritySchemes("bearerAuth", new SecurityScheme()
