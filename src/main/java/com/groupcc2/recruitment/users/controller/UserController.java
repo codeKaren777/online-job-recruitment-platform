@@ -3,6 +3,8 @@ package com.groupcc2.recruitment.users.controller;
 import com.groupcc2.recruitment.users.dto.UserResponse;
 import com.groupcc2.recruitment.users.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
@@ -24,7 +26,8 @@ public class UserController {
     }
 
     @GetMapping("/me")
-    @Operation(summary = "Get the current user")
+    @Operation(summary = "Get the current user", description = "Returns the account associated with the authenticated bearer token.")
+    @ApiResponses({@ApiResponse(responseCode="200",description="Returns the authenticated user's account details."),@ApiResponse(responseCode="401",description="A valid bearer token is required."),@ApiResponse(responseCode="403",description="The account is not permitted to access this resource."),@ApiResponse(responseCode="404",description="The authenticated account was not found.")})
     public UserResponse currentUser(@AuthenticationPrincipal Jwt principal) {
         return UserResponse.from(users.findOwnById(userId(principal)));
     }

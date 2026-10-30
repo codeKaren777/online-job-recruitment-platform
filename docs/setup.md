@@ -181,6 +181,8 @@ Your `.env` should contain the following configuration:
 POSTGRES_DB=recruitment
 POSTGRES_USER=recruitment
 POSTGRES_PASSWORD=your_local_database_password
+POSTGRES_RUNTIME_USER=recruitment_app
+POSTGRES_RUNTIME_PASSWORD=your_local_runtime_password
 
 DB_URL=jdbc:postgresql://localhost:5432/recruitment
 
@@ -191,10 +193,11 @@ JWT_AUDIENCE=groupcc2-api
 
 Replace the example password and secret with appropriate local values. Do not use the example values as production credentials.
 
-This development Compose setup reuses the existing `POSTGRES_USER` account
-for both the backend and Flyway; it does not provision separate migration or
-runtime accounts. The current local `recruitment` account is a PostgreSQL
-superuser and bypasses RLS. This is not a production database isolation model.
+Compose uses `POSTGRES_USER` and `POSTGRES_PASSWORD` for database bootstrap
+and Flyway migrations. The backend connects as the separate
+`POSTGRES_RUNTIME_USER` account, provisioned with `NOSUPERUSER NOBYPASSRLS`
+and only the schema, table, sequence, and function privileges it needs. Keep
+the runtime credentials distinct from the bootstrap credentials.
 
 ### What each variable means
 
@@ -203,6 +206,8 @@ superuser and bypasses RLS. This is not a production database isolation model.
 | `POSTGRES_DB` | The database name PostgreSQL initializes when creating a new database instance. |
 | `POSTGRES_USER` | The database username used during initial database creation. |
 | `POSTGRES_PASSWORD` | The password associated with that database user. |
+| `POSTGRES_RUNTIME_USER` | The restricted database role used by the backend at runtime. |
+| `POSTGRES_RUNTIME_PASSWORD` | The password for the restricted backend role. |
 | `DB_URL` | The JDBC connection URL used by the backend to connect to PostgreSQL. |
 | `JWT_SECRET_BASE64` | A Base64-encoded secret used for JWT operations. It should represent at least 32 cryptographically random bytes. |
 | `JWT_ISSUER` | Identifies the issuer of the JWT tokens. |
@@ -543,7 +548,8 @@ Check the following:
 
 1. Confirm that the database container is running.
 2. Check the database logs.
-3. Verify `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`.
+3. Verify `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`,
+   `POSTGRES_RUNTIME_USER`, and `POSTGRES_RUNTIME_PASSWORD`.
 4. Verify the effective `DB_URL`.
 5. Remember that `localhost` inside the backend container refers to that container itself, not the separate database container.
 

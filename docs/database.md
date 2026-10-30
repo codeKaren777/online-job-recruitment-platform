@@ -93,10 +93,11 @@ permissions required for registration under forced RLS. Employer access is
 available only through the approved upgrade workflow. V14 changes the
 application-to-job foreign key to `ON DELETE RESTRICT`, preserving application
 records when jobs are deleted. V15 adds the notification outbox with forced
-RLS. The runtime account has no direct table grants. Only four `SECURITY DEFINER` functions
-are executable by that account: enqueue validates the transaction-local
-actor, status/decision, application, and employer ownership before capturing
-the registered applicant address and job/company display fields; claim uses
+RLS. The runtime account has no direct grants on the outbox table. Only four
+outbox `SECURITY DEFINER` functions are executable by that account: enqueue
+validates the transaction-local actor, status/decision, application, and
+employer ownership before capturing the registered applicant address and
+job/company display fields; claim uses
 `FOR UPDATE SKIP LOCKED` and leases; mark-sent and failure-recording require
 the matching claim token. Each function sets a fixed `search_path`, and
 `PUBLIC` execution is revoked. The Flyway principal owns the functions and
