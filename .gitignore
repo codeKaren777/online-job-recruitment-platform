@@ -1,9 +1,6 @@
 .env
 .env.*
 !.env.example
-.codex/
-AGENTS.md
-.agents/
 target/
 uploads/
 *.log
