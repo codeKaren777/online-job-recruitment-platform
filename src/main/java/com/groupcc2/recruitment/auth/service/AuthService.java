@@ -12,11 +12,14 @@ import com.groupcc2.recruitment.auth.dto.PasswordResetRequest;
 import com.groupcc2.recruitment.auth.dto.PasswordResetResponse;
 import com.groupcc2.recruitment.auth.dto.RegisterRequest;
 import com.groupcc2.recruitment.auth.dto.RegisterResponse;
+import com.groupcc2.recruitment.common.notification.NotificationEmailSender;
 import com.groupcc2.recruitment.users.entity.AccountStatus;
 import com.groupcc2.recruitment.users.entity.UserRole;
 import com.groupcc2.recruitment.auth.repository.AuthCredentialRepository;
 import com.groupcc2.recruitment.security.RlsTransactionContext;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,17 +36,29 @@ public class AuthService {
     private final RlsTransactionContext rlsTransactionContext;
     private final PasswordResetTokenService passwordResetTokenService;
     private final PasswordResetTokenExposure passwordResetTokenExposure;
+    private final ObjectProvider<NotificationEmailSender> notificationEmails;
 
     public AuthService(AuthCredentialRepository userRepository, PasswordHashingService passwordHashingService,
                        JwtTokenService jwtTokenService, RlsTransactionContext rlsTransactionContext,
                        PasswordResetTokenService passwordResetTokenService,
                        PasswordResetTokenExposure passwordResetTokenExposure) {
+        this(userRepository, passwordHashingService, jwtTokenService, rlsTransactionContext,
+                passwordResetTokenService, passwordResetTokenExposure, null);
+    }
+
+    @Autowired
+    public AuthService(AuthCredentialRepository userRepository, PasswordHashingService passwordHashingService,
+                       JwtTokenService jwtTokenService, RlsTransactionContext rlsTransactionContext,
+                       PasswordResetTokenService passwordResetTokenService,
+                       PasswordResetTokenExposure passwordResetTokenExposure,
+                       ObjectProvider<NotificationEmailSender> notificationEmails) {
         this.userRepository = userRepository;
         this.passwordHashingService = passwordHashingService;
         this.jwtTokenService = jwtTokenService;
         this.rlsTransactionContext = rlsTransactionContext;
         this.passwordResetTokenService = passwordResetTokenService;
         this.passwordResetTokenExposure = passwordResetTokenExposure;
+        this.notificationEmails = notificationEmails;
     }
 
     @Transactional
@@ -112,8 +127,14 @@ public class AuthService {
     public PasswordResetResponse forgotPassword(ForgotPasswordRequest request) {
         String rawToken = passwordResetTokenService.generateToken();
         String hashedToken = passwordResetTokenService.hashToken(rawToken);
+        Instant expiresAt = Instant.now().plusSeconds(RESET_TOKEN_LIFETIME_SECONDS);
         int updated = userRepository.storePasswordResetToken(
-                request.email(), hashedToken, Instant.now().plusSeconds(RESET_TOKEN_LIFETIME_SECONDS));
+                request.email(), hashedToken, expiresAt);
+        NotificationEmailSender emailSender = notificationEmails == null
+                ? null : notificationEmails.getIfAvailable();
+        if (updated == 1 && emailSender != null) {
+            emailSender.sendPasswordReset(request.email(), rawToken, expiresAt);
+        }
         String exposedToken = updated == 1
                 ? passwordResetTokenExposure.exposeForLocalDevelopment(rawToken).orElse(null)
                 : null;

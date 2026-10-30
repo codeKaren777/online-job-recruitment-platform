@@ -140,4 +140,4 @@ volume; configure the additional `.env.example` variables without replacing your
 existing `.env`. See [local MinIO setup and testing without auth](docs/minio-setup.md) and
 [independent QA handoff](docs/issue-8-qa-handoff.md).
 
-The local Compose profile exposes password-reset tokens in the forgot-password response for development/Postman only; production requires a configured delivery provider. Local Compose currently uses the `recruitment` PostgreSQL superuser account, which bypasses RLS and must not be presented as production-ready isolation. Email, SMS, notifications and interviews remain out of scope.
+The local Compose profile exposes password-reset tokens in the forgot-password response for development/Postman only; production requires a configured delivery provider. Local Compose currently uses the `recruitment` PostgreSQL superuser account, which bypasses RLS and must not be presented as production-ready isolation. Email delivery covers password resets, employer decisions, and application status notifications; SMS and interviews remain out of scope.
