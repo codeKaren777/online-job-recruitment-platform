@@ -1,4 +1,4 @@
-package com.groupcc2.recruitment.admin.dto;
+package com.groupcc2.recruitment.users.dto;
 
 import com.groupcc2.recruitment.users.entity.UserRole;
 import jakarta.validation.constraints.AssertTrue;

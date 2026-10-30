@@ -1,6 +1,6 @@
-package com.groupcc2.recruitment.admin.controller;
+package com.groupcc2.recruitment.users.controller;
 
-import com.groupcc2.recruitment.admin.dto.AssignAdminRoleRequest;
+import com.groupcc2.recruitment.users.dto.AssignAdminRoleRequest;
 import com.groupcc2.recruitment.users.dto.UserResponse;
 import com.groupcc2.recruitment.users.service.UserService;
 import jakarta.validation.Valid;

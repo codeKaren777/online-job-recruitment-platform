@@ -32,7 +32,7 @@ The Online Job Recruitment Platform is a Spring Boot modular monolith. It is dep
 
 ### Users
 
-Owns user identity persistence, roles, account status, registration, and account-management rules. The supported roles are `JOB_SEEKER`, `EMPLOYER`, and `ADMIN`. Other modules use the users service contract and never duplicate the users repository.
+Owns user identity persistence, roles, account status, registration, account-management rules, and administrative user operations. The supported roles are `JOB_SEEKER`, `EMPLOYER`, and `ADMIN`. Administrator role changes retain an audit record. Other modules use the users service contract and never duplicate the users repository.
 
 ### Authentication
 
@@ -87,12 +87,11 @@ com.groupcc2.recruitment/
 ├── company/       employer companies and company ownership
 ├── job/           job postings
 ├── application/  job applications and statuses
-├── admin/         administrative orchestration
 ├── security/      shared authentication infrastructure
 └── common/        shared cross-feature concerns
 ```
 
-Administration uses user/auth services rather than creating a second user persistence model.
+Administrative user management and employer request review are owned by the Users module; administration does not have a separate persistence module.
 
 ## Request flow
 

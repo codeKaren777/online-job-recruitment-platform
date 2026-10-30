@@ -8,7 +8,7 @@ import com.groupcc2.recruitment.users.entity.AccountStatus;
 import com.groupcc2.recruitment.users.entity.User;
 import com.groupcc2.recruitment.users.entity.UserRole;
 import com.groupcc2.recruitment.users.repository.UserRepository;
-import com.groupcc2.recruitment.admin.repository.AdminRoleChangeRepository;
+import com.groupcc2.recruitment.users.repository.AdminRoleChangeRepository;
 import com.groupcc2.recruitment.security.RlsTransactionContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;

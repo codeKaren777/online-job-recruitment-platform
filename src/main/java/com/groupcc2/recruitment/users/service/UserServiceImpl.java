@@ -6,9 +6,9 @@ import java.util.UUID;
 
 import com.groupcc2.recruitment.users.entity.User;
 import com.groupcc2.recruitment.users.entity.UserRole;
+import com.groupcc2.recruitment.users.entity.AdminRoleChange;
 import com.groupcc2.recruitment.users.repository.UserRepository;
-import com.groupcc2.recruitment.admin.entity.AdminRoleChange;
-import com.groupcc2.recruitment.admin.repository.AdminRoleChangeRepository;
+import com.groupcc2.recruitment.users.repository.AdminRoleChangeRepository;
 import com.groupcc2.recruitment.security.RlsTransactionContext;
 import jakarta.transaction.Transactional;
 import org.springframework.dao.DataIntegrityViolationException;
