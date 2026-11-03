@@ -58,6 +58,9 @@ class ProfileServiceTest {
  @Test void cleanupFailureDoesNotHideOriginal(){manager.failCommit=true;doThrow(new IllegalStateException("sensitive")).when(storage).delete(any());assertThatThrownBy(()->service.upload(file())).isInstanceOf(TransactionSystemException.class);}
  @Test void deleteFailureRetainsMetadata(){UUID id=UUID.randomUUID();when(documents.findByIdAndProfileUserId(id,owner)).thenReturn(Optional.of(new Document(owner,"internal","cv.pdf","application/pdf",20)));
  doThrow(new IllegalStateException()).when(storage).delete(any());assertThatThrownBy(()->service.deleteOwn(id)).isInstanceOf(ProfileFailure.class);verify(documents,never()).delete(any());}
+ @Test void submittedApplicationCvCannotBeDeletedFromProfileLibrary(){UUID id=UUID.randomUUID();when(documents.findByIdAndProfileUserId(id,owner)).thenReturn(Optional.of(new Document(owner,"internal","cv.pdf","application/pdf",20)));
+ when(documents.existsApplicationReference(id)).thenReturn(true);assertThatThrownBy(()->service.deleteOwn(id)).isInstanceOf(IllegalArgumentException.class);
+ verify(storage,never()).delete(any());verify(documents,never()).delete(any());}
  @Test void employerMustPassSpecificJobApplicationCheck(){when(users.findById(owner)).thenReturn(new User("e@test","hash",UserRole.EMPLOYER));UUID job=UUID.randomUUID(),applicant=UUID.randomUUID();
  doThrow(new ProfileFailure(ProfileFailure.Code.FORBIDDEN)).when(access).requireSubmittedApplication(owner,job,applicant);
  assertThatThrownBy(()->service.readForEmployer(job,applicant)).isInstanceOf(ProfileFailure.class);verify(profiles,never()).findById(applicant);

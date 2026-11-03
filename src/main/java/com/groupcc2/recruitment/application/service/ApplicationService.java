@@ -24,6 +24,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.web.multipart.MultipartFile;
+import com.groupcc2.recruitment.profile.dto.DocumentResponse;
 
 /**
  * Job seeker side of applications: FR-08 submit, FR-09 no duplicates, FR-12 track status.
@@ -31,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class ApplicationService {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ApplicationService.class);
     private static final String ONE_PER_SEEKER_CONSTRAINT = "applications_one_per_job_seeker";
 
     private final ApplicationRepository applications;
@@ -40,6 +45,10 @@ public class ApplicationService {
     private final ApplicationDecisionAuditRepository decisionAudits;
     private final ApplicationNotificationOutboxRepository notifications;
     private final Clock clock;
+    private ApplicationCvDocuments cvDocuments;
+
+    @Autowired
+    void setCvDocuments(ApplicationCvDocuments cvDocuments) { this.cvDocuments = cvDocuments; }
 
     @Autowired
     public ApplicationService(ApplicationRepository applications, UserService users, ApplicationRls rls,
@@ -65,21 +74,49 @@ public class ApplicationService {
     /** FR-08 and FR-09. */
     @Transactional
     public ApplicationResponse apply(UUID userId, UUID jobId) {
-        if (userId == null || jobId == null) {
-            throw new IllegalArgumentException("userId and jobId are required");
+        throw new IllegalArgumentException("An application-specific CV is required");
+    }
+
+    /** Every newly submitted application receives a separate, validated CV document. */
+    @Transactional
+    public ApplicationResponse applyWithCv(UUID userId, UUID jobId, MultipartFile cv) {
+        if (userId == null || jobId == null || cv == null || cv.isEmpty()) {
+            throw new IllegalArgumentException("jobId and a non-empty application CV are required");
         }
+        // Check identity/job/duplicate eligibility before touching object storage.
+        JobSnapshot job = validateApplication(userId, jobId);
+        if (cvDocuments == null) throw new ApplicationFailure(ApplicationFailure.Code.INTEGRATION_UNAVAILABLE);
+        DocumentResponse document = cvDocuments.storeForCurrentApplicant(cv);
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            cvDocuments.removeForCurrentApplicant(document.id());
+            throw new ApplicationFailure(ApplicationFailure.Code.INTEGRATION_UNAVAILABLE);
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override public void afterCompletion(int status) {
+                if (status == STATUS_ROLLED_BACK) {
+                    try { cvDocuments.removeForCurrentApplicant(document.id()); }
+                    catch (RuntimeException ignored) { log.error("Application CV rollback cleanup failed; reconciliation document {}", document.id()); }
+                } else if (status == STATUS_UNKNOWN) {
+                    log.error("Application commit outcome unknown; verify submitted CV association for document {}", document.id());
+                }
+            }
+        });
+        return persistApplication(userId, jobId, document.id(), job);
+    }
+
+    private JobSnapshot validateApplication(UUID userId, UUID jobId) {
         requireJobSeeker(userId);
         JobSnapshot job = directory().findById(jobId)
                 .orElseThrow(() -> new ApplicationFailure(ApplicationFailure.Code.NOT_FOUND));
-        if (!job.acceptsApplications(LocalDate.now(clock))) {
-            throw new ApplicationFailure(ApplicationFailure.Code.JOB_NOT_ACCEPTING_APPLICATIONS);
-        }
-        // Friendly check first; the UNIQUE (job_id, job_seeker_id) constraint is the real guarantee.
-        if (applications.existsByJobIdAndJobSeekerId(jobId, userId)) {
-            throw new ApplicationFailure(ApplicationFailure.Code.DUPLICATE_APPLICATION);
-        }
+        if (!job.acceptsApplications(LocalDate.now(clock))) throw new ApplicationFailure(ApplicationFailure.Code.JOB_NOT_ACCEPTING_APPLICATIONS);
+        if (applications.existsByJobIdAndJobSeekerId(jobId, userId)) throw new ApplicationFailure(ApplicationFailure.Code.DUPLICATE_APPLICATION);
+        return job;
+    }
+
+    private ApplicationResponse persistApplication(UUID userId, UUID jobId, UUID cvDocumentId, JobSnapshot job) {
         try {
-            Application saved = applications.saveAndFlush(Application.submit(jobId, userId));
+            Application submission = Application.submit(jobId, userId, cvDocumentId);
+            Application saved = applications.saveAndFlush(submission);
             notifications.enqueue(saved.getId(), saved.getId(), "SUBMITTED");
             return ApplicationResponse.from(saved, job);
         } catch (DataIntegrityViolationException exception) {
@@ -141,8 +178,16 @@ public class ApplicationService {
                 : (status == null
                     ? applications.findAllByJobIdInOrderBySubmittedAtDesc(jobs.keySet())
                     : applications.findAllByJobIdInAndStatusOrderBySubmittedAtDesc(jobs.keySet(), status));
+        Set<UUID> documentIds = found.stream().map(Application::getCvDocumentId).filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        Set<UUID> applicantIds = found.stream().map(Application::getJobSeekerId).collect(Collectors.toSet());
+        Map<UUID, DocumentResponse> cvMetadata = cvDocuments == null || documentIds.isEmpty()
+                ? Map.of() : cvDocuments.metadataForEmployer(documentIds);
+        Map<UUID, String> applicantNames = cvDocuments == null || applicantIds.isEmpty()
+                ? Map.of() : cvDocuments.applicantNamesForEmployer(applicantIds);
         return found.stream()
-                .map(application -> ApplicationResponse.from(application, jobs.get(application.getJobId())))
+                .map(application -> ApplicationResponse.from(application, jobs.get(application.getJobId()),
+                        application.getCvDocumentId() == null ? null : cvMetadata.get(application.getCvDocumentId()),
+                        applicantNames.get(application.getJobSeekerId())))
                 .toList();
     }
 
@@ -165,7 +210,7 @@ public class ApplicationService {
         ApplicationDecisionAudit audit = decisionAudits.saveAndFlush(new ApplicationDecisionAudit(
                 application.getId(), application.getJobId(), employerId, previousStatus, newStatus, changedAt));
         notifications.enqueue(audit.getId(), application.getId(), newStatus.name());
-        return ApplicationResponse.from(application, jobs.get(application.getJobId()));
+        return employerResponse(application, jobs.get(application.getJobId()));
     }
 
     /** An employer can read an application only when its job belongs to that employer. */
@@ -178,7 +223,28 @@ public class ApplicationService {
         }
         Application application = applications.findByIdAndJobIdIn(applicationId, jobs.keySet())
                 .orElseThrow(() -> new ApplicationFailure(ApplicationFailure.Code.NOT_FOUND));
-        return ApplicationResponse.from(application, jobs.get(application.getJobId()));
+        return employerResponse(application, jobs.get(application.getJobId()));
+    }
+
+    private ApplicationResponse employerResponse(Application application, JobSnapshot job) {
+        UUID cvId = application.getCvDocumentId();
+        Map<UUID, DocumentResponse> metadata = cvId == null || cvDocuments == null
+                ? Map.of() : cvDocuments.metadataForEmployer(Set.of(cvId));
+        Map<UUID, String> names = cvDocuments == null ? Map.of()
+                : cvDocuments.applicantNamesForEmployer(Set.of(application.getJobSeekerId()));
+        return ApplicationResponse.from(application, job, cvId == null ? null : metadata.get(cvId),
+                names.get(application.getJobSeekerId()));
+    }
+
+    @Transactional(readOnly = true)
+    public com.groupcc2.recruitment.profile.dto.DownloadResponse downloadApplicationCv(UUID employerId, UUID applicationId) {
+        requireEmployer(employerId);
+        Map<UUID, JobSnapshot> jobs = directory().findAllForEmployer(employerId);
+        Application application = applications.findByIdAndJobIdIn(applicationId, jobs.keySet())
+                .orElseThrow(() -> new ApplicationFailure(ApplicationFailure.Code.NOT_FOUND));
+        if (application.getCvDocumentId() == null || cvDocuments == null)
+            throw new ApplicationFailure(ApplicationFailure.Code.NOT_FOUND);
+        return cvDocuments.downloadForEmployer(application.getJobId(), application.getJobSeekerId(), application.getCvDocumentId());
     }
 
     /**

@@ -4,6 +4,7 @@ public class ApplicationFailure extends RuntimeException {
     public enum Code {
         FORBIDDEN,
         NOT_FOUND,
+        PROFILE_INCOMPLETE,
         DUPLICATE_APPLICATION,
         JOB_NOT_ACCEPTING_APPLICATIONS,
         INVALID_STATUS_TRANSITION,

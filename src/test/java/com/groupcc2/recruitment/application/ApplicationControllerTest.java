@@ -18,6 +18,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -44,7 +45,7 @@ class ApplicationControllerTest {
     private final UUID jobId = UUID.randomUUID();
 
     private ApplicationResponse sample() {
-        return new ApplicationResponse(UUID.randomUUID(), jobId, ApplicationStatus.PENDING,
+        return new ApplicationResponse(UUID.randomUUID(), jobId, userId, null, null, ApplicationStatus.PENDING,
                 Instant.now(), Instant.now(), null, null, null);
     }
 
@@ -94,41 +95,35 @@ class ApplicationControllerTest {
 
     @Test
     void applyUsesTheTokenSubjectAndIgnoresAnyApplicantInTheBody() throws Exception {
-        when(service.apply(userId, jobId)).thenReturn(sample());
+        when(service.applyWithCv(eq(userId), eq(jobId), any())).thenReturn(sample());
 
-        mvc.perform(post("/api/applications").with(seekerToken(userId))
-                        .contentType("application/json")
-                        .content("{\"jobId\":\"" + jobId + "\",\"jobSeekerId\":\"" + UUID.randomUUID()
-                                + "\",\"id\":\"" + UUID.randomUUID()
-                                + "\",\"status\":\"REJECTED\",\"submittedAt\":\"2000-01-01T00:00:00Z\"}"))
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/applications")
+                        .file(new MockMultipartFile("cv", "developer.pdf", "application/pdf", "%PDF-1.7".getBytes()))
+                        .param("jobId", jobId.toString())
+                        .with(seekerToken(userId)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("PENDING"))
                 .andExpect(jsonPath("$.jobId").value(jobId.toString()));
-        org.mockito.Mockito.verify(service).apply(userId, jobId);
+        org.mockito.Mockito.verify(service).applyWithCv(eq(userId), eq(jobId), any());
     }
 
     @Test
     void duplicateAndClosedJobsAreConflicts() throws Exception {
-        when(service.apply(eq(userId), any()))
+        when(service.applyWithCv(eq(userId), any(), any()))
                 .thenThrow(new ApplicationFailure(ApplicationFailure.Code.DUPLICATE_APPLICATION))
                 .thenThrow(new ApplicationFailure(ApplicationFailure.Code.JOB_NOT_ACCEPTING_APPLICATIONS));
         var token = seekerToken(userId);
-        String body = "{\"jobId\":\"" + jobId + "\"}";
-
-        mvc.perform(post("/api/applications").with(token).contentType("application/json").content(body))
+        MockMultipartFile cv = new MockMultipartFile("cv", "developer.pdf", "application/pdf", "%PDF-1.7".getBytes());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/applications").file(cv).param("jobId", jobId.toString()).with(token))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DUPLICATE_APPLICATION"));
-        mvc.perform(post("/api/applications").with(token).contentType("application/json").content(body))
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/applications").file(cv).param("jobId", jobId.toString()).with(token))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("JOB_NOT_ACCEPTING_APPLICATIONS"));
     }
 
     @Test
     void invalidBodyIsBadRequest() throws Exception {
         var token = seekerToken(userId);
-        mvc.perform(post("/api/applications").with(token).contentType("application/json").content("{}"))
-                .andExpect(status().isBadRequest());
-        mvc.perform(post("/api/applications").with(token).contentType("application/json").content("{\"jobId\":\"nope\"}"))
-                .andExpect(status().isBadRequest());
-        mvc.perform(post("/api/applications").with(token).contentType("application/json").content("{\"jobId\":\"\"}"))
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/applications").with(token))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(service);
     }

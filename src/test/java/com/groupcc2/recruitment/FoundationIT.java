@@ -29,6 +29,11 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import com.groupcc2.recruitment.profile.storage.PrivateDocumentStorage;
+import java.net.URI;
+import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -45,6 +50,9 @@ class FoundationIT {
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17");
     private static final String APPLICATION_USERNAME = "recruitment_app";
     private static final String APPLICATION_PASSWORD = "recruitment-app-test-password";
+
+    @MockitoBean
+    PrivateDocumentStorage privateDocumentStorage;
 
     static {
         POSTGRES.start();
@@ -118,9 +126,17 @@ class FoundationIT {
     @Test
     void bootsAgainstPostgresAndAppliesMigrationOnlyOnce() throws Exception {
         assertThat(flyway.getConfiguration().getDefaultSchema()).isEqualTo("public");
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("15");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("16");
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
+        try (var connection = dataSource.getConnection(); var statement = connection.prepareStatement("""
+                SELECT is_nullable FROM information_schema.columns
+                WHERE table_schema = 'recruitment' AND table_name = 'applications'
+                  AND column_name = 'cv_document_id'
+                """); var result = statement.executeQuery()) {
+            assertThat(result.next()).isTrue();
+            assertThat(result.getString(1)).isEqualTo("YES");
+        }
         try (var connection = dataSource.getConnection(); var statement = connection.createStatement();
              var result = statement.executeQuery("""
                      SELECT p.prosecdef, p.proconfig,
@@ -173,6 +189,80 @@ class FoundationIT {
     }
 
     @Test
+    void newApplicationsRequireAnApplicantOwnedCvButLegacyColumnRemainsNullable() throws Exception {
+        UUID employerId = UUID.randomUUID();
+        UUID applicantId = UUID.randomUUID();
+        UUID otherApplicantId = UUID.randomUUID();
+        UUID companyId = UUID.randomUUID();
+        UUID jobId = UUID.randomUUID();
+        UUID applicantCvId = UUID.randomUUID();
+        UUID otherApplicantCvId = UUID.randomUUID();
+
+        try (Connection connection = adminConnection(); Statement statement = connection.createStatement()) {
+            statement.execute("""
+                    INSERT INTO recruitment.users (id, email, password_hash, role)
+                    VALUES ('%s', '%s@example.test', 'hash', 'EMPLOYER'),
+                           ('%s', '%s@example.test', 'hash', 'JOB_SEEKER'),
+                           ('%s', '%s@example.test', 'hash', 'JOB_SEEKER')
+                    """.formatted(employerId, employerId, applicantId, applicantId, otherApplicantId, otherApplicantId));
+            statement.execute("""
+                    INSERT INTO recruitment.profiles (user_id, display_name)
+                    VALUES ('%s', 'Applicant'), ('%s', 'Other Applicant')
+                    """.formatted(applicantId, otherApplicantId));
+            statement.execute("""
+                    INSERT INTO recruitment.documents (id, profile_user_id, storage_key, original_filename, content_type, byte_size)
+                    VALUES ('%s', '%s', 'documents/%s', 'applicant.pdf', 'application/pdf', 20),
+                           ('%s', '%s', 'documents/%s', 'other.pdf', 'application/pdf', 20)
+                    """.formatted(applicantCvId, applicantId, applicantCvId,
+                    otherApplicantCvId, otherApplicantId, otherApplicantCvId));
+            statement.execute("""
+                    INSERT INTO recruitment.companies (id, employer_id, name)
+                    VALUES ('%s', '%s', 'CV trigger company')
+                    """.formatted(companyId, employerId));
+            statement.execute("""
+                    INSERT INTO recruitment.jobs (id, employer_id, company_id, title, description, due_date)
+                    VALUES ('%s', '%s', '%s', 'CV trigger job', 'Description', CURRENT_DATE + 2)
+                    """.formatted(jobId, employerId, companyId));
+        }
+
+        try (Connection connection = adminConnection()) {
+            assertApplicationInsertRejected(connection, jobId, applicantId, null,
+                    "new applications require an application CV");
+            assertApplicationInsertRejected(connection, jobId, applicantId, otherApplicantCvId,
+                    "application CV must belong to the applicant");
+            UUID applicationId = UUID.randomUUID();
+            try (PreparedStatement insert = connection.prepareStatement("""
+                    INSERT INTO recruitment.applications (id, job_id, job_seeker_id, cv_document_id)
+                    VALUES (?, ?, ?, ?)
+                    """)) {
+                insert.setObject(1, applicationId);
+                insert.setObject(2, jobId);
+                insert.setObject(3, applicantId);
+                insert.setObject(4, applicantCvId);
+                assertThat(insert.executeUpdate()).isEqualTo(1);
+            }
+        }
+    }
+
+    private void assertApplicationInsertRejected(Connection connection, UUID jobId, UUID applicantId,
+                                                 UUID cvId, String message) throws Exception {
+        try (PreparedStatement insert = connection.prepareStatement("""
+                INSERT INTO recruitment.applications (job_id, job_seeker_id, cv_document_id)
+                VALUES (?, ?, ?)
+                """)) {
+            insert.setObject(1, jobId);
+            insert.setObject(2, applicantId);
+            insert.setObject(3, cvId);
+            try {
+                insert.executeUpdate();
+                throw new AssertionError("Application CV ownership trigger must reject the insert");
+            } catch (java.sql.SQLException exception) {
+                assertThat(exception.getMessage()).contains(message);
+            }
+        }
+    }
+
+    @Test
     void applicationRlsRestrictsRowsAndPreventsApplicantsFromChangingReviewStatus() throws Exception {
         UUID employerId = UUID.randomUUID();
         UUID applicantId = UUID.randomUUID();
@@ -180,6 +270,8 @@ class FoundationIT {
         UUID jobId = UUID.randomUUID();
         UUID applicationId = UUID.randomUUID();
         UUID otherApplicationId = UUID.randomUUID();
+        UUID applicantCvId = UUID.randomUUID();
+        UUID otherApplicantCvId = UUID.randomUUID();
 
         try (Connection connection = adminConnection(); Statement statement = connection.createStatement()) {
             statement.execute("""
@@ -212,12 +304,22 @@ class FoundationIT {
                     FROM recruitment.companies WHERE employer_id = '%s'
                     """.formatted(jobId, employerId, employerId));
             statement.execute("""
-                    INSERT INTO recruitment.applications (id, job_id, job_seeker_id)
+                    INSERT INTO recruitment.profiles (user_id, display_name)
+                    VALUES ('%s', 'Applicant'), ('%s', 'Other Applicant')
+                    """.formatted(applicantId, otherApplicantId));
+            statement.execute("""
+                    INSERT INTO recruitment.documents (id, profile_user_id, storage_key, original_filename, content_type, byte_size)
+                    VALUES ('%s', '%s', 'documents/%s', 'applicant.pdf', 'application/pdf', 20),
+                           ('%s', '%s', 'documents/%s', 'other-applicant.pdf', 'application/pdf', 20)
+                    """.formatted(applicantCvId, applicantId, applicantCvId,
+                    otherApplicantCvId, otherApplicantId, otherApplicantCvId));
+            statement.execute("""
+                    INSERT INTO recruitment.applications (id, job_id, job_seeker_id, cv_document_id)
                     VALUES
-                      ('%s', '%s', '%s'),
-                      ('%s', '%s', '%s')
-                    """.formatted(applicationId, jobId, applicantId,
-                    otherApplicationId, jobId, otherApplicantId));
+                      ('%s', '%s', '%s', '%s'),
+                      ('%s', '%s', '%s', '%s')
+                    """.formatted(applicationId, jobId, applicantId, applicantCvId,
+                    otherApplicationId, jobId, otherApplicantId, otherApplicantCvId));
         }
 
         try (Connection connection = adminConnection()) {
@@ -285,6 +387,7 @@ class FoundationIT {
         UUID companyId = UUID.randomUUID();
         UUID jobId = UUID.randomUUID();
         UUID applicationId = UUID.randomUUID();
+        UUID applicantCvId = UUID.randomUUID();
 
         try (Connection connection = adminConnection(); Statement statement = connection.createStatement()) {
             statement.executeUpdate("DELETE FROM recruitment.application_notification_outbox");
@@ -298,6 +401,10 @@ class FoundationIT {
                     VALUES ('%s', '<Applicant & One>')
                     """.formatted(applicantId));
             statement.execute("""
+                    INSERT INTO recruitment.documents (id, profile_user_id, storage_key, original_filename, content_type, byte_size)
+                    VALUES ('%s', '%s', 'documents/%s', 'notification-cv.pdf', 'application/pdf', 20)
+                    """.formatted(applicantCvId, applicantId, applicantCvId));
+            statement.execute("""
                     INSERT INTO recruitment.companies (id, employer_id, name)
                     VALUES ('%s', '%s', 'Trusted Company')
                     """.formatted(companyId, employerId));
@@ -306,9 +413,9 @@ class FoundationIT {
                     VALUES ('%s', '%s', '%s', '<Backend & API Engineer>', 'Integration test job', CURRENT_DATE + 10)
                     """.formatted(jobId, employerId, companyId));
             statement.execute("""
-                    INSERT INTO recruitment.applications (id, job_id, job_seeker_id)
-                    VALUES ('%s', '%s', '%s')
-                    """.formatted(applicationId, jobId, applicantId));
+                    INSERT INTO recruitment.applications (id, job_id, job_seeker_id, cv_document_id)
+                    VALUES ('%s', '%s', '%s', '%s')
+                    """.formatted(applicationId, jobId, applicantId, applicantCvId));
         }
 
         try (Connection connection = runtimeConnection()) {
@@ -410,17 +517,17 @@ class FoundationIT {
                 .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"))
                 .andExpect(jsonPath("$.paths['/actuator/health'].get.responses['200']").exists())
                 .andExpect(jsonPath("$.paths['/api/auth/register'].post").exists())
-                .andExpect(jsonPath("$.paths['/api/jobs'].get.tags[0]").value("Jobs"))
+                .andExpect(jsonPath("$.paths['/api/jobs'].get.tags[0]").value("Job"))
                 .andExpect(jsonPath("$.paths['/api/jobs'].post.security[0].bearerAuth").exists())
                 .andExpect(jsonPath("$.paths['/api/companies'].post.security[0].bearerAuth").exists())
                 .andExpect(jsonPath("$.components.schemas.JobRequest.properties.companyId").exists())
-                .andExpect(jsonPath("$.paths['/api/applications'].post.tags[0]").value("Applications"))
-                .andExpect(jsonPath("$.paths['/api/applications'].get.tags[0]").value("Applications"))
-                .andExpect(jsonPath("$.paths['/api/employer/applications'].get.tags[0]").value("Applications"))
+                .andExpect(jsonPath("$.paths['/api/applications'].post.tags[0]").value("Application"))
+                .andExpect(jsonPath("$.paths['/api/applications'].get.tags[0]").value("Application"))
+                .andExpect(jsonPath("$.paths['/api/employer/applications'].get.tags[0]").value("Application"))
                 .andExpect(jsonPath("$.tags[?(@.name == 'application controller')]").doesNotExist())
                 .andExpect(jsonPath("$.tags[?(@.name == 'job controller')]").doesNotExist())
-                .andExpect(jsonPath("$.components.schemas.ApplyRequest.properties.jobId").exists())
-                .andExpect(jsonPath("$.components.schemas.ApplyRequest.properties.jobSeekerId").doesNotExist())
+                .andExpect(jsonPath("$.components.schemas.ApplicationSubmissionRequest.properties.jobId").exists())
+                .andExpect(jsonPath("$.components.schemas.ApplicationSubmissionRequest.properties.cv.format").value("binary"))
                 .andExpect(jsonPath("$.components.schemas.JobRequest.properties.employerId").doesNotExist())
                 .andExpect(jsonPath("$.paths['/api/users/register']").doesNotExist())
                 .andExpect(jsonPath("$.paths['/api/users/me'].get").exists())
@@ -453,18 +560,15 @@ class FoundationIT {
                 .andExpect(jsonPath("$.paths['/api/admin/users/{id}/role'].patch.responses['403']").exists())
                 .andExpect(jsonPath("$.paths['/api/admin/users/{id}/role'].patch.requestBody.content['application/json'].schema.$ref")
                         .value("#/components/schemas/AssignAdminRoleRequest"))
-                .andExpect(jsonPath("$.tags[?(@.name == 'Administration')]").exists())
                 .andExpect(jsonPath("$.tags[?(@.name == 'Users')]").exists())
                 .andExpect(jsonPath("$.paths['/api/employer/applications'].get").exists())
                 .andExpect(jsonPath("$.paths['/api/employer/applications/{applicationId}'].get").exists())
                 .andExpect(jsonPath("$.paths['/api/applications'].post.requestBody.required").value(true))
-                .andExpect(jsonPath("$.paths['/api/applications'].post.requestBody.content['application/json'].schema.$ref")
-                        .value("#/components/schemas/ApplyRequest"))
-                .andExpect(jsonPath("$.components.schemas.ApplyRequest.required[0]").value("jobId"))
-                .andExpect(jsonPath("$.components.schemas.ApplyRequest.properties.jobId.format").value("uuid"))
-                .andExpect(jsonPath("$.components.schemas.ApplyRequest.properties.jobSeekerId").doesNotExist())
-                .andExpect(jsonPath("$.components.schemas.ApplyRequest.properties.id").doesNotExist())
-                .andExpect(jsonPath("$.components.schemas.ApplyRequest.properties.status").doesNotExist())
+                .andExpect(jsonPath("$.paths['/api/applications'].post.requestBody.content['multipart/form-data'].schema.$ref")
+                        .value("#/components/schemas/ApplicationSubmissionRequest"))
+                .andExpect(jsonPath("$.components.schemas.ApplicationSubmissionRequest.required").isArray())
+                .andExpect(jsonPath("$.components.schemas.ApplicationSubmissionRequest.properties.jobId.format").value("uuid"))
+                .andExpect(jsonPath("$.components.schemas.ApplicationSubmissionRequest.properties.cv.format").value("binary"))
                 .andExpect(jsonPath("$.paths['/api/applications'].post.responses['201']").exists())
                 .andExpect(jsonPath("$.paths['/api/applications'].post.responses['400']").exists())
                 .andExpect(jsonPath("$.paths['/api/applications'].post.responses['401']").exists())
@@ -725,38 +829,6 @@ class FoundationIT {
             }
         }
 
-        UUID clientApplicationId = UUID.randomUUID();
-        var applicationResponse = mvc.perform(post("/api/applications")
-                        .header("Authorization", "Bearer " + seekerToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"jobId":"%s","jobSeekerId":"%s","id":"%s","status":"REJECTED",
-                                 "submittedAt":"2000-01-01T00:00:00Z","updatedAt":"2000-01-01T00:00:00Z"}
-                                """.formatted(jobId, UUID.randomUUID(), clientApplicationId)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.status").value("PENDING"))
-                .andReturn();
-        UUID applicationId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(
-                applicationResponse.getResponse().getContentAsString(), "$.id"));
-        assertThat(applicationId).isNotEqualTo(clientApplicationId);
-        try (Connection connection = adminConnection();
-             PreparedStatement statement = connection.prepareStatement("""
-                     SELECT job_id, job_seeker_id, status::text, submitted_at, updated_at
-                     FROM recruitment.applications WHERE id = ?
-                     """)) {
-            statement.setObject(1, applicationId);
-            try (var result = statement.executeQuery()) {
-                assertThat(result.next()).isTrue();
-                assertThat(result.getObject("job_id", UUID.class)).isEqualTo(jobId);
-                assertThat(result.getObject("job_seeker_id", UUID.class)).isEqualTo(seekerId);
-                assertThat(result.getString("status")).isEqualTo("PENDING");
-                assertThat(result.getTimestamp("submitted_at").toInstant())
-                        .isAfter(Instant.parse("2000-01-01T00:00:00Z"));
-                assertThat(result.getTimestamp("updated_at").toInstant())
-                        .isAfter(Instant.parse("2000-01-01T00:00:00Z"));
-            }
-        }
-
         mvc.perform(put("/api/profile")
                         .header("Authorization", "Bearer " + seekerToken)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -765,9 +837,52 @@ class FoundationIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.displayName").value("Workflow Applicant"));
 
+        UUID clientApplicationId = UUID.randomUUID();
+        MockMultipartFile applicationCv = new MockMultipartFile("cv", "integration-cv.pdf",
+                "application/pdf", "%PDF-1.7\nIntegration CV\n%%EOF\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        var applicationResponse = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/applications")
+                        .file(applicationCv)
+                        .param("jobId", jobId.toString())
+                        .header("Authorization", "Bearer " + seekerToken)
+                        .param("jobSeekerId", UUID.randomUUID().toString())
+                        .param("id", clientApplicationId.toString())
+                        .param("status", "REJECTED"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("PENDING"))
+                .andReturn();
+        UUID applicationId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(
+                applicationResponse.getResponse().getContentAsString(), "$.id"));
+        assertThat(applicationId).isNotEqualTo(clientApplicationId);
+        try (Connection connection = adminConnection();
+             PreparedStatement statement = connection.prepareStatement("""
+                     SELECT a.job_id, a.job_seeker_id, a.status::text, a.submitted_at, a.updated_at,
+                            a.cv_document_id, d.profile_user_id, d.original_filename
+                     FROM recruitment.applications a
+                     JOIN recruitment.documents d ON d.id = a.cv_document_id
+                     WHERE a.id = ?
+                     """)) {
+            statement.setObject(1, applicationId);
+            try (var result = statement.executeQuery()) {
+                assertThat(result.next()).isTrue();
+                assertThat(result.getObject("job_id", UUID.class)).isEqualTo(jobId);
+                assertThat(result.getObject("job_seeker_id", UUID.class)).isEqualTo(seekerId);
+                assertThat(result.getString("status")).isEqualTo("PENDING");
+                assertThat(result.getObject("cv_document_id", UUID.class)).isNotNull();
+                assertThat(result.getObject("profile_user_id", UUID.class)).isEqualTo(seekerId);
+                assertThat(result.getString("original_filename")).isEqualTo("integration-cv.pdf");
+                assertThat(result.getTimestamp("submitted_at").toInstant())
+                        .isAfter(Instant.parse("2000-01-01T00:00:00Z"));
+                assertThat(result.getTimestamp("updated_at").toInstant())
+                        .isAfter(Instant.parse("2000-01-01T00:00:00Z"));
+            }
+        }
+
         mvc.perform(get("/api/employer/applications").header("Authorization", "Bearer " + employerToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value(applicationId.toString()));
+                .andExpect(jsonPath("$[0].id").value(applicationId.toString()))
+                .andExpect(jsonPath("$[0].cv.originalFilename").value("integration-cv.pdf"))
+                .andExpect(jsonPath("$[0].applicantDisplayName").value("Workflow Applicant"));
         mvc.perform(get("/api/employer/applications/" + applicationId)
                         .header("Authorization", "Bearer " + otherEmployerToken))
                 .andExpect(status().isNotFound());
@@ -776,16 +891,33 @@ class FoundationIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").doesNotExist())
                 .andExpect(jsonPath("$.applicantEmail").doesNotExist());
+        org.mockito.Mockito.when(privateDocumentStorage.signGet(
+                        org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq(Duration.ofSeconds(120))))
+                .thenReturn(URI.create("https://documents.example.test/application-cv"));
+        mvc.perform(get("/api/employer/applications/" + applicationId + "/cv")
+                        .header("Authorization", "Bearer " + employerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.url").value("https://documents.example.test/application-cv"));
+        mvc.perform(get("/api/employer/applications/" + applicationId + "/cv")
+                        .header("Authorization", "Bearer " + otherEmployerToken))
+                .andExpect(status().isNotFound());
         mvc.perform(get("/api/applications/" + applicationId)
                         .header("Authorization", "Bearer " + otherEmployerToken))
                 .andExpect(status().isForbidden());
         mvc.perform(get("/api/employer/applications").header("Authorization", "Bearer " + seekerToken))
                 .andExpect(status().isForbidden());
-        mvc.perform(post("/api/applications")
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/applications")
+                        .file(new MockMultipartFile("cv", "second-cv.pdf", "application/pdf",
+                                "%PDF-1.7\nSecond CV\n%%EOF\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII)))
                         .header("Authorization", "Bearer " + seekerToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"jobId\":\"" + jobId + "\"}"))
+                        .param("jobId", jobId.toString()))
                 .andExpect(status().isConflict());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/applications")
+                        .header("Authorization", "Bearer " + seekerToken)
+                        .param("jobId", jobId.toString()))
+                .andExpect(status().isBadRequest());
         try (Connection connection = adminConnection();
              PreparedStatement statement = connection.prepareStatement("""
                      SELECT count(*) FROM recruitment.application_notification_outbox

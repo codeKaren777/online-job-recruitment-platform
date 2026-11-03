@@ -15,4 +15,6 @@ public class Profile {
  public Profile(UUID userId, ProfileRequest request) {this.userId=userId; createdAt=Instant.now();update(request);}
  public void update(ProfileRequest r) {displayName=r.displayName().trim();phone=r.phone();biography=r.biography();updatedAt=Instant.now();}
  public ProfileResponse response() {return new ProfileResponse(displayName,phone,biography,createdAt,updatedAt);}
+ public UUID getUserId() {return userId;}
+ public String displayName() {return displayName;}
 }

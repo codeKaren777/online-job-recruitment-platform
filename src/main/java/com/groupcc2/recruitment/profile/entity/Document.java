@@ -16,5 +16,6 @@ public class Document {
  public Document(UUID owner, String key, String filename, String type, long size) {
  id=UUID.randomUUID();profileUserId=owner;storageKey=key;originalFilename=filename;contentType=type;byteSize=size;createdAt=Instant.now();}
  public String storageKey() {return storageKey;}
+ public UUID getId() {return id;}
  public DocumentResponse response() {return new DocumentResponse(id,originalFilename,contentType,byteSize,createdAt);}
 }

@@ -108,8 +108,9 @@ out of ordinary RLS queries and employer APIs.
 
 The older V14 registration-function repair is unnecessary after V13: the RBAC
 migration defines the restricted function with the same `SECURITY DEFINER`,
-fixed `search_path`, and `PUBLIC` revocation. V15 is reserved for notification
-outbox schema and functions.
+fixed `search_path`, and `PUBLIC` revocation. V15 contains notification outbox
+schema and functions. V16 adds an immutable application-to-CV document reference;
+legacy applications remain readable with no submitted-CV association.
 
 The current development credentials are `POSTGRES_DB`, `POSTGRES_USER`,
 `POSTGRES_PASSWORD`, `POSTGRES_RUNTIME_USER`, and
@@ -119,7 +120,7 @@ The current development credentials are `POSTGRES_DB`, `POSTGRES_USER`,
 
 For an existing database, inspect its Flyway history and make a protected
 backup before starting the updated backend. Flyway applies pending migrations
-in order through V15. These migrations preserve existing application data. Do
+in order through V16. These migrations preserve existing application data. Do
 not use `docker compose down -v`.
 
 ## Local database

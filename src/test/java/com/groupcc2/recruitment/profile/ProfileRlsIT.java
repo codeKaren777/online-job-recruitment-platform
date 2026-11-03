@@ -12,14 +12,15 @@ class ProfileRlsIT {
  @Container static PostgreSQLContainer<?> db=new PostgreSQLContainer<>("postgres:17");
  @Test void ownerIsolationEmployerVisibilityAndTransactionLocalContext() throws Exception {
  Flyway.configure().dataSource(db.getJdbcUrl(),db.getUsername(),db.getPassword()).load().migrate();
- UUID a=UUID.randomUUID(),b=UUID.randomUUID(),employer=UUID.randomUUID(),otherEmployer=UUID.randomUUID(),company=UUID.randomUUID(),job=UUID.randomUUID();
+ UUID a=UUID.randomUUID(),b=UUID.randomUUID(),employer=UUID.randomUUID(),otherEmployer=UUID.randomUUID(),company=UUID.randomUUID(),job=UUID.randomUUID(),aCv=UUID.randomUUID(),bCv=UUID.randomUUID();
  try(var root=DriverManager.getConnection(db.getJdbcUrl(),db.getUsername(),db.getPassword());var s=root.createStatement()) {
  s.execute("CREATE ROLE profile_runtime LOGIN PASSWORD 'test-only' NOSUPERUSER NOBYPASSRLS");
  s.execute("GRANT USAGE ON SCHEMA recruitment TO profile_runtime");s.execute("GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA recruitment TO profile_runtime");
  for(UUID id:new UUID[]{a,b,employer,otherEmployer})s.execute("INSERT INTO recruitment.users(id,email,password_hash,role) VALUES ('"+id+"','"+id+"@test','hash','"+(id.equals(a)||id.equals(b)?"JOB_SEEKER":"EMPLOYER")+"')");
  for(UUID id:new UUID[]{a,b}) {
  s.execute("INSERT INTO recruitment.profiles(user_id,display_name) VALUES ('"+id+"','name')");
- s.execute("INSERT INTO recruitment.documents(profile_user_id,storage_key,original_filename,content_type,byte_size) VALUES ('"+id+"','"+id+"','cv.pdf','application/pdf',20)");
+ UUID documentId=id.equals(a)?aCv:bCv;
+ s.execute("INSERT INTO recruitment.documents(id,profile_user_id,storage_key,original_filename,content_type,byte_size) VALUES ('"+documentId+"','"+id+"','documents/"+documentId+"','cv.pdf','application/pdf',20)");
  }
  s.execute("INSERT INTO recruitment.companies(id,employer_id,name) VALUES ('"+company+"','"+employer+"','Company')");
  s.execute("INSERT INTO recruitment.jobs(id,employer_id,company_id,title,description,due_date) VALUES ('"+job+"','"+employer+"','"+company+"','Job','Description',CURRENT_DATE+7)");
@@ -30,7 +31,7 @@ class ProfileRlsIT {
  assertThat(s.executeUpdate("UPDATE recruitment.profiles SET display_name='stolen' WHERE user_id='"+b+"'")).isZero();
  c.commit();assertThat(count(s,"SELECT count(*) FROM recruitment.profiles")).isZero();c.commit();
  context(s,employer,"EMPLOYER");assertThat(count(s,"SELECT count(*) FROM recruitment.profiles")).isZero();c.commit();
- context(s,a,"JOB_SEEKER");s.execute("INSERT INTO recruitment.applications(job_id,job_seeker_id) VALUES ('"+job+"','"+a+"')");c.commit();
+ context(s,a,"JOB_SEEKER");s.execute("INSERT INTO recruitment.applications(job_id,job_seeker_id,cv_document_id) VALUES ('"+job+"','"+a+"','"+aCv+"')");c.commit();
  context(s,employer,"EMPLOYER");assertThat(count(s,"SELECT count(*) FROM recruitment.profiles")).isEqualTo(1);
  assertThat(s.executeUpdate("DELETE FROM recruitment.profiles WHERE user_id='"+a+"'")).isZero();
  assertThat(count(s,"SELECT count(*) FROM recruitment.documents")).isEqualTo(1);
