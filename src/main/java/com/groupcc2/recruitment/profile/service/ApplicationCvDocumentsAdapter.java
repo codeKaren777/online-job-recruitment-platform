@@ -31,4 +31,7 @@ class ApplicationCvDocumentsAdapter implements ApplicationCvDocuments {
     @Override public java.util.Map<UUID, String> applicantNamesForEmployer(java.util.Set<UUID> applicantIds) {
         return profiles.applicantNamesForEmployer(applicantIds);
     }
+    @Override public java.util.Map<UUID, com.groupcc2.recruitment.profile.dto.ProfileResponse> applicantProfilesForEmployer(java.util.Set<UUID> applicantIds) {
+        return profiles.applicantProfilesForEmployer(applicantIds);
+    }
 }

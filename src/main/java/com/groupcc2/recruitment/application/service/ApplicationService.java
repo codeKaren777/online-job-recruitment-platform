@@ -28,6 +28,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 import com.groupcc2.recruitment.profile.dto.DocumentResponse;
+import com.groupcc2.recruitment.profile.dto.ProfileResponse;
 
 /**
  * Job seeker side of applications: FR-08 submit, FR-09 no duplicates, FR-12 track status.
@@ -184,10 +185,13 @@ public class ApplicationService {
                 ? Map.of() : cvDocuments.metadataForEmployer(documentIds);
         Map<UUID, String> applicantNames = cvDocuments == null || applicantIds.isEmpty()
                 ? Map.of() : cvDocuments.applicantNamesForEmployer(applicantIds);
+        Map<UUID, ProfileResponse> applicantProfiles = cvDocuments == null || applicantIds.isEmpty()
+                ? Map.of() : cvDocuments.applicantProfilesForEmployer(applicantIds);
         return found.stream()
                 .map(application -> ApplicationResponse.from(application, jobs.get(application.getJobId()),
                         application.getCvDocumentId() == null ? null : cvMetadata.get(application.getCvDocumentId()),
-                        applicantNames.get(application.getJobSeekerId())))
+                        applicantNames.get(application.getJobSeekerId()),
+                        applicantProfiles.get(application.getJobSeekerId())))
                 .toList();
     }
 
@@ -245,6 +249,24 @@ public class ApplicationService {
         if (application.getCvDocumentId() == null || cvDocuments == null)
             throw new ApplicationFailure(ApplicationFailure.Code.NOT_FOUND);
         return cvDocuments.downloadForEmployer(application.getJobId(), application.getJobSeekerId(), application.getCvDocumentId());
+    }
+
+    @Transactional(readOnly = true)
+    public ProfileResponse getApplicantProfile(UUID employerId, UUID applicationId) {
+        requireEmployer(employerId);
+        Map<UUID, JobSnapshot> jobs = directory().findAllForEmployer(employerId);
+        Application application = applications.findByIdAndJobIdIn(applicationId, jobs.keySet())
+                .orElseThrow(() -> new ApplicationFailure(ApplicationFailure.Code.NOT_FOUND));
+        if (cvDocuments == null) {
+            throw new ApplicationFailure(ApplicationFailure.Code.INTEGRATION_UNAVAILABLE);
+        }
+        Map<UUID, ProfileResponse> profiles =
+                cvDocuments.applicantProfilesForEmployer(Set.of(application.getJobSeekerId()));
+        ProfileResponse profile = profiles.get(application.getJobSeekerId());
+        if (profile == null) {
+            throw new ApplicationFailure(ApplicationFailure.Code.NOT_FOUND);
+        }
+        return profile;
     }
 
     /**

@@ -97,6 +97,11 @@ public class ProfileService {
    return profiles.findAllByUserIdIn(ids).stream().collect(java.util.stream.Collectors.toMap(
     Profile::getUserId,Profile::displayName));});
  }
+ public Map<UUID,ProfileResponse> applicantProfilesForEmployer(Set<UUID> ids) {
+  return tx.execute(s->{actor(UserRole.EMPLOYER);if(ids==null||ids.isEmpty())return Map.of();
+   return profiles.findAllByUserIdIn(ids).stream().collect(java.util.stream.Collectors.toMap(
+    Profile::getUserId,Profile::response));});
+ }
  private void employer(UUID jobId,UUID applicant){UUID employer=actor(UserRole.EMPLOYER);
  EmployerApplicationAccess access=employerAccess.getIfAvailable();if(access==null)throw failure(ProfileFailure.Code.INTEGRATION_UNAVAILABLE);
  access.requireSubmittedApplication(employer,jobId,applicant);
