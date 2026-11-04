@@ -36,9 +36,9 @@ public class EmployerApplicationController {
     }
 
     @GetMapping
-    @Operation(summary = "List applications for my jobs", description = "Returns applications for jobs owned by the authenticated EMPLOYER. Requires a bearer token.")
+    @Operation(summary = "List applications for my jobs", description = "Returns applications for jobs owned by the authenticated EMPLOYER, including applicant display names and the metadata for each application's submitted CV. Requires a bearer token.")
     @ApiResponses({@ApiResponse(responseCode="200",description="Returns matching applications."),@ApiResponse(responseCode="401",description="A valid bearer token is required."),@ApiResponse(responseCode="403",description="The caller is not permitted to review applications."),@ApiResponse(responseCode="400",description="A query parameter has an invalid format."),@ApiResponse(responseCode="503",description="Application service is unavailable.")})
-    public List<ApplicationResponse> applications(@AuthenticationPrincipal Jwt jwt,
+    public List<ApplicationResponse> applications(@AuthenticationPrincipal @io.swagger.v3.oas.annotations.Parameter(hidden = true) Jwt jwt,
                                                    @Parameter(description="Optional UUID to filter applications by job.") @org.springframework.web.bind.annotation.RequestParam(required = false) UUID jobId,
                                                    @Parameter(description="Optional application status filter.") @org.springframework.web.bind.annotation.RequestParam(required = false)
                                                    com.groupcc2.recruitment.application.entity.ApplicationStatus status) {
@@ -46,19 +46,27 @@ public class EmployerApplicationController {
     }
 
     @GetMapping("/{applicationId}")
-    @Operation(summary = "Get an application for my jobs", description = "Returns the application identified by applicationId when it belongs to one of the authenticated employer's jobs. Requires an EMPLOYER bearer token.")
+    @Operation(summary = "Get an application for my jobs", description = "Returns the application and its submitted CV metadata when it belongs to one of the authenticated employer's jobs. Requires an EMPLOYER bearer token.")
     @Parameter(name="applicationId", description="UUID of the application.", required=true)
     @ApiResponses({@ApiResponse(responseCode="200",description="Returns the application."),@ApiResponse(responseCode="401",description="A valid bearer token is required."),@ApiResponse(responseCode="403",description="The caller is not permitted to access this application."),@ApiResponse(responseCode="404",description="Application was not found."),@ApiResponse(responseCode="503",description="Application service is unavailable.")})
-    public ApplicationResponse application(@AuthenticationPrincipal Jwt jwt,
+    public ApplicationResponse application(@AuthenticationPrincipal @io.swagger.v3.oas.annotations.Parameter(hidden = true) Jwt jwt,
                                            @PathVariable UUID applicationId) {
         return service.getForEmployer(userId(jwt), applicationId);
+    }
+
+    @org.springframework.web.bind.annotation.GetMapping("/{applicationId}/cv")
+    @Operation(summary = "Get an application's submitted CV", description = "Returns a short-lived private download link for the CV submitted with this application. Only the employer that owns the application's job may request it.")
+    @ApiResponses({@ApiResponse(responseCode="200",description="Returns a short-lived download link."),@ApiResponse(responseCode="401",description="A valid bearer token is required."),@ApiResponse(responseCode="403",description="The caller is not authorized for this job."),@ApiResponse(responseCode="404",description="Application was not found."),@ApiResponse(responseCode="503",description="Document storage is unavailable.")})
+    public com.groupcc2.recruitment.profile.dto.DownloadResponse applicationCv(@AuthenticationPrincipal @io.swagger.v3.oas.annotations.Parameter(hidden = true) Jwt jwt,
+                                                                               @PathVariable UUID applicationId) {
+        return service.downloadApplicationCv(userId(jwt), applicationId);
     }
 
     @PatchMapping("/{applicationId}/status")
     @Operation(summary = "Update an application status", description = "Sets the status of an application belonging to an authenticated employer's job. Requires an EMPLOYER bearer token.", requestBody=@io.swagger.v3.oas.annotations.parameters.RequestBody(description="New application status.",required=true,content=@io.swagger.v3.oas.annotations.media.Content(examples=@ExampleObject(value="{\"status\":\"SHORTLISTED\"}"))))
     @Parameter(name="applicationId", description="UUID of the application.", required=true)
     @ApiResponses({@ApiResponse(responseCode="200",description="Returns the updated application."),@ApiResponse(responseCode="400",description="Request body is malformed or status is invalid."),@ApiResponse(responseCode="401",description="A valid bearer token is required."),@ApiResponse(responseCode="403",description="The caller is not permitted to update this application."),@ApiResponse(responseCode="404",description="Application was not found."),@ApiResponse(responseCode="409",description="The requested status transition is not allowed."),@ApiResponse(responseCode="503",description="Application service is unavailable.")})
-    public ApplicationResponse changeStatus(@AuthenticationPrincipal Jwt jwt,
+    public ApplicationResponse changeStatus(@AuthenticationPrincipal @io.swagger.v3.oas.annotations.Parameter(hidden = true) Jwt jwt,
                                              @PathVariable UUID applicationId,
                                              @Valid @RequestBody ApplicationStatusRequest request) {
         return service.changeStatus(userId(jwt), applicationId, request.status());

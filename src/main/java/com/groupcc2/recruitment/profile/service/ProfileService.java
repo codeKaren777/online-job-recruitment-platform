@@ -62,8 +62,11 @@ public class ProfileService {
  }catch(java.io.IOException e){throw failure(ProfileFailure.Code.STORAGE_UNAVAILABLE);}
  });
  }
+ /** Stores an immutable document row for the current application's CV; profile uploads remain independent. */
+ public DocumentResponse uploadForApplication(MultipartFile file) { return upload(file); }
  public void deleteOwn(UUID documentId) {
  tx.executeWithoutResult(s->{UUID id=actor(UserRole.JOB_SEEKER);Document d=document(documentId,id);PrivateDocumentStorage store=store();
+ if(documents.existsApplicationReference(documentId))throw new IllegalArgumentException("A submitted application CV cannot be deleted");
  // Object deletion first. On failure retain metadata so an owner can retry. On commit failure
  // metadata may refer to a missing object; repeated S3 deletion is idempotent and completes recovery.
  try{store.delete(d.storageKey());}catch(RuntimeException e){throw failure(ProfileFailure.Code.STORAGE_UNAVAILABLE);}
@@ -80,6 +83,19 @@ public class ProfileService {
  }
  public DownloadResponse downloadOwn(UUID documentId) {
  return tx.execute(s->sign(document(documentId,actor(UserRole.JOB_SEEKER))));
+ }
+ public Map<UUID,DocumentResponse> applicationCvMetadataForEmployer(Set<UUID> ids) {
+  return tx.execute(s->{
+   UUID employerId=actor(UserRole.EMPLOYER);
+   if(ids==null||ids.isEmpty())return Map.of();
+   return documents.findAllById(ids).stream().collect(java.util.stream.Collectors.toMap(
+    Document::getId,Document::response));
+  });
+ }
+ public Map<UUID,String> applicantNamesForEmployer(Set<UUID> ids) {
+  return tx.execute(s->{actor(UserRole.EMPLOYER);if(ids==null||ids.isEmpty())return Map.of();
+   return profiles.findAllByUserIdIn(ids).stream().collect(java.util.stream.Collectors.toMap(
+    Profile::getUserId,Profile::displayName));});
  }
  private void employer(UUID jobId,UUID applicant){UUID employer=actor(UserRole.EMPLOYER);
  EmployerApplicationAccess access=employerAccess.getIfAvailable();if(access==null)throw failure(ProfileFailure.Code.INTEGRATION_UNAVAILABLE);

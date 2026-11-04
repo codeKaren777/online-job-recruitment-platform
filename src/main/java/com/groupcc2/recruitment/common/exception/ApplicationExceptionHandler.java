@@ -13,6 +13,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import com.groupcc2.recruitment.profile.service.ProfileFailure;
 
 /** Translates application failures to HTTP; bodies carry only a stable error code, never internals. */
 @RestControllerAdvice(assignableTypes = {ApplicationController.class, EmployerApplicationController.class})
@@ -23,10 +24,23 @@ public class ApplicationExceptionHandler {
     @ExceptionHandler(ApplicationFailure.class)
     ResponseEntity<ErrorResponse> application(ApplicationFailure failure) {
         HttpStatus status = switch (failure.code()) {
+            case PROFILE_INCOMPLETE -> HttpStatus.BAD_REQUEST;
             case FORBIDDEN -> HttpStatus.FORBIDDEN;
             case NOT_FOUND -> HttpStatus.NOT_FOUND;
             case DUPLICATE_APPLICATION, JOB_NOT_ACCEPTING_APPLICATIONS, INVALID_STATUS_TRANSITION -> HttpStatus.CONFLICT;
             case INTEGRATION_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
+        };
+        return ResponseEntity.status(status).body(new ErrorResponse(failure.code().name()));
+    }
+
+    @ExceptionHandler(ProfileFailure.class)
+    ResponseEntity<ErrorResponse> profile(ProfileFailure failure) {
+        HttpStatus status = switch (failure.code()) {
+            case FORBIDDEN -> HttpStatus.FORBIDDEN;
+            case NOT_FOUND -> HttpStatus.NOT_FOUND;
+            case INVALID_FILE -> HttpStatus.BAD_REQUEST;
+            case FILE_TOO_LARGE -> HttpStatus.PAYLOAD_TOO_LARGE;
+            case STORAGE_UNAVAILABLE, INTEGRATION_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
         };
         return ResponseEntity.status(status).body(new ErrorResponse(failure.code().name()));
     }
@@ -40,5 +54,10 @@ public class ApplicationExceptionHandler {
             HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class})
     ResponseEntity<ErrorResponse> invalid() {
         return ResponseEntity.badRequest().body(new ErrorResponse("INVALID_REQUEST"));
+    }
+
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    ResponseEntity<ErrorResponse> tooLarge() {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(new ErrorResponse("FILE_TOO_LARGE"));
     }
 }

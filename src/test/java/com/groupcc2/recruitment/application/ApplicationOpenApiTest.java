@@ -1,6 +1,7 @@
 package com.groupcc2.recruitment.application;
 
 import com.groupcc2.recruitment.application.controller.ApplicationController;
+import com.groupcc2.recruitment.application.controller.EmployerApplicationController;
 import com.groupcc2.recruitment.application.service.ApplicationService;
 import com.groupcc2.recruitment.common.openapi.OpenApiConfiguration;
 import com.groupcc2.recruitment.security.AccountJwtValidator;
@@ -22,7 +23,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(controllers = ApplicationController.class, properties = {
+@WebMvcTest(controllers = {ApplicationController.class, EmployerApplicationController.class}, properties = {
         "app.security.jwt.secret-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "app.openapi.enabled=true",
         "app.openapi.public-in-local=true",
@@ -38,29 +39,30 @@ class ApplicationOpenApiTest {
     @MockitoBean AccountJwtValidator accountJwtValidator;
 
     @Test
-    void applicationCreationSchemaContainsOnlyRequiredJobId() throws Exception {
+    void applicationCreationSchemaDocumentsRequiredMultipartCv() throws Exception {
         mvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.paths['/api/applications'].post.requestBody.required").value(true))
-                .andExpect(jsonPath("$.paths['/api/applications'].post.requestBody.content['application/json'].schema.$ref")
-                        .value("#/components/schemas/ApplyRequest"))
-                .andExpect(jsonPath("$.paths['/api/applications'].post.requestBody.content['application/json'].examples['Valid application'].value.jobId")
-                        .value("7e2778ac-26fd-4a2d-b318-8e06e315a082"))
+                .andExpect(jsonPath("$.paths['/api/applications'].post.requestBody.content['multipart/form-data'].schema.$ref")
+                        .value("#/components/schemas/ApplicationSubmissionRequest"))
                 .andExpect(jsonPath("$.paths['/api/applications'].post.security[0].bearerAuth").exists())
                 .andExpect(jsonPath("$.paths['/api/applications'].post.responses['201']").exists())
                 .andExpect(jsonPath("$.paths['/api/applications'].post.responses['400']").exists())
+                .andExpect(jsonPath("$.paths['/api/applications'].post.responses['413']").exists())
                 .andExpect(jsonPath("$.paths['/api/applications'].post.responses['401']").exists())
                 .andExpect(jsonPath("$.paths['/api/applications'].post.responses['403']").exists())
                 .andExpect(jsonPath("$.paths['/api/applications'].post.responses['404']").exists())
                 .andExpect(jsonPath("$.paths['/api/applications'].post.responses['409']").exists())
                 .andExpect(jsonPath("$.paths['/api/applications'].post.responses['503']").exists())
-                .andExpect(jsonPath("$.components.schemas.ApplyRequest.properties.jobId.type").value("string"))
-                .andExpect(jsonPath("$.components.schemas.ApplyRequest.properties.jobId.format").value("uuid"))
-                .andExpect(jsonPath("$.components.schemas.ApplyRequest.required[0]").value("jobId"))
-                .andExpect(jsonPath("$.components.schemas.ApplyRequest.properties.jobSeekerId").doesNotExist())
-                .andExpect(jsonPath("$.components.schemas.ApplyRequest.properties.id").doesNotExist())
-                .andExpect(jsonPath("$.components.schemas.ApplyRequest.properties.status").doesNotExist())
-                .andExpect(jsonPath("$.components.schemas.ApplyRequest.properties.submittedAt").doesNotExist())
-                .andExpect(jsonPath("$.components.schemas.ApplyRequest.properties.updatedAt").doesNotExist());
+                .andExpect(jsonPath("$.components.schemas.ApplicationSubmissionRequest.properties.jobId.type").value("string"))
+                .andExpect(jsonPath("$.components.schemas.ApplicationSubmissionRequest.properties.jobId.format").value("uuid"))
+                .andExpect(jsonPath("$.components.schemas.ApplicationSubmissionRequest.properties.cv.format").value("binary"))
+                .andExpect(jsonPath("$.components.schemas.ApplicationSubmissionRequest.required").isArray())
+                .andExpect(jsonPath("$.components.schemas.ApplicationResponse.properties.cv.$ref").value("#/components/schemas/DocumentResponse"))
+                .andExpect(jsonPath("$.components.schemas.ApplicationResponse.properties.applicantDisplayName").exists())
+                .andExpect(jsonPath("$.paths['/api/employer/applications'].get.responses['200'].content['*/*'].schema.items.$ref")
+                        .value("#/components/schemas/ApplicationResponse"))
+                .andExpect(jsonPath("$.paths['/api/employer/applications/{applicationId}/cv'].get.responses['200'].content['*/*'].schema.$ref")
+                        .value("#/components/schemas/DownloadResponse"));
     }
 }

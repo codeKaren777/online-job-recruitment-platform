@@ -31,6 +31,7 @@ class JobsRlsIT {
         UUID employer = UUID.randomUUID();
         UUID otherEmployer = UUID.randomUUID();
         UUID applicant = UUID.randomUUID();
+        UUID applicantCvId = UUID.randomUUID();
         UUID ownJob = UUID.randomUUID();
         UUID deletableJob = UUID.randomUUID();
         UUID otherActiveJob = UUID.randomUUID();
@@ -56,6 +57,14 @@ class JobsRlsIT {
                       ('%s', '%s@test.example', 'test-hash', 'EMPLOYER'),
                       ('%s', '%s@test.example', 'test-hash', 'JOB_SEEKER')
                     """.formatted(employer, employer, otherEmployer, otherEmployer, applicant, applicant));
+            statement.execute("""
+                    INSERT INTO recruitment.profiles (user_id, display_name)
+                    VALUES ('%s', 'Jobs RLS applicant')
+                    """.formatted(applicant));
+            statement.execute("""
+                    INSERT INTO recruitment.documents (id, profile_user_id, storage_key, original_filename, content_type, byte_size)
+                    VALUES ('%s', '%s', 'documents/%s', 'jobs-rls-cv.pdf', 'application/pdf', 20)
+                    """.formatted(applicantCvId, applicant, applicantCvId));
             statement.execute("""
                     INSERT INTO recruitment.companies (id, employer_id, name)
                     VALUES
@@ -93,11 +102,12 @@ class JobsRlsIT {
 
             try (Connection admin = adminConnection();
                  PreparedStatement statement = admin.prepareStatement("""
-                         INSERT INTO recruitment.applications (job_id, job_seeker_id)
-                         VALUES (?, ?)
+                         INSERT INTO recruitment.applications (job_id, job_seeker_id, cv_document_id)
+                         VALUES (?, ?, ?)
                          """)) {
                 statement.setObject(1, ownJob);
                 statement.setObject(2, applicant);
+                statement.setObject(3, applicantCvId);
                 statement.executeUpdate();
             }
 

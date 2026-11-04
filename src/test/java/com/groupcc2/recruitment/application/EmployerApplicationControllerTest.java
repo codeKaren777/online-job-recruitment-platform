@@ -4,6 +4,7 @@ import com.groupcc2.recruitment.application.controller.EmployerApplicationContro
 import com.groupcc2.recruitment.application.dto.ApplicationResponse;
 import com.groupcc2.recruitment.application.entity.ApplicationStatus;
 import com.groupcc2.recruitment.application.service.ApplicationService;
+import com.groupcc2.recruitment.application.service.ApplicationFailure;
 import com.groupcc2.recruitment.security.AccountJwtValidator;
 import com.groupcc2.recruitment.security.SecurityConfig;
 import java.time.Instant;
@@ -43,7 +44,7 @@ class EmployerApplicationControllerTest {
     void employerCanListOwnJobApplications() throws Exception {
         UUID employerId = UUID.randomUUID();
         ApplicationResponse response = new ApplicationResponse(
-                UUID.randomUUID(), UUID.randomUUID(), ApplicationStatus.PENDING,
+                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), null, null, ApplicationStatus.PENDING,
                 Instant.now(), Instant.now(), null, null, null);
         when(service.listForEmployer(employerId, null, null)).thenReturn(List.of(response));
 
@@ -55,12 +56,39 @@ class EmployerApplicationControllerTest {
     }
 
     @Test
+    void employerRequestsOnlyTheSubmittedCvThroughTheApplicationRoute() throws Exception {
+        UUID employerId = UUID.randomUUID();
+        UUID applicationId = UUID.randomUUID();
+        when(service.downloadApplicationCv(employerId, applicationId)).thenReturn(
+                new com.groupcc2.recruitment.profile.dto.DownloadResponse(
+                        java.net.URI.create("https://documents.example.test/signed"), Instant.now().plusSeconds(60)));
+        mvc.perform(get("/api/employer/applications/{id}/cv", applicationId).with(employerToken(employerId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.url").value("https://documents.example.test/signed"));
+        verify(service).downloadApplicationCv(employerId, applicationId);
+    }
+
+    @Test
     void jobSeekersCannotReachEmployerApplicationRoutes() throws Exception {
         UUID seekerId = UUID.randomUUID();
         mvc.perform(get("/api/employer/applications").with(
                         jwt().authorities(new SimpleGrantedAuthority("ROLE_JOB_SEEKER"))
                                 .jwt(token -> token.subject(seekerId.toString()))))
                 .andExpect(status().isForbidden());
+        mvc.perform(get("/api/employer/applications/{id}/cv", UUID.randomUUID()).with(
+                        jwt().authorities(new SimpleGrantedAuthority("ROLE_JOB_SEEKER"))
+                                .jwt(token -> token.subject(seekerId.toString()))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void unrelatedEmployerCannotDownloadApplicationCv() throws Exception {
+        UUID employer = UUID.randomUUID();
+        UUID applicationId = UUID.randomUUID();
+        when(service.downloadApplicationCv(employer, applicationId))
+                .thenThrow(new ApplicationFailure(ApplicationFailure.Code.NOT_FOUND));
+        mvc.perform(get("/api/employer/applications/{id}/cv", applicationId).with(employerToken(employer)))
+                .andExpect(status().isNotFound());
     }
 
     @Test
@@ -68,7 +96,7 @@ class EmployerApplicationControllerTest {
         UUID employerId = UUID.randomUUID();
         UUID applicationId = UUID.randomUUID();
         ApplicationResponse response = new ApplicationResponse(
-                applicationId, UUID.randomUUID(), ApplicationStatus.SHORTLISTED,
+                applicationId, UUID.randomUUID(), UUID.randomUUID(), null, null, ApplicationStatus.SHORTLISTED,
                 Instant.now(), Instant.now(), Instant.now(), null, null);
         when(service.changeStatus(employerId, applicationId, ApplicationStatus.SHORTLISTED)).thenReturn(response);
 

@@ -24,4 +24,7 @@ class DocumentValidatorTest {
  assertThatThrownBy(()->validator.validate(file)).isInstanceOf(ProfileFailure.class);}
  @Test void rejectsEmptyAndOversize(){for(byte[] data:new byte[][]{new byte[0],new byte[(int)DocumentValidator.MAX_BYTES+1]})
  assertThatThrownBy(()->validator.validate(new MockMultipartFile("file","cv.pdf","application/pdf",data))).isInstanceOf(ProfileFailure.class);}
+ @Test void reportsOversizeWithDedicatedCode(){
+  assertThatThrownBy(()->validator.validate(new MockMultipartFile("file","cv.pdf","application/pdf",new byte[(int)DocumentValidator.MAX_BYTES+1])))
+   .isInstanceOfSatisfying(ProfileFailure.class,e->assertThat(e.code()).isEqualTo(ProfileFailure.Code.FILE_TOO_LARGE));}
 }

@@ -12,6 +12,7 @@ public class ProfileExceptionHandler {
  case FORBIDDEN -> HttpStatus.FORBIDDEN;
  case NOT_FOUND -> HttpStatus.NOT_FOUND;
  case INVALID_FILE -> HttpStatus.BAD_REQUEST;
+ case FILE_TOO_LARGE -> HttpStatus.PAYLOAD_TOO_LARGE;
  case STORAGE_UNAVAILABLE,INTEGRATION_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
  };return ResponseEntity.status(status).body(new ErrorResponse(e.code().name()));}
  @ExceptionHandler({InactiveAccountException.class,AuthorizationDeniedException.class,UserNotFoundException.class})

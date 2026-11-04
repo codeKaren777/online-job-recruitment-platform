@@ -33,6 +33,9 @@ public class Application {
     @Column(name = "job_seeker_id", nullable = false, updatable = false)
     private UUID jobSeekerId;
 
+    @Column(name = "cv_document_id", updatable = false)
+    private UUID cvDocumentId;
+
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(nullable = false, columnDefinition = "recruitment.application_status")
@@ -53,15 +56,21 @@ public class Application {
     protected Application() {
     }
 
-    private Application(UUID jobId, UUID jobSeekerId) {
+    private Application(UUID jobId, UUID jobSeekerId, UUID cvDocumentId) {
         this.id = UUID.randomUUID();
         this.jobId = jobId;
         this.jobSeekerId = jobSeekerId;
+        this.cvDocumentId = cvDocumentId;
         this.status = ApplicationStatus.PENDING; // BR-03
     }
 
     public static Application submit(UUID jobId, UUID jobSeekerId) {
-        return new Application(jobId, jobSeekerId);
+        return new Application(jobId, jobSeekerId, null);
+    }
+
+    public static Application submit(UUID jobId, UUID jobSeekerId, UUID cvDocumentId) {
+        if (cvDocumentId == null) throw new IllegalArgumentException("An application CV is required");
+        return new Application(jobId, jobSeekerId, cvDocumentId);
     }
 
     @PrePersist
@@ -91,6 +100,8 @@ public class Application {
     public UUID getJobSeekerId() {
         return jobSeekerId;
     }
+
+    public UUID getCvDocumentId() { return cvDocumentId; }
 
     public ApplicationStatus getStatus() {
         return status;

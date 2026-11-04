@@ -19,6 +19,8 @@ import com.groupcc2.recruitment.application.service.ApplicationFailure;
 import com.groupcc2.recruitment.application.notification.ApplicationNotificationOutboxRepository;
 import com.groupcc2.recruitment.application.service.ApplicationRls;
 import com.groupcc2.recruitment.application.service.ApplicationService;
+import com.groupcc2.recruitment.application.service.ApplicationCvDocuments;
+import com.groupcc2.recruitment.profile.dto.DocumentResponse;
 import com.groupcc2.recruitment.application.service.JobDirectory;
 import com.groupcc2.recruitment.application.service.JobSnapshot;
 import com.groupcc2.recruitment.users.entity.User;
@@ -56,6 +58,7 @@ class ApplicationServiceTest {
     @Mock ApplicationNotificationOutboxRepository notifications;
     @Mock ObjectProvider<JobDirectory> directoryProvider;
     @Mock JobDirectory directory;
+    @Mock ApplicationCvDocuments cvDocuments;
 
     ApplicationService service;
     User seeker = new User("seeker@example.com", "hash", UserRole.JOB_SEEKER);
@@ -66,6 +69,7 @@ class ApplicationServiceTest {
         Clock clock = Clock.fixed(TODAY.atTime(9, 0).toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
         service = new ApplicationService(repository, users, rls, directoryProvider,
                 decisionAudits, notifications, clock);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "cvDocuments", cvDocuments);
         when(directoryProvider.getIfAvailable()).thenReturn(directory);
         when(users.findById(seeker.getId())).thenReturn(seeker);
         when(repository.saveAndFlush(any(Application.class))).thenAnswer(call -> call.getArgument(0));
@@ -76,11 +80,29 @@ class ApplicationServiceTest {
         return new JobSnapshot(jobId, "Backend Developer", "Zomba", due, state);
     }
 
+    private ApplicationResponse submit(UUID applicantId, UUID targetJobId) {
+        UUID cvId = UUID.randomUUID();
+        when(cvDocuments.storeForCurrentApplicant(any())).thenReturn(
+                new DocumentResponse(cvId, "application.pdf", "application/pdf", 20L, Instant.now()));
+        var cv = new org.springframework.mock.web.MockMultipartFile("cv", "application.pdf", "application/pdf", "%PDF-1.7".getBytes());
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try { return service.applyWithCv(applicantId, targetJobId, cv); }
+        finally { org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization(); }
+    }
+
+    @Test
+    void legacyNoCvSubmissionMethodRejectsRequest() {
+        assertThatThrownBy(() -> service.apply(seeker.getId(), jobId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("CV is required");
+        verifyNoInteractions(repository, notifications, cvDocuments);
+    }
+
     @Test
     void submitsPendingApplicationToActiveJob() {
         when(directory.findById(jobId)).thenReturn(Optional.of(job(TODAY.plusDays(3), JobSnapshot.State.ACTIVE)));
 
-        var response = service.apply(seeker.getId(), jobId);
+        var response = submit(seeker.getId(), jobId);
         var savedApplication = org.mockito.ArgumentCaptor.forClass(Application.class);
 
         assertThat(response.status()).isEqualTo(ApplicationStatus.PENDING);
@@ -94,11 +116,31 @@ class ApplicationServiceTest {
     }
 
     @Test
+    void submitsEachApplicationWithItsOwnUploadedCv() {
+        when(directory.findById(jobId)).thenReturn(Optional.of(job(TODAY.plusDays(3), JobSnapshot.State.ACTIVE)));
+        UUID cvId = UUID.randomUUID();
+        when(cvDocuments.storeForCurrentApplicant(any())).thenReturn(
+                new DocumentResponse(cvId, "role-cv.pdf", "application/pdf", 42, Instant.now()));
+        org.springframework.mock.web.MockMultipartFile cv = new org.springframework.mock.web.MockMultipartFile(
+                "cv", "role-cv.pdf", "application/pdf", "%PDF-1.7".getBytes());
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try {
+            ApplicationResponse response = service.applyWithCv(seeker.getId(), jobId, cv);
+            var saved = org.mockito.ArgumentCaptor.forClass(Application.class);
+            verify(repository).saveAndFlush(saved.capture());
+            assertThat(saved.getValue().getCvDocumentId()).isEqualTo(cvId);
+            assertThat(response.status()).isEqualTo(ApplicationStatus.PENDING);
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
     void rejectsSecondApplicationToSameJob() {
         when(directory.findById(jobId)).thenReturn(Optional.of(job(TODAY.plusDays(3), JobSnapshot.State.ACTIVE)));
         when(repository.existsByJobIdAndJobSeekerId(jobId, seeker.getId())).thenReturn(true);
 
-        assertThatThrownBy(() -> service.apply(seeker.getId(), jobId))
+        assertThatThrownBy(() -> submit(seeker.getId(), jobId))
                 .isInstanceOfSatisfying(ApplicationFailure.class,
                         e -> assertThat(e.code()).isEqualTo(ApplicationFailure.Code.DUPLICATE_APPLICATION));
         verify(repository, never()).saveAndFlush(any());
@@ -111,7 +153,7 @@ class ApplicationServiceTest {
         when(repository.saveAndFlush(any(Application.class))).thenThrow(new DataIntegrityViolationException(
                 "could not execute statement", new RuntimeException("violates unique constraint \"applications_one_per_job_seeker\"")));
 
-        assertThatThrownBy(() -> service.apply(seeker.getId(), jobId))
+        assertThatThrownBy(() -> submit(seeker.getId(), jobId))
                 .isInstanceOfSatisfying(ApplicationFailure.class,
                         e -> assertThat(e.code()).isEqualTo(ApplicationFailure.Code.DUPLICATE_APPLICATION));
     }
@@ -122,7 +164,7 @@ class ApplicationServiceTest {
         when(repository.saveAndFlush(any(Application.class)))
                 .thenThrow(new DataIntegrityViolationException("foreign key violation"));
 
-        assertThatThrownBy(() -> service.apply(seeker.getId(), jobId))
+        assertThatThrownBy(() -> submit(seeker.getId(), jobId))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -130,7 +172,7 @@ class ApplicationServiceTest {
     void rejectsApplicationOnDueDateAndAfter() {
         for (LocalDate due : new LocalDate[] {TODAY, TODAY.minusDays(1)}) {
             when(directory.findById(jobId)).thenReturn(Optional.of(job(due, JobSnapshot.State.ACTIVE)));
-            assertThatThrownBy(() -> service.apply(seeker.getId(), jobId))
+            assertThatThrownBy(() -> submit(seeker.getId(), jobId))
                     .isInstanceOfSatisfying(ApplicationFailure.class, e -> assertThat(e.code())
                             .isEqualTo(ApplicationFailure.Code.JOB_NOT_ACCEPTING_APPLICATIONS));
         }
@@ -141,7 +183,7 @@ class ApplicationServiceTest {
     void rejectsExpiredOrClosedStatusEvenBeforeDueDate() {
         for (var state : new JobSnapshot.State[] {JobSnapshot.State.EXPIRED, JobSnapshot.State.CLOSED}) {
             when(directory.findById(jobId)).thenReturn(Optional.of(job(TODAY.plusDays(5), state)));
-            assertThatThrownBy(() -> service.apply(seeker.getId(), jobId))
+            assertThatThrownBy(() -> submit(seeker.getId(), jobId))
                     .isInstanceOfSatisfying(ApplicationFailure.class, e -> assertThat(e.code())
                             .isEqualTo(ApplicationFailure.Code.JOB_NOT_ACCEPTING_APPLICATIONS));
         }
@@ -151,7 +193,7 @@ class ApplicationServiceTest {
     void unknownJobIsNotFound() {
         when(directory.findById(jobId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.apply(seeker.getId(), jobId))
+        assertThatThrownBy(() -> submit(seeker.getId(), jobId))
                 .isInstanceOfSatisfying(ApplicationFailure.class,
                         e -> assertThat(e.code()).isEqualTo(ApplicationFailure.Code.NOT_FOUND));
     }
@@ -161,7 +203,7 @@ class ApplicationServiceTest {
         for (UserRole role : new UserRole[] {UserRole.EMPLOYER, UserRole.ADMIN}) {
             User other = new User(role + "@example.com", "hash", role);
             when(users.findById(other.getId())).thenReturn(other);
-            assertThatThrownBy(() -> service.apply(other.getId(), jobId))
+                    assertThatThrownBy(() -> submit(other.getId(), jobId))
                     .isInstanceOfSatisfying(ApplicationFailure.class,
                             e -> assertThat(e.code()).isEqualTo(ApplicationFailure.Code.FORBIDDEN));
         }
@@ -172,7 +214,7 @@ class ApplicationServiceTest {
     void inactiveAccountCannotApply() {
         doThrow(new InactiveAccountException()).when(users).requireActive(seeker);
 
-        assertThatThrownBy(() -> service.apply(seeker.getId(), jobId)).isInstanceOf(InactiveAccountException.class);
+        assertThatThrownBy(() -> submit(seeker.getId(), jobId)).isInstanceOf(InactiveAccountException.class);
         verify(repository, never()).saveAndFlush(any());
     }
 
@@ -180,7 +222,7 @@ class ApplicationServiceTest {
     void reportsIntegrationUnavailableWhenJobsModuleIsMissing() {
         when(directoryProvider.getIfAvailable()).thenReturn(null);
 
-        assertThatThrownBy(() -> service.apply(seeker.getId(), jobId))
+        assertThatThrownBy(() -> submit(seeker.getId(), jobId))
                 .isInstanceOfSatisfying(ApplicationFailure.class,
                         e -> assertThat(e.code()).isEqualTo(ApplicationFailure.Code.INTEGRATION_UNAVAILABLE));
     }
@@ -262,6 +304,27 @@ class ApplicationServiceTest {
 
         assertThat(result).extracting(ApplicationResponse::jobId).containsExactly(ownedJobId);
         verify(rls).establish(employer.getId(), "EMPLOYER");
+    }
+
+    @Test
+    void employerListingReturnsTheCvAssociatedWithThatApplication() {
+        User employer = new User("employer@example.com", "hash", UserRole.EMPLOYER);
+        UUID applicant = seeker.getId();
+        UUID cvId = UUID.randomUUID();
+        Application application = Application.submit(jobId, applicant, cvId);
+        DocumentResponse cv = new DocumentResponse(cvId, "developer.pdf", "application/pdf", 120L, Instant.now());
+        when(users.findById(employer.getId())).thenReturn(employer);
+        when(directory.findAllForEmployer(employer.getId())).thenReturn(Map.of(jobId,
+                job(TODAY.plusDays(2), JobSnapshot.State.ACTIVE)));
+        when(repository.findAllByJobIdInOrderBySubmittedAtDesc(Set.of(jobId))).thenReturn(List.of(application));
+        when(cvDocuments.metadataForEmployer(Set.of(cvId))).thenReturn(Map.of(cvId, cv));
+        when(cvDocuments.applicantNamesForEmployer(Set.of(applicant))).thenReturn(Map.of(applicant, "Applicant Name"));
+
+        ApplicationResponse response = service.listForEmployer(employer.getId()).getFirst();
+
+        assertThat(response.cv()).isEqualTo(cv);
+        assertThat(response.applicantDisplayName()).isEqualTo("Applicant Name");
+        assertThat(response.applicantId()).isEqualTo(applicant);
     }
 
     @Test
