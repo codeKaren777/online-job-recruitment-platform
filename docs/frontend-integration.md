@@ -181,14 +181,20 @@ CORS setup. The frontend should not alter backend security settings.
 
 ## Health and API documentation
 
-The backend team may provide:
+The local development bundle exposes these URLs at `http://localhost:8080`:
 
-- `GET /actuator/health` for service availability;
-- Swagger UI at `/swagger-ui/index.html`;
-- OpenAPI JSON at `/v3/api-docs`.
+- Health: `/actuator/health`
+- Swagger UI: `/swagger-ui/index.html`
+- OpenAPI JSON: `/v3/api-docs`
+- OpenAPI YAML: `/v3/api-docs.yaml`
 
-These are optional integration aids. The frontend should use the API reference
-for implementation and should not depend on database or storage access.
+Docker Compose activates the `local` Spring profile, which enables the
+documentation endpoints and permits unauthenticated access to them only in
+that profile. OpenAPI generation is disabled by default in other profiles;
+do not expose the documentation publicly in a deployed environment. The
+frontend can use the live OpenAPI document for tooling, while
+[frontend-api-reference.md](frontend-api-reference.md) remains the human-readable
+contract guide.
 
 ## Errors
 
