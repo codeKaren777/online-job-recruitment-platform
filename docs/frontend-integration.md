@@ -4,46 +4,111 @@ This document describes how to use the provided backend Docker image. The
 backend is a REST/JSON API with a PostgreSQL database and private MinIO
 document storage.
 
-## Run the supplied backend image
+## Accessing and Running the Backend API Docker Image
 
-The backend listens on port `8080`. Replace the example image name and tag with
-the image that was provided. Run it with the required environment variables and
-a network route to PostgreSQL:
+The published backend image is hosted in GitHub Container Registry (GHCR):
 
-```text
-http://localhost:8080
+- Package and available versions: <https://github.com/bsc-inf-09-24?tab=packages>
+- Image: `ghcr.io/bsc-inf-09-24/recruitment-api`
+- Version: `0.1.0`
+- Full image reference: `ghcr.io/bsc-inf-09-24/recruitment-api:0.1.0`
+
+### Package access and visibility
+
+GHCR package visibility is controlled on GitHub, not in this repository's Docker
+configuration. Check the package page before pulling. If it is marked **Public**,
+Docker can pull it without a registry login. If it is marked **Private**, a
+developer needs GitHub access to the package and a GitHub personal access token
+(classic) with `read:packages`, then must authenticate without putting the token
+in source control:
+
+```bash
+echo '<GITHUB_TOKEN>' | docker login ghcr.io -u '<GITHUB_USERNAME>' --password-stdin
 ```
 
-Example image-only startup:
+### Pull the image
+
+```bash
+docker pull ghcr.io/bsc-inf-09-24/recruitment-api:0.1.0
+```
+
+### Backend dependencies and environment
+
+This image contains the Spring Boot backend application only. It does **not**
+contain PostgreSQL or MinIO. Start or provision a reachable PostgreSQL 17
+database separately. Configure MinIO separately as well when private document
+storage is enabled (`PROFILE_STORAGE_ENABLED=true`). The frontend must never
+connect directly to either service.
+
+The following backend variables are required by the application. Use a private
+environment file or secret manager; do not expose it to the browser or commit
+it:
+
+```text
+DB_URL=jdbc:postgresql://<postgres-host>:5432/<database-name>
+POSTGRES_USER=<database-runtime-user>
+POSTGRES_PASSWORD=<database-runtime-password>
+JWT_SECRET_BASE64=<base64-encoded-random-key-of-at-least-32-bytes>
+```
+
+Useful optional configuration, only when applicable:
+
+| Variable | Purpose |
+|---|---|
+| `JWT_ISSUER` / `JWT_AUDIENCE` | JWT claims; defaults are `groupcc2-recruitment` and `groupcc2-api`. |
+| `SPRING_PROFILES_ACTIVE=local` | Enables the local profile, including OpenAPI documentation. |
+| `APP_OPENAPI_ENABLED=true` | Enables OpenAPI and Swagger UI explicitly. |
+| `APP_BOOTSTRAP_ADMIN_EMAIL` / `APP_BOOTSTRAP_ADMIN_PASSWORD` | Optional first-start admin bootstrap; remove both after successful startup. |
+| `PROFILE_STORAGE_ENABLED=true` | Enables MinIO-backed private document storage. |
+| `PROFILE_STORAGE_ENDPOINT` / `PROFILE_STORAGE_PUBLIC_ENDPOINT` | Backend and browser-reachable MinIO endpoints when storage is enabled. |
+| `PROFILE_STORAGE_BUCKET` / `PROFILE_STORAGE_REGION` | MinIO/S3 bucket and region. |
+| `PROFILE_STORAGE_ACCESS_KEY` / `PROFILE_STORAGE_SECRET_KEY` | Restricted MinIO application credentials when storage is enabled. |
+| `PROFILE_DOWNLOAD_SECONDS` | Signed download URL lifetime; defaults to `120` seconds. |
+
+If email delivery is enabled, configure `APP_MAIL_ENABLED`, `APP_MAIL_FROM`,
+`PASSWORD_RESET_URL`, and the `SPRING_MAIL_*` settings described in the backend
+configuration table below. These are backend settings, never frontend settings.
+
+### Run the image
+
+Create a private `backend.env` containing the required values above and any
+optional values needed by the environment. Then publish the container's port
+`8080` to an available host port:
 
 ```bash
 docker run --name recruitment-backend \
   --publish 8080:8080 \
   --env-file backend.env \
-  registry.example.com/recruitment-backend:1.0
+  ghcr.io/bsc-inf-09-24/recruitment-api:0.1.0
 ```
 
-`backend.env` contains backend-only configuration and must not be exposed to
-the browser. The image expects a reachable PostgreSQL database and a valid JWT
-signing secret.
+The database hostname in `DB_URL` must be reachable from the container. For
+example, do not use `localhost` in `DB_URL` when PostgreSQL is running in a
+different container or on another machine; use its Docker-network hostname or
+the reachable host name instead. The database user must be able to run the
+Flyway migrations used by the image.
 
-For a complete local stack, run PostgreSQL and MinIO separately and provide
-their connection values to the backend. The API is ready when this returns
-successfully:
+Check that the container is running and inspect startup errors with:
 
 ```bash
+docker ps --filter name=recruitment-backend
+docker logs --tail 100 recruitment-backend
 curl --fail http://localhost:8080/actuator/health
 ```
 
-For local Compose deployments, publish the backend on localhost. In another
-environment, publish it through an HTTPS reverse proxy and use that public URL
-as the frontend API base URL. Do not run `docker compose down -v` during normal
-development because it deletes the PostgreSQL and MinIO volumes.
+The health response should report `UP`. If the host port is not `8080`, replace
+`8080` in the URL with the host-side port from `--publish`, for example
+`18080:8080` means `http://localhost:18080`.
 
-When the `local` profile is enabled, API documentation is available at
-`http://localhost:8080/swagger-ui/index.html` and
-`http://localhost:8080/v3/api-docs`. Swagger operations still require the
-appropriate bearer token.
+When `SPRING_PROFILES_ACTIVE=local` or `APP_OPENAPI_ENABLED=true` is configured,
+the API documentation is available at:
+
+- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
+- OpenAPI JSON: `http://localhost:8080/v3/api-docs`
+
+The `local` profile permits these documentation paths; other profiles may keep
+them behind the default security policy. API operations still enforce their
+normal authentication and role rules.
 
 ## Frontend environment values
 
@@ -59,18 +124,20 @@ Use the variable name required by the frontend build system. Do not put
 `POSTGRES_*`, `DB_URL`, `JWT_SECRET_BASE64`, MinIO credentials, SMTP
 credentials, or reset-mail settings in frontend environment variables. Values
 with `VITE_`, `NEXT_PUBLIC_`, or equivalent public prefixes are delivered to
-the browser and are not secrets.
+the browser and are not secrets. `http://localhost:8080` works only when the
+browser and the published backend port are on the same machine. If the frontend
+is running on another machine, set the API base URL to the backend machine's
+reachable hostname or IP and published port, or to the HTTPS reverse-proxy URL,
+for example `https://<api-hostname>/<api-base-path>`.
 
 The backend configuration is supplied to the container by the deployment
 environment. The important values are:
 
 | Variable | Purpose | Required |
 |---|---|---|
-| `POSTGRES_DB` | PostgreSQL database name | Yes |
 | `DB_URL` | JDBC URL used by the backend, for example `jdbc:postgresql://db:5432/recruitment` inside Compose | Yes |
-| `POSTGRES_RUNTIME_USER` / `POSTGRES_RUNTIME_PASSWORD` | Restricted runtime database account used by Spring Boot in Compose | Yes |
-| `POSTGRES_USER` / `POSTGRES_PASSWORD` | Bootstrap database account used by PostgreSQL initialization and Flyway | Yes |
-| `SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD` | Bootstrap account used to apply migrations | Yes in Compose |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` | Database account used by Spring Boot and Flyway | Yes |
+| `POSTGRES_DB` | Database name used by the repository's Docker Compose PostgreSQL service; the standalone image uses the database name in `DB_URL` | Compose only |
 | `JWT_SECRET_BASE64` | Base64-encoded random JWT signing key; use at least 32 random bytes | Yes |
 | `JWT_ISSUER` / `JWT_AUDIENCE` | JWT issuer and audience; defaults are `groupcc2-recruitment` and `groupcc2-api` | No |
 | `APP_BOOTSTRAP_ADMIN_EMAIL` / `APP_BOOTSTRAP_ADMIN_PASSWORD` | Optional first-start administrator credentials; use only when no administrator exists, then remove them | No |
@@ -115,6 +182,33 @@ If an administrator already exists, the bootstrap values are ignored and the
 existing account is not changed. If the configured email already belongs to a
 non-admin account, startup fails instead of changing that account. Log in using
 `POST /api/auth/login`, then use the protected admin endpoints to manage users.
+
+## Troubleshooting the image
+
+- **Image pull fails:** confirm the image reference and tag are exactly
+  `ghcr.io/bsc-inf-09-24/recruitment-api:0.1.0`, and check the package page for
+  the published version. If the package is private, authenticate to `ghcr.io`
+  with a GitHub account that has package access and a token with `read:packages`.
+- **Authentication or `denied` errors:** run `docker login ghcr.io` again,
+  verify the token has not expired, and confirm the GitHub account has access to
+  the organization package. Never place the token in `backend.env` or commit it.
+- **Port conflict:** choose another host port, such as
+  `--publish 18080:8080`, then use `http://<backend-host>:18080` for health
+  checks and the frontend API base URL.
+- **Container exits or health is not `UP`:** run
+  `docker logs recruitment-backend`. Check that `DB_URL` resolves from inside
+  the container, PostgreSQL is running, the database credentials are correct,
+  Flyway can apply migrations, and `JWT_SECRET_BASE64` is valid Base64 with at
+  least 32 decoded random bytes.
+- **Missing environment variable errors:** inspect the private `backend.env`
+  for `DB_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and
+  `JWT_SECRET_BASE64`. Add MinIO variables only when
+  `PROFILE_STORAGE_ENABLED=true`; add SMTP variables only when email delivery
+  is enabled. Do not print the file contents in bug reports.
+- **Swagger UI is unavailable:** verify that `SPRING_PROFILES_ACTIVE=local` or
+  `APP_OPENAPI_ENABLED=true` was passed to the container, then check the exact
+  paths `/swagger-ui/index.html` and `/v3/api-docs`. A non-local deployment may
+  require authentication for documentation endpoints.
 
 ## Calling the API
 
