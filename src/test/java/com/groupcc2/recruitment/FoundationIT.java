@@ -95,7 +95,8 @@ class FoundationIT {
             statement.execute("GRANT USAGE ON TYPE recruitment.user_role, recruitment.account_status, "
                     + "recruitment.job_status, recruitment.application_status TO " + APPLICATION_USERNAME);
             statement.execute("GRANT SELECT ON recruitment.current_jobs TO " + APPLICATION_USERNAME);
-            statement.execute("GRANT EXECUTE ON FUNCTION recruitment.auth_lookup_user(text) TO "
+            statement.execute("GRANT EXECUTE ON FUNCTION recruitment.auth_lookup_user(text), "
+                    + "recruitment.auth_bootstrap_admin(text, text) TO "
                     + APPLICATION_USERNAME);
             statement.execute("GRANT EXECUTE ON FUNCTION recruitment.auth_register_user(text, text, text) TO "
                     + APPLICATION_USERNAME);
@@ -126,7 +127,7 @@ class FoundationIT {
     @Test
     void bootsAgainstPostgresAndAppliesMigrationOnlyOnce() throws Exception {
         assertThat(flyway.getConfiguration().getDefaultSchema()).isEqualTo("public");
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("16");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("17");
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
         try (var connection = dataSource.getConnection(); var statement = connection.prepareStatement("""

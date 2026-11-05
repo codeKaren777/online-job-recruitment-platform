@@ -71,6 +71,9 @@ app:
     poll-interval-ms: ${APP_MAIL_POLL_INTERVAL_MS:30000}
   auth:
     password-reset-url: ${PASSWORD_RESET_URL:}
+    bootstrap-admin:
+      email: ${APP_BOOTSTRAP_ADMIN_EMAIL:}
+      password: ${APP_BOOTSTRAP_ADMIN_PASSWORD:}
   openapi:
     enabled: ${APP_OPENAPI_ENABLED:false}
     public-in-local: false

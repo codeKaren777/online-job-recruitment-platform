@@ -56,6 +56,13 @@ public interface AuthCredentialRepository extends JpaRepository<User, UUID> {
             @Param("passwordHash") String passwordHash,
             @Param("role") String role);
 
+    @Query(value = """
+            SELECT recruitment.auth_bootstrap_admin(:email, :passwordHash)
+            """, nativeQuery = true)
+    Integer bootstrapAdmin(
+            @Param("email") String email,
+            @Param("passwordHash") String passwordHash);
+
     @Modifying
     @Transactional
     @Query(value = """

@@ -4,6 +4,8 @@ set -eu
 psql -v ON_ERROR_STOP=1 \
   --set=runtime_user="$POSTGRES_RUNTIME_USER" \
   --set=runtime_password="$POSTGRES_RUNTIME_PASSWORD" <<'SQL'
+CREATE SCHEMA IF NOT EXISTS recruitment;
+
 SELECT format(
     CASE WHEN EXISTS (
         SELECT 1 FROM pg_roles WHERE rolname = :'runtime_user'
@@ -56,6 +58,7 @@ WITH function_signatures(signature) AS (
     VALUES
         ('auth_lookup_user(text)'),
         ('auth_register_user(text, text, text)'),
+        ('auth_bootstrap_admin(text, text)'),
         ('auth_store_password_reset_token(text, text, timestamptz)'),
         ('auth_consume_password_reset_token(text, text)'),
         ('enqueue_application_notification(uuid, uuid, text)'),
