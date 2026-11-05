@@ -27,3 +27,5 @@ COPY --from=build --chown=recruitment:recruitment \
 USER recruitment
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+
+LABEL org.opencontainers.image.source https://github.com/codeKaren777/online-job-recruitment-platform
