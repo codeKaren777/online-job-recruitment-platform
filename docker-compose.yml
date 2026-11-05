@@ -43,18 +43,18 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
       PROFILE_STORAGE_BUCKET: ${PROFILE_STORAGE_BUCKET:-recruitment-documents}
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - >-
-        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" &&
-        mc mb --ignore-existing "local/$$PROFILE_STORAGE_BUCKET" &&
-        mc anonymous set none "local/$$PROFILE_STORAGE_BUCKET" &&
-        mc anonymous get "local/$$PROFILE_STORAGE_BUCKET"
+      PROFILE_STORAGE_ACCESS_KEY: ${PROFILE_STORAGE_ACCESS_KEY:?Set PROFILE_STORAGE_ACCESS_KEY in .env}
+      PROFILE_STORAGE_SECRET_KEY: ${PROFILE_STORAGE_SECRET_KEY:?Set PROFILE_STORAGE_SECRET_KEY in .env}
+    volumes:
+      - ./docker/minio-init.sh:/usr/local/bin/minio-init.sh:ro
+    entrypoint: ["/usr/local/bin/minio-init.sh"]
   backend:
     build: .
     environment:
       # Keep Flyway history in the original bootstrap schema across restarts.
       SPRING_FLYWAY_DEFAULT_SCHEMA: public
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: ${SPRING_FLYWAY_BASELINE_ON_MIGRATE:-false}
+      SPRING_FLYWAY_BASELINE_VERSION: ${SPRING_FLYWAY_BASELINE_VERSION:-0}
       DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:?Set POSTGRES_DB in .env}
       POSTGRES_USER: ${POSTGRES_RUNTIME_USER:?Set POSTGRES_RUNTIME_USER in .env}
       POSTGRES_PASSWORD: ${POSTGRES_RUNTIME_PASSWORD:?Set POSTGRES_RUNTIME_PASSWORD in .env}
@@ -114,6 +114,7 @@ services:
       PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       POSTGRES_RUNTIME_USER: ${POSTGRES_RUNTIME_USER:?Set POSTGRES_RUNTIME_USER in .env}
       POSTGRES_RUNTIME_PASSWORD: ${POSTGRES_RUNTIME_PASSWORD:?Set POSTGRES_RUNTIME_PASSWORD in .env}
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: ${SPRING_FLYWAY_BASELINE_ON_MIGRATE:-false}
     entrypoint: ["/usr/local/bin/db-runtime-init.sh"]
 volumes:
   postgres_data:

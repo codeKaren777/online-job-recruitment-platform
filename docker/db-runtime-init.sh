@@ -1,6 +1,14 @@
 #!/bin/sh
 set -eu
 
+if [ "${SPRING_FLYWAY_BASELINE_ON_MIGRATE:-false}" = "true" ]; then
+    psql -v ON_ERROR_STOP=1 <<'SQL'
+CREATE TABLE IF NOT EXISTS public.frontend_dev_flyway_baseline_marker (
+    id boolean PRIMARY KEY DEFAULT true CHECK (id)
+);
+SQL
+fi
+
 psql -v ON_ERROR_STOP=1 \
   --set=runtime_user="$POSTGRES_RUNTIME_USER" \
   --set=runtime_password="$POSTGRES_RUNTIME_PASSWORD" <<'SQL'

@@ -1,6 +1,7 @@
 .env
 .env.*
 !.env.example
+.frontend-dev.env
 target/
 uploads/
 *.log
