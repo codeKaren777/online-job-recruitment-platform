@@ -207,6 +207,20 @@ must upload a separate PDF CV for each application. A seeker can apply only
 once to a job. Profile documents referenced by an application cannot be
 deleted.
 
+Profile requests may also include `fullName`, `dateOfBirth` (ISO date), and
+`location`:
+
+```json
+{
+  "displayName": "Jane Applicant",
+  "fullName": "Jane Mary Applicant",
+  "dateOfBirth": "1995-06-15",
+  "phone": "+265999000111",
+  "location": "Blantyre",
+  "biography": "Backend developer"
+}
+```
+
 ### Employer routes
 
 An account must first be upgraded through the employer-request workflow and
@@ -226,6 +240,7 @@ approved by an administrator.
 | `DELETE` | `/api/jobs/{jobId}` | Delete an own job with no applications; returns `204` |
 | `GET` | `/api/employer/applications` | List applications for own jobs |
 | `GET` | `/api/employer/applications/{applicationId}` | Read an application for an own job |
+| `GET` | `/api/employer/applications/{applicationId}/profile` | Read the applicant profile for an own application |
 | `GET` | `/api/employer/applications/{applicationId}/cv` | Get a short-lived private CV download URL |
 | `PATCH` | `/api/employer/applications/{applicationId}/status` | Change `PENDING` to `SHORTLISTED` or `REJECTED` |
 
@@ -233,6 +248,10 @@ Employer application listing accepts optional `jobId` and `status` filters.
 Allowed statuses are `PENDING`, `SHORTLISTED`, and `REJECTED`. Job create/update
 requires `companyId`, `title`, `description`, `requiredQualifications`,
 `dueDate` (a future ISO date such as `2099-12-31`), and `location`.
+Employer application responses include `applicantProfile` with the applicant's
+full name, date of birth, phone, location, and biography. The profile endpoint
+and embedded profile are available only for applications belonging to the
+employer's own jobs.
 
 ### Administrator routes
 

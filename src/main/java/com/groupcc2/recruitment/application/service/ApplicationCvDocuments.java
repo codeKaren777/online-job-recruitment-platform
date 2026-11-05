@@ -2,6 +2,7 @@ package com.groupcc2.recruitment.application.service;
 
 import com.groupcc2.recruitment.profile.dto.DocumentResponse;
 import com.groupcc2.recruitment.profile.dto.DownloadResponse;
+import com.groupcc2.recruitment.profile.dto.ProfileResponse;
 import org.springframework.web.multipart.MultipartFile;
 import java.util.UUID;
 import java.util.Map;
@@ -14,4 +15,5 @@ public interface ApplicationCvDocuments {
     DownloadResponse downloadForEmployer(UUID jobId, UUID applicantId, UUID documentId);
     Map<UUID, DocumentResponse> metadataForEmployer(Set<UUID> documentIds);
     Map<UUID, String> applicantNamesForEmployer(Set<UUID> applicantIds);
+    Map<UUID, ProfileResponse> applicantProfilesForEmployer(Set<UUID> applicantIds);
 }
