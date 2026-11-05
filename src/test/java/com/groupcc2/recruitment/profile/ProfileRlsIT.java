@@ -18,7 +18,7 @@ class ProfileRlsIT {
  s.execute("GRANT USAGE ON SCHEMA recruitment TO profile_runtime");s.execute("GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA recruitment TO profile_runtime");
  for(UUID id:new UUID[]{a,b,employer,otherEmployer})s.execute("INSERT INTO recruitment.users(id,email,password_hash,role) VALUES ('"+id+"','"+id+"@test','hash','"+(id.equals(a)||id.equals(b)?"JOB_SEEKER":"EMPLOYER")+"')");
  for(UUID id:new UUID[]{a,b}) {
- s.execute("INSERT INTO recruitment.profiles(user_id,display_name) VALUES ('"+id+"','name')");
+ s.execute("INSERT INTO recruitment.profiles(user_id,display_name,full_name) VALUES ('"+id+"','name','name')");
  UUID documentId=id.equals(a)?aCv:bCv;
  s.execute("INSERT INTO recruitment.documents(id,profile_user_id,storage_key,original_filename,content_type,byte_size) VALUES ('"+documentId+"','"+id+"','documents/"+documentId+"','cv.pdf','application/pdf',20)");
  }

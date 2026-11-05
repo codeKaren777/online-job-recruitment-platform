@@ -67,7 +67,11 @@ public class EmployerUpgradeService {
     public EmployerUpgradeRequest approve(UUID administratorId, UUID requestId) {
         requireAdministrator(administratorId);
         EmployerUpgradeRequest request = findRequest(requestId);
-        request.approve(administratorId);
+        try {
+            request.approve(administratorId);
+        } catch (IllegalStateException exception) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Employer request has already been reviewed");
+        }
         users.promoteToEmployer(administratorId, request.getUserId());
         EmployerUpgradeRequest saved = requests.save(request);
         notifyDecision(saved);
@@ -78,7 +82,11 @@ public class EmployerUpgradeService {
     public EmployerUpgradeRequest reject(UUID administratorId, UUID requestId, String reason) {
         requireAdministrator(administratorId);
         EmployerUpgradeRequest request = findRequest(requestId);
-        request.reject(administratorId, clean(reason));
+        try {
+            request.reject(administratorId, clean(reason));
+        } catch (IllegalStateException exception) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Employer request has already been reviewed");
+        }
         EmployerUpgradeRequest saved = requests.save(request);
         notifyDecision(saved);
         return saved;

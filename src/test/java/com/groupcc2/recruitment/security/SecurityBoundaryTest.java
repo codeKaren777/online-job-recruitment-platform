@@ -30,6 +30,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 @WebMvcTest(properties = "app.security.jwt.secret-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 @Import(SecurityConfig.class)
@@ -80,9 +81,23 @@ class SecurityBoundaryTest {
                 .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Job not found"));
         String companyId = UUID.randomUUID().toString();
 
-        mvc.perform(get("/api/jobs")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/jobs"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+                .andExpect(jsonPath("$.path").value("/api/jobs"));
         mvc.perform(get("/api/jobs").with(seekerToken)).andExpect(status().isOk());
-        mvc.perform(get("/api/jobs").with(employerToken)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/jobs?page=-1").with(seekerToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("browse.page"));
+        mvc.perform(get("/api/jobs?size=101").with(seekerToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("browse.size"));
+        mvc.perform(get("/api/jobs").with(employerToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+                .andExpect(jsonPath("$.message").isNotEmpty());
         mvc.perform(get("/api/jobs").with(adminToken)).andExpect(status().isForbidden());
 
         mvc.perform(post("/api/jobs").contentType("application/json")
@@ -101,9 +116,21 @@ class SecurityBoundaryTest {
                 """.formatted(companyId)))
                 .andExpect(status().isCreated());
 
+        mvc.perform(post("/api/companies").with(employerToken).contentType("application/json")
+                        .content("{\"name\":\" \"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.path").value("/api/companies"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("name"))
+                .andExpect(jsonPath("$.fieldErrors[0].message").isNotEmpty());
+        org.mockito.Mockito.verifyNoInteractions(companyService);
+
         mvc.perform(get("/api/jobs/{jobId}", jobId)).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/jobs/{jobId}", jobId).with(adminToken)).andExpect(status().isForbidden());
-        mvc.perform(get("/api/jobs/{jobId}", jobId).with(seekerToken)).andExpect(status().isNotFound());
+        mvc.perform(get("/api/jobs/{jobId}", jobId).with(seekerToken))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+                .andExpect(jsonPath("$.path").value("/api/jobs/" + jobId));
         mvc.perform(get("/api/jobs/{jobId}", jobId).with(employerToken)).andExpect(status().isNotFound());
 
         mvc.perform(get("/api/employer/jobs")).andExpect(status().isUnauthorized());

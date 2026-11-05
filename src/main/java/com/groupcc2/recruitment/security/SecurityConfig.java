@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.UUID;
 import javax.crypto.spec.SecretKeySpec;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.groupcc2.recruitment.common.exception.ApplicationExceptionHandler.ErrorResponse;
 import com.groupcc2.recruitment.users.entity.UserRole;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -12,6 +14,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -39,6 +42,7 @@ public class SecurityConfig {
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationConverter jwtAuthenticationConverter,
                                             Environment environment,
+                                            ObjectMapper objectMapper,
                                             @Value("${app.openapi.enabled:false}") boolean openApiEnabled,
                                             @Value("${app.openapi.public-in-local:false}") boolean openApiPublicInLocal)
             throws Exception {
@@ -52,6 +56,21 @@ public class SecurityConfig {
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
+                .exceptionHandling(exceptions -> exceptions
+                    .authenticationEntryPoint((request, response, exception) -> {
+                        response.setStatus(HttpStatus.UNAUTHORIZED.value());
+                        response.setContentType("application/json");
+                        objectMapper.writeValue(response.getOutputStream(), new ErrorResponse(
+                            "UNAUTHORIZED", "Authentication is required or the token is invalid.",
+                            request.getRequestURI(), List.of()));
+                    })
+                    .accessDeniedHandler((request, response, exception) -> {
+                        response.setStatus(HttpStatus.FORBIDDEN.value());
+                        response.setContentType("application/json");
+                        objectMapper.writeValue(response.getOutputStream(), new ErrorResponse(
+                            "FORBIDDEN", "You are not allowed to perform this operation.",
+                            request.getRequestURI(), List.of()));
+                    }))
                 .authorizeHttpRequests(authorize -> {
                     authorize.requestMatchers(HttpMethod.GET, "/actuator/health").permitAll();
                     if (localPublicDocs) {

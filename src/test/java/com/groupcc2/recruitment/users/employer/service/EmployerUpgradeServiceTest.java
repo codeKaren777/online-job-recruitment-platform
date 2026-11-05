@@ -93,6 +93,23 @@ class EmployerUpgradeServiceTest {
         verifyNoInteractions(requests);
     }
 
+        @Test
+        void repeatedEmployerRequestDecisionReturnsConflict() {
+        User admin = new User("admin@example.com", "hash", UserRole.ADMIN);
+        EmployerUpgradeRequest request = new EmployerUpgradeRequest(seekerId, "Acme", "Recruitment",
+            "contact@acme.example", null, "Blantyre");
+        request.approve(adminId);
+        when(users.findById(adminId)).thenReturn(admin);
+        when(requests.findById(requestId)).thenReturn(Optional.of(request));
+
+        assertThatThrownBy(() -> service.approve(adminId, requestId))
+            .isInstanceOf(ResponseStatusException.class)
+            .hasMessageContaining("409")
+            .hasMessageContaining("already been reviewed");
+        verify(users, never()).promoteToEmployer(any(), any());
+        verify(requests, never()).save(any());
+        }
+
     @Test
     void employerCannotUseAdminReviewService() {
         User employer = new User("employer@example.com", "hash", UserRole.EMPLOYER);

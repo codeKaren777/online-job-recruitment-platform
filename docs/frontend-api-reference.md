@@ -202,7 +202,8 @@ Maximum file size is 5 MiB. Response `201`:
 
 Open the returned URL before `expiresAt`; do not construct storage URLs.
 
-`DELETE /api/profile/documents/{documentId}` — response `204`.
+`DELETE /api/profile/documents/{documentId}` — response `204`. Returns `409`
+when the document is attached to a submitted application.
 
 ### Employer upgrade request
 
@@ -225,7 +226,9 @@ Each request contains `id`, `userId`, the submitted company fields, `status`,
 ### Browse and apply for jobs
 
 `GET /api/jobs` — browse active jobs. Optional query parameters:
-`location`, `q`, `page` (default `0`), and `size` (default `20`, maximum `100`).
+`location`, `q`, `page` (default `0`, must be zero or greater), and `size`
+(default `20`, range `1`–`100`). Invalid bounds return `400`; values are not
+silently clamped.
 
 `GET /api/jobs/{jobId}` — read a job.
 
@@ -362,10 +365,26 @@ and `updatedAt`.
 | `404` | Resource not found or not visible |
 | `409` | Duplicate application, invalid status change, or blocked deletion |
 | `413` | File too large |
+| `500` | Unexpected server error |
 | `503` | Backend or file storage unavailable |
 
-On `401`, clear the access token and send the user to login. Error responses
-may include a safe `code` field, for example `{"code":"FORBIDDEN"}`.
+All API errors use the same structure. `fieldErrors` is empty when there are no
+field-specific validation failures.
+
+```json
+{
+  "code": "VALIDATION_FAILED",
+  "message": "One or more fields are invalid.",
+  "path": "/api/auth/register",
+  "fieldErrors": [
+    {"field": "email", "message": "must be a well-formed email address"},
+    {"field": "password", "message": "size must be between 12 and 72"}
+  ]
+}
+```
+
+On `401`, clear the access token and send the user to login. Internal exception
+details are not returned to API consumers.
 
 ## Local development
 

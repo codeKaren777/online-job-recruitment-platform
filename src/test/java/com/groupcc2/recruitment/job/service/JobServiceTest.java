@@ -240,19 +240,17 @@ class JobServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void browseJobs_capsPageSize_andUsesDatabasePaging() {
-        when(jobRepository.findAll(any(Specification.class), any(Pageable.class)))
-                .thenReturn(Page.empty());
-        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+    void browseJobs_rejectsInvalidPagingBounds() {
+        assertThatThrownBy(() -> service.browseJobs(SEEKER, UserRole.JOB_SEEKER, null, null, -3, 20))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("400")
+                .hasMessageContaining("page must be zero or greater");
+        assertThatThrownBy(() -> service.browseJobs(SEEKER, UserRole.JOB_SEEKER, null, null, 0, 101))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("400")
+                .hasMessageContaining("size must be between 1 and 100");
 
-        service.browseJobs(SEEKER, UserRole.JOB_SEEKER, null, null, -3, 5000);
-
-        verify(jobRepository).findAll(any(Specification.class), captor.capture());
-        InOrder order = inOrder(rlsTransactionContext, jobRepository);
-        order.verify(rlsTransactionContext).setAuthenticatedUser(SEEKER, UserRole.JOB_SEEKER);
-        order.verify(jobRepository).findAll(any(Specification.class), any(Pageable.class));
-        assertThat(captor.getValue().getPageSize()).isEqualTo(100);
-        assertThat(captor.getValue().getPageNumber()).isZero();
+        verify(jobRepository, never()).findAll(any(Specification.class), any(Pageable.class));
     }
 
     @Test

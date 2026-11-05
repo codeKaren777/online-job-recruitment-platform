@@ -35,6 +35,6 @@ public class ProfileController {
  @DeleteMapping("/documents/{documentId}") @ResponseStatus(HttpStatus.NO_CONTENT)
  @Operation(summary="Delete a profile document", description="Deletes documentId if it belongs to the authenticated JOB_SEEKER. Requires a bearer token.")
  @Parameter(name="documentId",description="UUID of the document.",required=true)
- @ApiResponses({@ApiResponse(responseCode="204",description="Document deleted."),@ApiResponse(responseCode="400",description="A document referenced by a submitted application cannot be deleted."),@ApiResponse(responseCode="401",description="A valid bearer token is required."),@ApiResponse(responseCode="403",description="The caller is not permitted to delete this document."),@ApiResponse(responseCode="404",description="Document was not found."),@ApiResponse(responseCode="503",description="Document storage is unavailable.")})
+ @ApiResponses({@ApiResponse(responseCode="204",description="Document deleted."),@ApiResponse(responseCode="409",description="A document referenced by a submitted application cannot be deleted."),@ApiResponse(responseCode="401",description="A valid bearer token is required."),@ApiResponse(responseCode="403",description="The caller is not permitted to delete this document."),@ApiResponse(responseCode="404",description="Document was not found."),@ApiResponse(responseCode="503",description="Document storage is unavailable.")})
  public void delete(@PathVariable UUID documentId){service.deleteOwn(documentId);}
 }

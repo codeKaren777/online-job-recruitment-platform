@@ -169,7 +169,13 @@ public class JobService {
     }
 
     private Pageable pageable(int page, int size) {
-        return PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), MAX_PAGE_SIZE), NEWEST_FIRST);
+        if (page < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "page must be zero or greater");
+        }
+        if (size < 1 || size > MAX_PAGE_SIZE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "size must be between 1 and 100");
+        }
+        return PageRequest.of(page, size, NEWEST_FIRST);
     }
 
     private LocalDate today() {

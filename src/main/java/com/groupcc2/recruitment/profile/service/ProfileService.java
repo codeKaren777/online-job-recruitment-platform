@@ -43,7 +43,9 @@ public class ProfileService {
  }
  public ProfileResponse readOwn() {return tx.execute(s->profile(actor(UserRole.JOB_SEEKER)).response());}
  public ProfileResponse upsert(ProfileRequest request) {
- if(request==null || !validator.validate(request).isEmpty())throw new IllegalArgumentException("Invalid profile fields");
+ if(request==null)throw new IllegalArgumentException("Profile request is required");
+ var violations=validator.validate(request);
+ if(!violations.isEmpty())throw new jakarta.validation.ConstraintViolationException(violations);
  return tx.execute(s->{UUID id=actor(UserRole.JOB_SEEKER);Profile p=profiles.findById(id).orElseGet(()->new Profile(id,request));
  p.update(request);return profiles.saveAndFlush(p).response();});
  }
@@ -66,7 +68,7 @@ public class ProfileService {
  public DocumentResponse uploadForApplication(MultipartFile file) { return upload(file); }
  public void deleteOwn(UUID documentId) {
  tx.executeWithoutResult(s->{UUID id=actor(UserRole.JOB_SEEKER);Document d=document(documentId,id);PrivateDocumentStorage store=store();
- if(documents.existsApplicationReference(documentId))throw new IllegalArgumentException("A submitted application CV cannot be deleted");
+ if(documents.existsApplicationReference(documentId))throw failure(ProfileFailure.Code.APPLICATION_CV_IN_USE);
  // Object deletion first. On failure retain metadata so an owner can retry. On commit failure
  // metadata may refer to a missing object; repeated S3 deletion is idempotent and completes recovery.
  try{store.delete(d.storageKey());}catch(RuntimeException e){throw failure(ProfileFailure.Code.STORAGE_UNAVAILABLE);}

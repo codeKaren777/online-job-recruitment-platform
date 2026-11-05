@@ -10,18 +10,13 @@ import com.groupcc2.recruitment.auth.dto.PasswordResetResponse;
 import com.groupcc2.recruitment.auth.dto.RegisterRequest;
 import com.groupcc2.recruitment.auth.dto.RegisterResponse;
 import com.groupcc2.recruitment.auth.service.AuthService;
-import com.groupcc2.recruitment.auth.service.InvalidPasswordResetTokenException;
 import jakarta.validation.Valid;
-import com.groupcc2.recruitment.auth.service.EmailAlreadyRegisteredException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,7 +26,6 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 
 @RestController
@@ -108,26 +102,6 @@ public class AuthController {
     public ResponseEntity<CurrentUserResponse> currentUser(@AuthenticationPrincipal Jwt principal) {
         return ResponseEntity.ok(authService.currentUser(
                 principal.getSubject(), principal.getClaimAsString("role")));
-    }
-
-    @ExceptionHandler(EmailAlreadyRegisteredException.class)
-    public ResponseEntity<Void> duplicateEmail() {
-        return ResponseEntity.status(HttpStatus.CONFLICT).build();
-    }
-
-    @ExceptionHandler(BadCredentialsException.class)
-    public ResponseEntity<Void> invalidCredentials() {
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-    }
-
-    @ExceptionHandler(InvalidPasswordResetTokenException.class)
-    public ResponseEntity<Void> invalidResetToken() {
-        return ResponseEntity.badRequest().build();
-    }
-
-    @ExceptionHandler({MethodArgumentNotValidException.class, HttpMessageNotReadableException.class})
-    public ResponseEntity<Void> invalidRequestBody() {
-        return ResponseEntity.badRequest().build();
     }
 
     private int tokenVersion(Jwt principal) {

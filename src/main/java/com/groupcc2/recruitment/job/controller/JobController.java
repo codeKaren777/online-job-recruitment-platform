@@ -6,6 +6,8 @@ import com.groupcc2.recruitment.job.dto.PageResponse;
 import com.groupcc2.recruitment.job.entity.JobStatus;
 import com.groupcc2.recruitment.job.service.JobService;
 import com.groupcc2.recruitment.users.entity.UserRole;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,6 +22,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -32,6 +35,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@Validated
 @RequestMapping("/api")
 @Tag(name = "Job", description = "Browse and manage job postings")
 @SecurityRequirement(name = "bearerAuth")
@@ -59,8 +63,8 @@ public class JobController {
     @ApiResponses({@ApiResponse(responseCode="200",description="Returns a page of matching jobs."),@ApiResponse(responseCode="401",description="A valid bearer token is required."),@ApiResponse(responseCode="403",description="The caller does not have the JOB_SEEKER role.")})
     public PageResponse<JobResponse> browse(@Parameter(description="Filter by location text.") @RequestParam(required = false) String location,
                                             @Parameter(description="Search job title and description.") @RequestParam(required = false, name = "q") String text,
-                                            @Parameter(description="Zero-based page index (default 0).") @RequestParam(defaultValue = "0") int page,
-                                            @Parameter(description="Page size (default 20; maximum 100).") @RequestParam(defaultValue = "20") int size,
+                                            @Parameter(description="Zero-based page index (default 0).") @Min(value = 0, message = "Page must be zero or greater.") @RequestParam(defaultValue = "0") int page,
+                                            @Parameter(description="Page size (default 20; maximum 100).") @Min(value = 1, message = "Page size must be at least 1.") @Max(value = 100, message = "Page size must not exceed 100.") @RequestParam(defaultValue = "20") int size,
                                             @AuthenticationPrincipal Jwt jwt) {
         return jobService.browseJobs(userId(jwt), userRole(jwt), location, text, page, size);
     }
@@ -79,8 +83,8 @@ public class JobController {
     @Operation(summary = "List my job postings", description = "Returns a page of the authenticated EMPLOYER's job postings. Requires a bearer token. Page defaults to 0 and size to 20; results are sorted newest first.")
     @ApiResponses({@ApiResponse(responseCode="200",description="Returns a page of the employer's jobs."),@ApiResponse(responseCode="400",description="Status query parameter has an invalid value."),@ApiResponse(responseCode="401",description="A valid bearer token is required."),@ApiResponse(responseCode="403",description="The caller does not have the EMPLOYER role.")})
     public PageResponse<JobResponse> myJobs(@Parameter(description="Optional effective job status filter.") @RequestParam(required = false) JobStatus status,
-                                            @Parameter(description="Zero-based page index (default 0).") @RequestParam(defaultValue = "0") int page,
-                                            @Parameter(description="Page size (default 20; maximum 100).") @RequestParam(defaultValue = "20") int size,
+                                            @Parameter(description="Zero-based page index (default 0).") @Min(value = 0, message = "Page must be zero or greater.") @RequestParam(defaultValue = "0") int page,
+                                            @Parameter(description="Page size (default 20; maximum 100).") @Min(value = 1, message = "Page size must be at least 1.") @Max(value = 100, message = "Page size must not exceed 100.") @RequestParam(defaultValue = "20") int size,
                                             @AuthenticationPrincipal Jwt jwt) {
         return jobService.getEmployerJobs(userId(jwt), userRole(jwt), status, page, size);
     }

@@ -115,7 +115,10 @@ class AuthControllerTest {
                         .content("""
                                 {"email":"person@example.com","password":"StrongPassword123!"}
                                 """))
-                .andExpect(status().isConflict());
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("EMAIL_ALREADY_REGISTERED"))
+                .andExpect(jsonPath("$.message").isNotEmpty())
+                .andExpect(jsonPath("$.path").value("/api/auth/register"));
     }
 
     @Test
@@ -144,7 +147,11 @@ class AuthControllerTest {
                         .content("""
                                 {"email":"invalid","password":""}
                                 """))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.path").value("/api/auth/login"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("email"))
+                .andExpect(jsonPath("$.fieldErrors[0].message").isNotEmpty());
 
         verify(authService, never()).login(org.mockito.ArgumentMatchers.any());
     }
@@ -216,6 +223,24 @@ class AuthControllerTest {
                                 {"resetToken":"RANDOM-RESET-TOKEN","newPassword":"NewStrongPassword123!"}
                                 """))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void unexpectedFailuresReturnSafeStructuredInternalError() throws Exception {
+        when(authService.login(org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new IllegalStateException("database password leaked"));
+
+        mvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"person@example.com","password":"StrongPassword123!"}
+                                """))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.message").value("An unexpected server error occurred."))
+                .andExpect(jsonPath("$.path").value("/api/auth/login"))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("database password leaked"))));
     }
 
     @Test

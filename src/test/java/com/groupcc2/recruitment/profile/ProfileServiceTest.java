@@ -41,6 +41,12 @@ class ProfileServiceTest {
  @Test void deniesInactive(){doThrow(new InactiveAccountException()).when(users).requireActive(seeker);
  assertThatThrownBy(()->service.readOwn()).isInstanceOf(InactiveAccountException.class);verifyNoInteractions(storage);}
  @Test void deniesWrongRole(){when(users.findById(owner)).thenReturn(new User("e@test","hash",UserRole.EMPLOYER));assertThatThrownBy(()->service.readOwn()).isInstanceOf(ProfileFailure.class);}
+ @Test void serviceValidationPreservesInvalidFieldDetails(){
+	assertThatThrownBy(()->service.upsert(new ProfileRequest(" ",null,null)))
+	 .isInstanceOfSatisfying(jakarta.validation.ConstraintViolationException.class,e->
+		assertThat(e.getConstraintViolations()).extracting(v->v.getPropertyPath().toString()).contains("displayName"));
+	verifyNoInteractions(profiles);
+ }
  @Test void documentIdCannotOverrideOwnership(){UUID foreign=UUID.randomUUID();when(documents.findByIdAndProfileUserId(foreign,owner)).thenReturn(Optional.empty());
  assertThatThrownBy(()->service.deleteOwn(foreign)).isInstanceOf(ProfileFailure.class);verifyNoInteractions(storage);}
  @Test void foreignDocumentCannotBeSigned(){UUID foreign=UUID.randomUUID();when(documents.findByIdAndProfileUserId(foreign,owner)).thenReturn(Optional.empty());
@@ -59,7 +65,8 @@ class ProfileServiceTest {
  @Test void deleteFailureRetainsMetadata(){UUID id=UUID.randomUUID();when(documents.findByIdAndProfileUserId(id,owner)).thenReturn(Optional.of(new Document(owner,"internal","cv.pdf","application/pdf",20)));
  doThrow(new IllegalStateException()).when(storage).delete(any());assertThatThrownBy(()->service.deleteOwn(id)).isInstanceOf(ProfileFailure.class);verify(documents,never()).delete(any());}
  @Test void submittedApplicationCvCannotBeDeletedFromProfileLibrary(){UUID id=UUID.randomUUID();when(documents.findByIdAndProfileUserId(id,owner)).thenReturn(Optional.of(new Document(owner,"internal","cv.pdf","application/pdf",20)));
- when(documents.existsApplicationReference(id)).thenReturn(true);assertThatThrownBy(()->service.deleteOwn(id)).isInstanceOf(IllegalArgumentException.class);
+ when(documents.existsApplicationReference(id)).thenReturn(true);assertThatThrownBy(()->service.deleteOwn(id))
+  .isInstanceOfSatisfying(ProfileFailure.class,e->assertThat(e.code()).isEqualTo(ProfileFailure.Code.APPLICATION_CV_IN_USE));
  verify(storage,never()).delete(any());verify(documents,never()).delete(any());}
  @Test void employerMustPassSpecificJobApplicationCheck(){when(users.findById(owner)).thenReturn(new User("e@test","hash",UserRole.EMPLOYER));UUID job=UUID.randomUUID(),applicant=UUID.randomUUID();
  doThrow(new ProfileFailure(ProfileFailure.Code.FORBIDDEN)).when(access).requireSubmittedApplication(owner,job,applicant);
