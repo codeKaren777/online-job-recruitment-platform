@@ -19,7 +19,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/employer-requests")
+@RequestMapping({"/api/employer-requests", "/api/employer-requests/"})
 @PreAuthorize("hasAnyRole('JOB_SEEKER', 'EMPLOYER')")
 @Tag(name = "Users", description = "User accounts, employer upgrade requests, and administrator account operations")
 @SecurityRequirement(name = "bearerAuth")

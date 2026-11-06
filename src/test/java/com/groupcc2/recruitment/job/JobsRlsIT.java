@@ -58,8 +58,8 @@ class JobsRlsIT {
                       ('%s', '%s@test.example', 'test-hash', 'JOB_SEEKER')
                     """.formatted(employer, employer, otherEmployer, otherEmployer, applicant, applicant));
             statement.execute("""
-                    INSERT INTO recruitment.profiles (user_id, display_name)
-                    VALUES ('%s', 'Jobs RLS applicant')
+                    INSERT INTO recruitment.profiles (user_id, display_name, full_name)
+                    VALUES ('%s', 'Jobs RLS applicant', 'Jobs RLS applicant')
                     """.formatted(applicant));
             statement.execute("""
                     INSERT INTO recruitment.documents (id, profile_user_id, storage_key, original_filename, content_type, byte_size)
