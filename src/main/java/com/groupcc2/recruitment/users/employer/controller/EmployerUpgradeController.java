@@ -19,7 +19,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping({"/api/employer-requests", "/api/employer-requests/"})
+@RequestMapping("/api/employer-requests")
 @PreAuthorize("hasAnyRole('JOB_SEEKER', 'EMPLOYER')")
 @Tag(name = "Users", description = "User accounts, employer upgrade requests, and administrator account operations")
 @SecurityRequirement(name = "bearerAuth")
@@ -29,6 +29,7 @@ public class EmployerUpgradeController {
     public EmployerUpgradeController(EmployerUpgradeService service) { this.service = service; }
 
     @PostMapping
+    @PreAuthorize("hasRole('JOB_SEEKER')")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Submit an employer upgrade request", description = "Submits a request for employer access for administrator review. Requires a bearer token.",requestBody=@io.swagger.v3.oas.annotations.parameters.RequestBody(description="Company and contact details for the upgrade request.",required=true,content=@io.swagger.v3.oas.annotations.media.Content(examples=@ExampleObject(value="{\"companyName\":\"Acme Technologies\",\"businessDescription\":\"Recruitment technology company\",\"contactEmail\":\"contact@acme.example\",\"contactPhone\":\"+265999000111\",\"location\":\"Blantyre\"}"))))
     @ApiResponses({@ApiResponse(responseCode="201",description="Request submitted; returns request details."),@ApiResponse(responseCode="400",description="Request body is malformed or fails validation."),@ApiResponse(responseCode="401",description="A valid bearer token is required."),@ApiResponse(responseCode="403",description="The account is not permitted to submit this request."),@ApiResponse(responseCode="409",description="An upgrade request cannot be submitted in the account's current state.")})

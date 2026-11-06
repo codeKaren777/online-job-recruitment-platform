@@ -146,6 +146,36 @@ class SecurityBoundaryTest {
     }
 
     @Test
+    void employerRequestSubmissionUsesOneCanonicalEndpointForJobSeekers() throws Exception {
+        UUID userId = UUID.randomUUID();
+        when(employerUpgradeService.submit(org.mockito.ArgumentMatchers.eq(userId),
+                org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new com.groupcc2.recruitment.users.employer.entity.EmployerUpgradeRequest(
+                        userId, "Acme", "Recruitment", "contact@acme.example", null, "Blantyre"));
+        var seekerToken = jwt().jwt(token -> token
+                .subject(userId.toString())
+                .claim("role", UserRole.JOB_SEEKER.name()))
+                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                        "ROLE_JOB_SEEKER"));
+        String body = """
+                {"companyName":"Acme","businessDescription":"Recruitment",
+                 "contactEmail":"contact@acme.example","location":"Blantyre"}
+                """;
+
+        mvc.perform(post("/api/employer-requests").with(seekerToken)
+                        .contentType("application/json").content(body))
+                .andExpect(status().isCreated());
+        var employerToken = jwt().jwt(token -> token
+                .subject(userId.toString())
+                .claim("role", UserRole.EMPLOYER.name()))
+                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                        "ROLE_EMPLOYER"));
+        mvc.perform(post("/api/employer-requests").with(employerToken)
+                        .contentType("application/json").content(body))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void registrationAndLoginAreDeliberatelyPublicButOtherFeatureRoutesRemainClosed() throws Exception {
         UUID userId = UUID.randomUUID();
         org.mockito.Mockito.doThrow(
