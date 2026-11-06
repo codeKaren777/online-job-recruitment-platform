@@ -18,7 +18,11 @@ cat > "$policy_file" <<EOF
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": ["s3:GetBucketLocation", "s3:ListBucket"],
+      "Action": [
+        "s3:GetBucketLocation",
+        "s3:GetBucketPolicy",
+        "s3:ListBucket"
+      ],
       "Resource": ["arn:aws:s3:::$PROFILE_STORAGE_BUCKET"]
     },
     {
@@ -30,11 +34,8 @@ cat > "$policy_file" <<EOF
 }
 EOF
 
-if mc admin policy info local recruitment-document-service >/dev/null 2>&1; then
-    :
-else
-    mc admin policy create local recruitment-document-service "$policy_file"
-fi
+mc admin policy remove local recruitment-document-service >/dev/null 2>&1 || true
+mc admin policy create local recruitment-document-service "$policy_file"
 
 mc admin policy attach local recruitment-document-service \
     --user "$PROFILE_STORAGE_ACCESS_KEY"
