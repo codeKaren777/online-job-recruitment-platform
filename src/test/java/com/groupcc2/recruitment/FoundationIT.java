@@ -207,8 +207,8 @@ class FoundationIT {
                            ('%s', '%s@example.test', 'hash', 'JOB_SEEKER')
                     """.formatted(employerId, employerId, applicantId, applicantId, otherApplicantId, otherApplicantId));
             statement.execute("""
-                    INSERT INTO recruitment.profiles (user_id, display_name)
-                    VALUES ('%s', 'Applicant'), ('%s', 'Other Applicant')
+                    INSERT INTO recruitment.profiles (user_id, display_name, full_name)
+                    VALUES ('%s', 'Applicant', 'Applicant'), ('%s', 'Other Applicant', 'Other Applicant')
                     """.formatted(applicantId, otherApplicantId));
             statement.execute("""
                     INSERT INTO recruitment.documents (id, profile_user_id, storage_key, original_filename, content_type, byte_size)
@@ -305,8 +305,8 @@ class FoundationIT {
                     FROM recruitment.companies WHERE employer_id = '%s'
                     """.formatted(jobId, employerId, employerId));
             statement.execute("""
-                    INSERT INTO recruitment.profiles (user_id, display_name)
-                    VALUES ('%s', 'Applicant'), ('%s', 'Other Applicant')
+                    INSERT INTO recruitment.profiles (user_id, display_name, full_name)
+                    VALUES ('%s', 'Applicant', 'Applicant'), ('%s', 'Other Applicant', 'Other Applicant')
                     """.formatted(applicantId, otherApplicantId));
             statement.execute("""
                     INSERT INTO recruitment.documents (id, profile_user_id, storage_key, original_filename, content_type, byte_size)
@@ -398,8 +398,8 @@ class FoundationIT {
                            ('%s', 'notify-applicant@example.com', 'test-hash', 'JOB_SEEKER')
                     """.formatted(employerId, applicantId));
             statement.execute("""
-                    INSERT INTO recruitment.profiles (user_id, display_name)
-                    VALUES ('%s', '<Applicant & One>')
+                    INSERT INTO recruitment.profiles (user_id, display_name, full_name)
+                    VALUES ('%s', '<Applicant & One>', '<Applicant & One>')
                     """.formatted(applicantId));
             statement.execute("""
                     INSERT INTO recruitment.documents (id, profile_user_id, storage_key, original_filename, content_type, byte_size)
