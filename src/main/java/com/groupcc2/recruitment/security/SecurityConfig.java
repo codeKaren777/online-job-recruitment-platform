@@ -56,6 +56,7 @@ public class SecurityConfig {
                     authorize.requestMatchers(HttpMethod.GET, "/actuator/health").permitAll();
                     if (localPublicDocs) {
                         authorize.requestMatchers(HttpMethod.GET, "/v3/api-docs", "/v3/api-docs/**",
+                                "/v3/api-docs.yaml",
                                 "/swagger-ui.html", "/swagger-ui/**").permitAll();
                     }
                     authorize

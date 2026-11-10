@@ -20,8 +20,10 @@ import org.springdoc.core.properties.SpringDocConfigProperties;
 import org.springdoc.webmvc.core.configuration.SpringDocWebMvcConfiguration;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.hamcrest.Matchers.containsString;
 
 @WebMvcTest(controllers = {ApplicationController.class, EmployerApplicationController.class}, properties = {
         "app.security.jwt.secret-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
@@ -37,6 +39,14 @@ class ApplicationOpenApiTest {
     @Autowired MockMvc mvc;
     @MockitoBean ApplicationService applicationService;
     @MockitoBean AccountJwtValidator accountJwtValidator;
+
+    @Test
+    void yamlSpecificationIsAvailableInLocalProfile() throws Exception {
+        mvc.perform(get("/v3/api-docs.yaml"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("openapi:")))
+                .andExpect(content().string(containsString("/api/applications:")));
+    }
 
     @Test
     void applicationCreationSchemaDocumentsRequiredMultipartCv() throws Exception {
