@@ -34,6 +34,12 @@ public class Company {
 
     private String location;
 
+    @Column(name = "vat_number")
+    private String vatNumber;
+
+    @Column(name = "registration_number")
+    private String registrationNumber;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -47,8 +53,15 @@ public class Company {
 
     public Company(UUID employerId, String name, String description, String contactEmail,
                    String contactPhone, String location) {
+        this(employerId, name, description, contactEmail, contactPhone, location, null, null);
+    }
+
+    public Company(UUID employerId, String name, String description, String contactEmail,
+                   String contactPhone, String location, String vatNumber, String registrationNumber) {
         this.employerId = employerId;
         update(name, description, contactEmail, contactPhone, location);
+        this.vatNumber = vatNumber;
+        this.registrationNumber = registrationNumber;
     }
 
     public void update(String name, String description, String contactEmail,
@@ -67,6 +80,8 @@ public class Company {
     public String getContactEmail() { return contactEmail; }
     public String getContactPhone() { return contactPhone; }
     public String getLocation() { return location; }
+    public String getVatNumber() { return vatNumber; }
+    public String getRegistrationNumber() { return registrationNumber; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
 }

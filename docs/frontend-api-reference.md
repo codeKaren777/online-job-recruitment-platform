@@ -206,7 +206,18 @@ Open the returned URL before `expiresAt`; do not construct storage URLs.
 
 ### Employer upgrade request
 
-`POST /api/employer-requests`
+This is the existing employer request workflow for a `JOB_SEEKER` to request a
+change to `EMPLOYER`. Company verification is part of this request and review
+flow; there is no separate company-verification API. Submission requires a
+`JOB_SEEKER` bearer token. The request is `multipart/form-data` with both parts
+below required:
+
+| Part | Content type | Value |
+|---|---|---|
+| `application` | `application/json` | Company details JSON shown below |
+| `document` | `application/pdf` | Private company registration document |
+
+The `application` JSON has these required fields:
 
 ```json
 {
@@ -214,13 +225,36 @@ Open the returned URL before `expiresAt`; do not construct storage URLs.
   "businessDescription": "Software and recruitment technology company.",
   "contactEmail": "contact@acme.example",
   "contactPhone": "+265999000111",
-  "location": "Blantyre"
+  "location": "Blantyre",
+  "vatNumber": "VAT-123456",
+  "registrationNumber": "REG-123456"
 }
 ```
 
-Response `201`. `GET /api/employer-requests` returns the user's requests.
-Each request contains `id`, `userId`, the submitted company fields, `status`,
-`reviewedBy`, `reviewedAt`, `rejectionReason`, `createdAt`, and `updatedAt`.
+Company name and location are limited to 255 characters, business description
+to 10,000, contact email to 254, contact phone to 50, and each identifier to
+80. The phone must contain 7–50 characters drawn from digits, `+`, parentheses,
+spaces, dots, and hyphens. Email must be valid; required strings cannot be
+blank.
+
+The `document` must be non-empty, have a filename ending in `.pdf` (up to 180
+characters, using letters, digits, spaces, `_`, `(`, `)`, `.`, and `-`), and
+have the `application/pdf` content type. The service checks the PDF header and
+trailing `%%EOF` marker. Maximum file size is 5 MiB; the configured multipart
+request limit is 6 MiB. The document is stored privately. Invalid parts or
+fields return `400`; an oversized document returns `413`; unavailable private
+storage returns `503`.
+
+Successful submission returns `201` with the request. `GET
+/api/employer-requests` lists the authenticated user's requests, and `GET
+/api/employer-requests/{requestId}` returns one of that user's requests and its
+status. Both are available to `JOB_SEEKER` and `EMPLOYER` accounts; a request
+owned by another user is not returned.
+
+Each request response contains `id`, `userId`, company/contact fields,
+`vatNumber`, `registrationNumber`, `companyId`, document filename/content type
+and size, `status`, `reviewedBy`, `reviewedAt`, `rejectionReason`, `createdAt`,
+and `updatedAt`. It does not expose the private storage key.
 
 ### Browse and apply for jobs
 
@@ -346,8 +380,27 @@ These endpoints require an `ADMIN` token:
 | PATCH | `/api/admin/users/{id}/remove` | — |
 | PATCH | `/api/admin/users/{id}/role` | `{"role":"ADMIN"}` |
 | GET | `/api/admin/employer-requests` | — |
+| GET | `/api/admin/employer-requests/{requestId}` | — |
+| GET | `/api/admin/employer-requests/{requestId}/document` | — |
 | PATCH | `/api/admin/employer-requests/{requestId}/approve` | — |
 | PATCH | `/api/admin/employer-requests/{requestId}/reject` | `{"reason":"..."}` |
+
+`GET /api/admin/employer-requests` lists requests awaiting review.
+`GET /api/admin/employer-requests/{requestId}` returns one request's company
+details and review status. `GET
+/api/admin/employer-requests/{requestId}/document` returns
+`{"url":"<short-lived signed URL>"}` for the private registration document;
+the URL expires after two minutes. Legacy requests without a stored document
+have no downloadable document.
+
+`PATCH /api/admin/employer-requests/{requestId}/approve` approves a pending
+verified request: it creates and associates the company and changes the
+applicant's role from `JOB_SEEKER` to `EMPLOYER` as part of the approval
+transaction. A request without a verification document cannot be approved.
+`PATCH /api/admin/employer-requests/{requestId}/reject` rejects a pending
+request using a required reason of 1–2,000 characters; rejection does not
+create a company or grant the employer role. Already reviewed requests cannot
+be reviewed again. Both decision endpoints return the updated request.
 
 User responses contain `id`, `email`, `role`, `accountStatus`, `createdAt`,
 and `updatedAt`.

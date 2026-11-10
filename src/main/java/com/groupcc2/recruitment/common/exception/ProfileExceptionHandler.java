@@ -2,9 +2,11 @@ package com.groupcc2.recruitment.common.exception;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.*;
 import com.groupcc2.recruitment.profile.controller.ProfileController;
+import com.groupcc2.recruitment.users.employer.controller.EmployerUpgradeController;
+import com.groupcc2.recruitment.users.employer.controller.AdminEmployerUpgradeController;
 import com.groupcc2.recruitment.profile.service.ProfileFailure;
 import com.groupcc2.recruitment.users.service.*;
-@RestControllerAdvice(assignableTypes=ProfileController.class)
+@RestControllerAdvice(assignableTypes={ProfileController.class,EmployerUpgradeController.class,AdminEmployerUpgradeController.class})
 public class ProfileExceptionHandler {
  public record ErrorResponse(String code) {}
  @ExceptionHandler(ProfileFailure.class) ResponseEntity<ErrorResponse> profile(ProfileFailure e){
@@ -22,5 +24,9 @@ public class ProfileExceptionHandler {
  ResponseEntity<ErrorResponse> invalid(Exception e){return ResponseEntity.badRequest().body(new ErrorResponse("INVALID_REQUEST"));}
  @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
  ResponseEntity<ErrorResponse> tooLarge(Exception e){return ResponseEntity.status(413).body(new ErrorResponse("FILE_TOO_LARGE"));}
+ @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+ ResponseEntity<ErrorResponse> responseStatus(org.springframework.web.server.ResponseStatusException e){
+ HttpStatus status=HttpStatus.resolve(e.getStatusCode().value());
+ return ResponseEntity.status(e.getStatusCode()).body(new ErrorResponse(status==null?"REQUEST_FAILED":status.name()));}
  @ExceptionHandler(Exception.class) ResponseEntity<ErrorResponse> unavailable(Exception e){return ResponseEntity.status(503).body(new ErrorResponse("PROFILE_UNAVAILABLE"));}
 }

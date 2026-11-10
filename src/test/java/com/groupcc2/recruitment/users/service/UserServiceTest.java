@@ -144,11 +144,13 @@ class UserServiceTest {
         User user = new User("person@example.com", "hash", UserRole.JOB_SEEKER);
         when(repository.findById(administrator.getId())).thenReturn(Optional.of(administrator));
         when(repository.findById(user.getId())).thenReturn(Optional.of(user));
+        when(repository.saveAndFlush(user)).thenReturn(user);
 
         User promoted = service.promoteToEmployer(administrator.getId(), user.getId());
 
         assertThat(promoted.getRole()).isEqualTo(UserRole.EMPLOYER);
         assertThat(promoted.getTokenVersion()).isEqualTo(1);
+        verify(repository).saveAndFlush(user);
     }
 
     @Test

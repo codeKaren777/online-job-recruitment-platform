@@ -52,7 +52,7 @@ Owns company identity and contact information for employers. An employer may man
 
 ### Employer approval
 
-Public registration creates `JOB_SEEKER` accounts only. Job seekers submit employer upgrade requests through the users module; administrators review those requests, and approval atomically changes the account role to `EMPLOYER`. Pending or rejected requests never grant employer permissions.
+Public registration creates `JOB_SEEKER` accounts only. Job seekers submit company verification applications through the users module with private registration proof; administrators review the details and document. Approval atomically creates the company, records the request's company association and review metadata, and changes the account role to `EMPLOYER`. Pending or rejected requests never grant employer permissions.
 
 ### Applications
 

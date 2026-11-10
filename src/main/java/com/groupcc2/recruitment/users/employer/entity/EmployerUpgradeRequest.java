@@ -30,6 +30,27 @@ public class EmployerUpgradeRequest {
     @Column(nullable = false)
     private String location;
 
+    @Column(name = "vat_number", nullable = false)
+    private String vatNumber;
+
+    @Column(name = "registration_number", nullable = false)
+    private String registrationNumber;
+
+    @Column(name = "document_storage_key", nullable = false)
+    private String documentStorageKey;
+
+    @Column(name = "document_original_filename", nullable = false)
+    private String documentOriginalFilename;
+
+    @Column(name = "document_content_type", nullable = false)
+    private String documentContentType;
+
+    @Column(name = "document_size", nullable = false)
+    private long documentSize;
+
+    @Column(name = "company_id")
+    private UUID companyId;
+
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(nullable = false, columnDefinition = "recruitment.employer_request_status")
@@ -53,7 +74,9 @@ public class EmployerUpgradeRequest {
     protected EmployerUpgradeRequest() {}
 
     public EmployerUpgradeRequest(UUID userId, String companyName, String businessDescription,
-                                  String contactEmail, String contactPhone, String location) {
+                                  String contactEmail, String contactPhone, String location,
+                                  String vatNumber, String registrationNumber, String documentStorageKey,
+                                  String documentOriginalFilename, String documentContentType, long documentSize) {
         this.id = UUID.randomUUID();
         this.userId = userId;
         this.companyName = companyName;
@@ -61,6 +84,12 @@ public class EmployerUpgradeRequest {
         this.contactEmail = contactEmail;
         this.contactPhone = contactPhone;
         this.location = location;
+        this.vatNumber = vatNumber;
+        this.registrationNumber = registrationNumber;
+        this.documentStorageKey = documentStorageKey;
+        this.documentOriginalFilename = documentOriginalFilename;
+        this.documentContentType = documentContentType;
+        this.documentSize = documentSize;
         this.status = EmployerRequestStatus.PENDING;
         Instant now = Instant.now();
         this.createdAt = now;
@@ -74,6 +103,8 @@ public class EmployerUpgradeRequest {
         reviewedAt = Instant.now();
         updatedAt = reviewedAt;
     }
+
+    public void attachCompany(UUID companyId) { this.companyId = companyId; }
 
     public void reject(UUID administratorId, String reason) {
         requirePending();
@@ -103,4 +134,11 @@ public class EmployerUpgradeRequest {
     public String getRejectionReason() { return rejectionReason; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
+    public String getVatNumber() { return vatNumber; }
+    public String getRegistrationNumber() { return registrationNumber; }
+    public String getDocumentStorageKey() { return documentStorageKey; }
+    public String getDocumentOriginalFilename() { return documentOriginalFilename; }
+    public String getDocumentContentType() { return documentContentType; }
+    public long getDocumentSize() { return documentSize; }
+    public UUID getCompanyId() { return companyId; }
 }
