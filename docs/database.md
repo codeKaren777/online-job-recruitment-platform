@@ -12,6 +12,7 @@ The model is in third normal form:
 - `jobs` stores employer-owned job postings and due dates.
 - `applications` links one job seeker to one job and stores the application status.
 - `application_notification_outbox` durably records application notification events and delivery state.
+- `employer_upgrade_requests` records company verification data, private registration-document metadata, review decisions, and the company created on approval.
 
 Applications have a database-enforced `UNIQUE (job_id, job_seeker_id)` constraint, so a job seeker cannot apply to the same job twice. New applications default to `PENDING`. Employers can change applications for their own jobs to `SHORTLISTED` or `REJECTED`; the application service must enforce the allowed transition rules. Migration V4 separates application SELECT and UPDATE policies so applicants can read their own submissions but cannot update review status.
 
@@ -112,6 +113,8 @@ fixed `search_path`, and `PUBLIC` revocation. V15 contains notification outbox
 schema and functions. V16 adds an immutable application-to-CV document reference;
 legacy applications remain readable with no submitted-CV association.
 
+V19 adds VAT and registration identifiers, private proof-document metadata, and a company association to employer upgrade requests. The decision service locks each request; a unique company association and applicant/company foreign key protect retries and ownership. New submissions must reference an object under the private company-verification storage prefix. V20 stores verified VAT and registration identifiers on the existing company entity and prevents duplicate identifiers.
+
 The current development credentials are `POSTGRES_DB`, `POSTGRES_USER`,
 `POSTGRES_PASSWORD`, `POSTGRES_RUNTIME_USER`, and
 `POSTGRES_RUNTIME_PASSWORD`; `DB_URL` is overridden inside Compose to use the
@@ -120,7 +123,7 @@ The current development credentials are `POSTGRES_DB`, `POSTGRES_USER`,
 
 For an existing database, inspect its Flyway history and make a protected
 backup before starting the updated backend. Flyway applies pending migrations
-in order through V16. These migrations preserve existing application data. Do
+in order through V20. These migrations preserve existing application data. Do
 not use `docker compose down -v`.
 
 ## Local database

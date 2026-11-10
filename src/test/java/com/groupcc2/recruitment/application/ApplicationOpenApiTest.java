@@ -3,6 +3,9 @@ package com.groupcc2.recruitment.application;
 import com.groupcc2.recruitment.application.controller.ApplicationController;
 import com.groupcc2.recruitment.application.controller.EmployerApplicationController;
 import com.groupcc2.recruitment.application.service.ApplicationService;
+import com.groupcc2.recruitment.users.employer.controller.EmployerUpgradeController;
+import com.groupcc2.recruitment.users.employer.controller.AdminEmployerUpgradeController;
+import com.groupcc2.recruitment.users.employer.service.EmployerUpgradeService;
 import com.groupcc2.recruitment.common.openapi.OpenApiConfiguration;
 import com.groupcc2.recruitment.security.AccountJwtValidator;
 import com.groupcc2.recruitment.security.SecurityConfig;
@@ -25,7 +28,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.hamcrest.Matchers.containsString;
 
-@WebMvcTest(controllers = {ApplicationController.class, EmployerApplicationController.class}, properties = {
+@WebMvcTest(controllers = {ApplicationController.class, EmployerApplicationController.class,
+        EmployerUpgradeController.class, AdminEmployerUpgradeController.class}, properties = {
         "app.security.jwt.secret-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "app.openapi.enabled=true",
         "app.openapi.public-in-local=true",
@@ -38,6 +42,7 @@ import static org.hamcrest.Matchers.containsString;
 class ApplicationOpenApiTest {
     @Autowired MockMvc mvc;
     @MockitoBean ApplicationService applicationService;
+    @MockitoBean EmployerUpgradeService employerUpgradeService;
     @MockitoBean AccountJwtValidator accountJwtValidator;
 
     @Test
@@ -74,5 +79,21 @@ class ApplicationOpenApiTest {
                         .value("#/components/schemas/ApplicationResponse"))
                 .andExpect(jsonPath("$.paths['/api/employer/applications/{applicationId}/cv'].get.responses['200'].content['*/*'].schema.$ref")
                         .value("#/components/schemas/DownloadResponse"));
+    }
+
+    @Test
+    void employerVerificationDocumentsMultipartPartsAndAdminReviewRoutes() throws Exception {
+        mvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/employer-requests'].post.requestBody.required").value(true))
+                .andExpect(jsonPath("$.paths['/api/employer-requests'].post.requestBody.content['multipart/form-data'].schema.$ref")
+                        .value("#/components/schemas/EmployerVerificationMultipartRequest"))
+                .andExpect(jsonPath("$.components.schemas.EmployerVerificationMultipartRequest.properties.document.format")
+                        .value("binary"))
+                .andExpect(jsonPath("$.components.schemas.EmployerVerificationMultipartRequest.required").isArray())
+                .andExpect(jsonPath("$.paths['/api/employer-requests/{requestId}'].get").exists())
+                .andExpect(jsonPath("$.paths['/api/admin/employer-requests/{requestId}/document'].get").exists())
+                .andExpect(jsonPath("$.paths['/api/admin/employer-requests/{requestId}/approve'].patch").exists())
+                .andExpect(jsonPath("$.paths['/api/admin/employer-requests/{requestId}/reject'].patch").exists());
     }
 }

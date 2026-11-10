@@ -6,10 +6,12 @@ import java.util.UUID;
 
 public record CompanyResponse(UUID id, UUID employerId, String name, String description,
                               String contactEmail, String contactPhone, String location,
-                              Instant createdAt, Instant updatedAt) {
+                              Instant createdAt, Instant updatedAt, String vatNumber,
+                              String registrationNumber) {
     public static CompanyResponse from(Company company) {
         return new CompanyResponse(company.getId(), company.getEmployerId(), company.getName(),
                 company.getDescription(), company.getContactEmail(), company.getContactPhone(),
-                company.getLocation(), company.getCreatedAt(), company.getUpdatedAt());
+                company.getLocation(), company.getCreatedAt(), company.getUpdatedAt(),
+                company.getVatNumber(), company.getRegistrationNumber());
     }
 }

@@ -153,7 +153,7 @@ public class UserServiceImpl implements UserService {
         } catch (IllegalStateException exception) {
             throw new InvalidRoleChangeException(exception.getMessage());
         }
-        return user;
+        return users.saveAndFlush(user);
     }
 
     private void requireAdministrator(UUID administratorId) {

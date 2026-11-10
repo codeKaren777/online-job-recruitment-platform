@@ -127,7 +127,7 @@ class FoundationIT {
     @Test
     void bootsAgainstPostgresAndAppliesMigrationOnlyOnce() throws Exception {
         assertThat(flyway.getConfiguration().getDefaultSchema()).isEqualTo("public");
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("18");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("20");
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
         try (var connection = dataSource.getConnection(); var statement = connection.prepareStatement("""
@@ -187,6 +187,162 @@ class FoundationIT {
         }
         mvc.perform(get("/actuator/health")).andExpect(status().isOk())
                 .andExpect(content().json("{\"status\":\"UP\"}", true));
+    }
+
+    @Test
+    void employerVerificationApprovalPersistsCompanyRoleAndRequestAtomically() throws Exception {
+        String suffix = UUID.randomUUID().toString();
+        String password = "VerificationPassword123!";
+        UUID applicantId = register("verification-" + suffix + "@example.com", password);
+        UUID adminId = createAccount("verification-admin-" + suffix + "@example.com", password, UserRole.ADMIN);
+        String applicantToken = loginAndGetToken("verification-" + suffix + "@example.com", password);
+        String adminToken = loginAndGetToken("verification-admin-" + suffix + "@example.com", password);
+
+        var submitted = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/employer-requests")
+                        .file(new MockMultipartFile("application", "application.json", "application/json",
+                                ("{\"companyName\":\"Verified Company " + suffix
+                                        + "\",\"businessDescription\":\"Recruitment services\","
+                                        + "\"contactEmail\":\"contact@example.com\",\"contactPhone\":\"+265999000111\","
+                                        + "\"location\":\"Blantyre\",\"vatNumber\":\"vat-" + suffix
+                                        + "\",\"registrationNumber\":\"reg-" + suffix + "\"}")
+                                        .getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                        .file(new MockMultipartFile("document", "registration.pdf", "application/pdf",
+                                "%PDF-1.7\nregistration proof\n%%EOF\n"
+                                        .getBytes(java.nio.charset.StandardCharsets.US_ASCII)))
+                        .header("Authorization", "Bearer " + applicantToken))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("PENDING"))
+                .andReturn();
+        String requestId = com.jayway.jsonpath.JsonPath.read(
+                submitted.getResponse().getContentAsString(), "$.id");
+
+        mvc.perform(patch("/api/admin/employer-requests/{requestId}/approve", requestId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("APPROVED"))
+                .andExpect(jsonPath("$.companyId").isNotEmpty());
+        mvc.perform(patch("/api/admin/employer-requests/{requestId}/approve", requestId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("APPROVED"));
+
+        assertThat(userRole(applicantId)).isEqualTo(UserRole.EMPLOYER.name());
+        try (Connection connection = adminConnection();
+             PreparedStatement statement = connection.prepareStatement("""
+                     SELECT r.status::TEXT, r.company_id, c.vat_number, c.registration_number,
+                            (SELECT count(*) FROM recruitment.companies WHERE employer_id = r.user_id)
+                     FROM recruitment.employer_upgrade_requests r
+                     JOIN recruitment.companies c ON c.id = r.company_id
+                     WHERE r.id = ? AND r.user_id = ?
+                     """)) {
+            statement.setObject(1, UUID.fromString(requestId));
+            statement.setObject(2, applicantId);
+            try (var result = statement.executeQuery()) {
+                assertThat(result.next()).isTrue();
+                assertThat(result.getString(1)).isEqualTo("APPROVED");
+                assertThat(result.getObject(2, UUID.class)).isNotNull();
+                assertThat(result.getString(3)).isEqualTo("VAT-" + suffix.toUpperCase(java.util.Locale.ROOT));
+                assertThat(result.getString(4)).isEqualTo("REG-" + suffix.toUpperCase(java.util.Locale.ROOT));
+                assertThat(result.getLong(5)).isEqualTo(1);
+            }
+        }
+    }
+
+    @Test
+    void employerVerificationApprovalRollsBackFlushedRoleWhenCompanyInsertFails() throws Exception {
+        String suffix = UUID.randomUUID().toString();
+        String password = "VerificationRollback123!";
+        String applicantEmail = "verification-rollback-" + suffix + "@example.com";
+        String adminEmail = "verification-rollback-admin-" + suffix + "@example.com";
+        String companyName = "Forced rollback company " + suffix;
+        UUID applicantId = register(applicantEmail, password);
+        UUID adminId = createAccount(adminEmail, password, UserRole.ADMIN);
+        String applicantToken = loginAndGetToken(applicantEmail, password);
+        String adminToken = loginAndGetToken(adminEmail, password);
+        UUID requestId = null;
+        boolean failureConstraintCreated = false;
+
+        try {
+            var submitted = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                            .multipart("/api/employer-requests")
+                            .file(new MockMultipartFile("application", "application.json", "application/json",
+                                    ("{\"companyName\":\"" + companyName
+                                            + "\",\"businessDescription\":\"Recruitment services\","
+                                            + "\"contactEmail\":\"contact@example.com\",\"contactPhone\":\"+265999000111\","
+                                            + "\"location\":\"Blantyre\",\"vatNumber\":\"vat-rollback-" + suffix
+                                            + "\",\"registrationNumber\":\"reg-rollback-" + suffix + "\"}")
+                                            .getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                            .file(new MockMultipartFile("document", "registration.pdf", "application/pdf",
+                                    "%PDF-1.7\nregistration proof\n%%EOF\n"
+                                            .getBytes(java.nio.charset.StandardCharsets.US_ASCII)))
+                            .header("Authorization", "Bearer " + applicantToken))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.status").value("PENDING"))
+                    .andReturn();
+            requestId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(
+                    submitted.getResponse().getContentAsString(), "$.id"));
+
+            // The company role trigger runs before this check. A 409 therefore confirms the
+            // flushed applicant role was visible to that trigger before the forced insert failure.
+            try (Connection connection = adminConnection(); Statement statement = connection.createStatement()) {
+                statement.execute("ALTER TABLE recruitment.companies ADD CONSTRAINT "
+                        + "companies_it_force_verification_rollback CHECK (name <> '" + companyName + "')");
+                failureConstraintCreated = true;
+            }
+
+            mvc.perform(patch("/api/admin/employer-requests/{requestId}/approve", requestId)
+                            .header("Authorization", "Bearer " + adminToken))
+                    .andExpect(status().isConflict());
+
+            try (Connection connection = adminConnection();
+                 PreparedStatement statement = connection.prepareStatement("""
+                         SELECT u.role::TEXT, r.status::TEXT, r.company_id,
+                                (SELECT count(*) FROM recruitment.companies c WHERE c.employer_id = u.id),
+                                (SELECT count(*) FROM recruitment.companies c WHERE c.name = ?)
+                         FROM recruitment.users u
+                         JOIN recruitment.employer_upgrade_requests r ON r.user_id = u.id
+                         WHERE u.id = ? AND r.id = ?
+                         """)) {
+                statement.setString(1, companyName);
+                statement.setObject(2, applicantId);
+                statement.setObject(3, requestId);
+                try (var result = statement.executeQuery()) {
+                    assertThat(result.next()).isTrue();
+                    assertThat(result.getString(1)).isEqualTo(UserRole.JOB_SEEKER.name());
+                    assertThat(result.getString(2)).isEqualTo("PENDING");
+                    assertThat(result.getObject(3)).isNull();
+                    assertThat(result.getLong(4)).isZero();
+                    assertThat(result.getLong(5)).isZero();
+                    assertThat(result.next()).isFalse();
+                }
+            }
+        } finally {
+            try (Connection connection = adminConnection(); Statement statement = connection.createStatement()) {
+                if (failureConstraintCreated) {
+                    statement.execute("ALTER TABLE recruitment.companies DROP CONSTRAINT "
+                            + "companies_it_force_verification_rollback");
+                }
+                if (requestId != null) {
+                    try (PreparedStatement deleteRequest = connection.prepareStatement(
+                            "DELETE FROM recruitment.employer_upgrade_requests WHERE id = ?")) {
+                        deleteRequest.setObject(1, requestId);
+                        deleteRequest.executeUpdate();
+                    }
+                }
+                try (PreparedStatement deleteCompanies = connection.prepareStatement(
+                        "DELETE FROM recruitment.companies WHERE employer_id = ?")) {
+                    deleteCompanies.setObject(1, applicantId);
+                    deleteCompanies.executeUpdate();
+                }
+                try (PreparedStatement deleteUsers = connection.prepareStatement(
+                        "DELETE FROM recruitment.users WHERE id IN (?, ?)")) {
+                    deleteUsers.setObject(1, applicantId);
+                    deleteUsers.setObject(2, adminId);
+                    deleteUsers.executeUpdate();
+                }
+            }
+        }
     }
 
     @Test
