@@ -14,8 +14,6 @@ public class S3DocumentStorage implements PrivateDocumentStorage {
   try{client.getBucketPolicy(GetBucketPolicyRequest.builder().bucket(bucket).build());
    throw new IllegalStateException("Document bucket must have no bucket policy");
   }catch(S3Exception e){if(!"NoSuchBucketPolicy".equals(e.awsErrorDetails().errorCode()))throw e;}
-  var acl=client.getBucketAcl(GetBucketAclRequest.builder().bucket(bucket).build());
-  if(acl.grants().stream().anyMatch(g->g.grantee().type()==Type.GROUP))throw new IllegalStateException("Document bucket must be private");
  }
  public void upload(String key,Path path,String type){ensurePrivate();client.putObject(PutObjectRequest.builder().bucket(bucket).key(key).contentType(type).build(),RequestBody.fromFile(path));}
  public void delete(String key){client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build());}
