@@ -14,13 +14,13 @@ import com.groupcc2.recruitment.profile.dto.ProfileResponse;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ApplicationResponse(UUID id, UUID jobId, UUID applicantId, String applicantDisplayName, ProfileResponse applicantProfile, DocumentResponse cv, ApplicationStatus status,
                                   Instant submittedAt, Instant updatedAt, Instant shortlistedAt,
-                                  Instant rejectedAt, JobSummaryResponse job) {
+                                  Instant rejectedAt, JobSummaryResponse job, String coverLetter) {
     public ApplicationResponse(UUID id, UUID jobId, UUID applicantId, String applicantDisplayName,
                                DocumentResponse cv, ApplicationStatus status, Instant submittedAt,
                                Instant updatedAt, Instant shortlistedAt, Instant rejectedAt,
                                JobSummaryResponse job) {
         this(id, jobId, applicantId, applicantDisplayName, null, cv, status, submittedAt,
-                updatedAt, shortlistedAt, rejectedAt, job);
+                updatedAt, shortlistedAt, rejectedAt, job, null);
     }
 
     public static ApplicationResponse from(Application application, JobSnapshot job) {
@@ -40,6 +40,6 @@ public record ApplicationResponse(UUID id, UUID jobId, UUID applicantId, String 
                 applicantProfile, cv, application.getStatus(),
                 application.getSubmittedAt(), application.getUpdatedAt(),
                 application.getShortlistedAt(), application.getRejectedAt(),
-                job == null ? null : JobSummaryResponse.from(job));
+                job == null ? null : JobSummaryResponse.from(job), application.getCoverLetter());
     }
 }

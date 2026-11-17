@@ -2,6 +2,8 @@ package com.groupcc2.recruitment.application.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.springframework.web.multipart.MultipartFile;
 import java.util.UUID;
 
@@ -14,8 +16,14 @@ public class ApplicationSubmissionRequest {
     @Schema(description = "PDF CV for this application (maximum 5 MiB).", requiredMode = Schema.RequiredMode.REQUIRED,
             type = "string", format = "binary")
     private MultipartFile cv;
+    @NotBlank
+    @Size(max = 10000)
+    @Schema(description = "Plain text cover letter (maximum 10,000 characters).", requiredMode = Schema.RequiredMode.REQUIRED)
+    private String coverLetter;
     public UUID getJobId() { return jobId; }
     public void setJobId(UUID jobId) { this.jobId = jobId; }
     public MultipartFile getCv() { return cv; }
     public void setCv(MultipartFile cv) { this.cv = cv; }
+    public String getCoverLetter() { return coverLetter; }
+    public void setCoverLetter(String coverLetter) { this.coverLetter = coverLetter; }
 }

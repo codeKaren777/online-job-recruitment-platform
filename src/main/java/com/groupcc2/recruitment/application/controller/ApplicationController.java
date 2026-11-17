@@ -49,7 +49,7 @@ public class ApplicationController {
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Apply to a job",
             description = "Creates a PENDING application for the authenticated job seeker. Applicant identity, "
-                    + "application ID, status, and timestamps are assigned by the server. Each application requires its own PDF CV (maximum 5 MiB).",
+                    + "application ID, status, and timestamps are assigned by the server. Each application requires its own PDF CV (maximum 5 MiB) and plain text cover letter (maximum 10,000 characters).",
             requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Multipart form with a jobId and the PDF CV to submit for this application. The CV is preserved for this application and does not replace profile documents.", required = true,
                     content = @Content(mediaType = "multipart/form-data", schema = @Schema(implementation = ApplicationSubmissionRequest.class))))
     @ApiResponses({
@@ -72,7 +72,7 @@ public class ApplicationController {
     public ApplicationResponse apply(
             @AuthenticationPrincipal @io.swagger.v3.oas.annotations.Parameter(hidden = true) Jwt jwt,
             @org.springframework.web.bind.annotation.ModelAttribute @Valid ApplicationSubmissionRequest request) {
-        return service.applyWithCv(userId(jwt), request.getJobId(), request.getCv());
+        return service.applyWithCv(userId(jwt), request.getJobId(), request.getCv(), request.getCoverLetter());
     }
 
     @GetMapping

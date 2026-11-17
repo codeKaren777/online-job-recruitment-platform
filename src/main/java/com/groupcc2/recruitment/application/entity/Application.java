@@ -36,6 +36,9 @@ public class Application {
     @Column(name = "cv_document_id", updatable = false)
     private UUID cvDocumentId;
 
+    @Column(name = "cover_letter", length = 10000, updatable = false)
+    private String coverLetter;
+
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(nullable = false, columnDefinition = "recruitment.application_status")
@@ -56,21 +59,29 @@ public class Application {
     protected Application() {
     }
 
-    private Application(UUID jobId, UUID jobSeekerId, UUID cvDocumentId) {
+    private Application(UUID jobId, UUID jobSeekerId, UUID cvDocumentId, String coverLetter) {
         this.id = UUID.randomUUID();
         this.jobId = jobId;
         this.jobSeekerId = jobSeekerId;
         this.cvDocumentId = cvDocumentId;
+        this.coverLetter = coverLetter;
         this.status = ApplicationStatus.PENDING; // BR-03
     }
 
     public static Application submit(UUID jobId, UUID jobSeekerId) {
-        return new Application(jobId, jobSeekerId, null);
+        return new Application(jobId, jobSeekerId, null, null);
     }
 
+    /** Legacy model factory for pre-cover-letter application fixtures and historical rows. */
     public static Application submit(UUID jobId, UUID jobSeekerId, UUID cvDocumentId) {
         if (cvDocumentId == null) throw new IllegalArgumentException("An application CV is required");
-        return new Application(jobId, jobSeekerId, cvDocumentId);
+        return new Application(jobId, jobSeekerId, cvDocumentId, null);
+    }
+
+    public static Application submit(UUID jobId, UUID jobSeekerId, UUID cvDocumentId, String coverLetter) {
+        if (cvDocumentId == null) throw new IllegalArgumentException("An application CV is required");
+        if (coverLetter == null || coverLetter.isBlank() || coverLetter.length() > 10000) throw new IllegalArgumentException("A valid application cover letter is required");
+        return new Application(jobId, jobSeekerId, cvDocumentId, coverLetter);
     }
 
     @PrePersist
@@ -102,6 +113,7 @@ public class Application {
     }
 
     public UUID getCvDocumentId() { return cvDocumentId; }
+    public String getCoverLetter() { return coverLetter; }
 
     public ApplicationStatus getStatus() {
         return status;

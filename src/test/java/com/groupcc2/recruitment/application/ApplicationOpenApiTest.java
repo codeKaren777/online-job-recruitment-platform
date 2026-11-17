@@ -72,6 +72,8 @@ class ApplicationOpenApiTest {
                 .andExpect(jsonPath("$.components.schemas.ApplicationSubmissionRequest.properties.jobId.type").value("string"))
                 .andExpect(jsonPath("$.components.schemas.ApplicationSubmissionRequest.properties.jobId.format").value("uuid"))
                 .andExpect(jsonPath("$.components.schemas.ApplicationSubmissionRequest.properties.cv.format").value("binary"))
+                .andExpect(jsonPath("$.components.schemas.ApplicationSubmissionRequest.properties.coverLetter.maxLength").value(10000))
+                .andExpect(jsonPath("$.components.schemas.ApplicationSubmissionRequest.required").value(org.hamcrest.Matchers.hasItems("jobId", "cv", "coverLetter")))
                 .andExpect(jsonPath("$.components.schemas.ApplicationSubmissionRequest.required").isArray())
                 .andExpect(jsonPath("$.components.schemas.ApplicationResponse.properties.cv.$ref").value("#/components/schemas/DocumentResponse"))
                 .andExpect(jsonPath("$.components.schemas.ApplicationResponse.properties.applicantDisplayName").exists())
