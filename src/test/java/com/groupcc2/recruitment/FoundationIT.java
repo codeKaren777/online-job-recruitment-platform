@@ -127,7 +127,7 @@ class FoundationIT {
     @Test
     void bootsAgainstPostgresAndAppliesMigrationOnlyOnce() throws Exception {
         assertThat(flyway.getConfiguration().getDefaultSchema()).isEqualTo("public");
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("20");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("23");
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
         try (var connection = dataSource.getConnection(); var statement = connection.prepareStatement("""
@@ -488,11 +488,11 @@ class FoundationIT {
             assertThat(countApplication(connection, otherApplicationId)).isZero();
 
             try (Statement statement = connection.createStatement()) {
-                assertThat(statement.executeUpdate("""
+                org.assertj.core.api.Assertions.assertThatThrownBy(() -> statement.executeUpdate("""
                         UPDATE recruitment.applications
                            SET status = 'REJECTED', rejected_at = CURRENT_TIMESTAMP
                          WHERE id = '%s'
-                        """.formatted(applicationId))).isZero();
+                        """.formatted(applicationId))).hasMessageContaining("applicant may only edit cover letter or withdraw");
             }
             connection.commit();
 
@@ -1001,6 +1001,7 @@ class FoundationIT {
                         .multipart("/api/applications")
                         .file(applicationCv)
                         .param("jobId", jobId.toString())
+                        .param("coverLetter", "Integration test application")
                         .header("Authorization", "Bearer " + seekerToken)
                         .param("jobSeekerId", UUID.randomUUID().toString())
                         .param("id", clientApplicationId.toString())
@@ -1068,7 +1069,8 @@ class FoundationIT {
                         .file(new MockMultipartFile("cv", "second-cv.pdf", "application/pdf",
                                 "%PDF-1.7\nSecond CV\n%%EOF\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII)))
                         .header("Authorization", "Bearer " + seekerToken)
-                        .param("jobId", jobId.toString()))
+                        .param("jobId", jobId.toString())
+                        .param("coverLetter", "Second application attempt"))
                 .andExpect(status().isConflict());
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                         .multipart("/api/applications")

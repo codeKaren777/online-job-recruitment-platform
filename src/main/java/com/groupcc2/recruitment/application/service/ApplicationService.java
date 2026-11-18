@@ -158,6 +158,24 @@ public class ApplicationService {
         return ApplicationResponse.from(application, job);
     }
 
+    @Transactional
+    public ApplicationResponse updateOwn(UUID userId, UUID applicationId, String coverLetter) {
+        requireJobSeeker(userId);
+        if (coverLetter == null || coverLetter.isBlank() || coverLetter.length() > 10000 || coverLetter.codePoints().anyMatch(c -> Character.isISOControl(c) && c != '\n' && c != '\r' && c != '\t')) throw new IllegalArgumentException("A valid application cover letter is required");
+        Application a = applications.findByIdAndJobSeekerId(applicationId, userId).orElseThrow(() -> new ApplicationFailure(ApplicationFailure.Code.NOT_FOUND));
+        try { a.updateCoverLetter(coverLetter.strip()); } catch (IllegalStateException e) { throw new ApplicationFailure(ApplicationFailure.Code.INVALID_STATUS_TRANSITION); }
+        JobSnapshot job = directory().findAllById(Set.of(a.getJobId())).get(a.getJobId());
+        return ApplicationResponse.from(a, job);
+    }
+
+    @Transactional
+    public void withdrawOwn(UUID userId, UUID applicationId) {
+        requireJobSeeker(userId);
+        Application a = applications.findByIdAndJobSeekerId(applicationId, userId).orElseThrow(() -> new ApplicationFailure(ApplicationFailure.Code.NOT_FOUND));
+        if (a.getWithdrawnAt() != null) return;
+        try { a.withdraw(Instant.now(clock)); } catch (IllegalStateException e) { throw new ApplicationFailure(ApplicationFailure.Code.INVALID_STATUS_TRANSITION); }
+    }
+
     /** Employers may see applications only for their own jobs. */
     @Transactional(readOnly = true)
     public List<ApplicationResponse> listForEmployer(UUID employerId) {
@@ -180,11 +198,11 @@ public class ApplicationService {
         }
         List<Application> found = jobId != null
                 ? (status == null
-                    ? applications.findAllByJobIdOrderBySubmittedAtDesc(jobId)
-                    : applications.findAllByJobIdAndStatusOrderBySubmittedAtDesc(jobId, status))
+                    ? applications.findAllByJobIdAndWithdrawnAtIsNullOrderBySubmittedAtDesc(jobId)
+                    : applications.findAllByJobIdAndStatusAndWithdrawnAtIsNullOrderBySubmittedAtDesc(jobId, status))
                 : (status == null
-                    ? applications.findAllByJobIdInOrderBySubmittedAtDesc(jobs.keySet())
-                    : applications.findAllByJobIdInAndStatusOrderBySubmittedAtDesc(jobs.keySet(), status));
+                    ? applications.findAllByJobIdInAndWithdrawnAtIsNullOrderBySubmittedAtDesc(jobs.keySet())
+                    : applications.findAllByJobIdInAndStatusAndWithdrawnAtIsNullOrderBySubmittedAtDesc(jobs.keySet(), status));
         Set<UUID> documentIds = found.stream().map(Application::getCvDocumentId).filter(java.util.Objects::nonNull).collect(Collectors.toSet());
         Set<UUID> applicantIds = found.stream().map(Application::getJobSeekerId).collect(Collectors.toSet());
         Map<UUID, DocumentResponse> cvMetadata = cvDocuments == null || documentIds.isEmpty()
