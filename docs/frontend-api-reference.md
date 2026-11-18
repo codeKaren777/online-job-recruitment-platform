@@ -356,7 +356,11 @@ query parameters: `jobId` and `status`.
 profile.
 
 `GET /api/employer/applications/{applicationId}/cv` — receive a temporary CV
-download URL.
+download URL. The URL is authorized for the employer that owns the application's
+job and is signed against the configured `PROFILE_STORAGE_PUBLIC_ENDPOINT`; it
+must be opened by the recipient before `expiresAt`. The object remains private,
+and the signed response supplies attachment disposition, the original filename,
+and the stored content type.
 
 `PATCH /api/employer/applications/{applicationId}/status`
 

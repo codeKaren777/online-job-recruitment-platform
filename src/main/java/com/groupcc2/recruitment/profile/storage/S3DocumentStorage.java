@@ -17,6 +17,12 @@ public class S3DocumentStorage implements PrivateDocumentStorage {
  }
  public void upload(String key,Path path,String type){ensurePrivate();client.putObject(PutObjectRequest.builder().bucket(bucket).key(key).contentType(type).build(),RequestBody.fromFile(path));}
  public void delete(String key){client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build());}
- public URI signGet(String key,Duration expiry){ensurePrivate();return URI.create(signer.presignGetObject(r->r.signatureDuration(expiry)
- .getObjectRequest(g->g.bucket(bucket).key(key).responseContentDisposition("attachment"))).url().toString());}
+ public URI signGet(String key,Duration expiry,String filename,String contentType){
+  ensurePrivate();
+  String safeFilename=filename.replace("\"","").replace("\r","").replace("\n","");
+  return URI.create(signer.presignGetObject(r->r.signatureDuration(expiry)
+   .getObjectRequest(g->g.bucket(bucket).key(key)
+    .responseContentDisposition("attachment; filename=\"" + safeFilename + "\"")
+    .responseContentType(contentType))).url().toString());
+ }
 }

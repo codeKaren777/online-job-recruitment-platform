@@ -1049,7 +1049,8 @@ class FoundationIT {
                 .andExpect(jsonPath("$.email").doesNotExist())
                 .andExpect(jsonPath("$.applicantEmail").doesNotExist());
         org.mockito.Mockito.when(privateDocumentStorage.signGet(
-                        org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq(Duration.ofSeconds(120))))
+                        org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq(Duration.ofSeconds(120)),
+                        org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn(URI.create("https://documents.example.test/application-cv"));
         mvc.perform(get("/api/employer/applications/" + applicationId + "/cv")
                         .header("Authorization", "Bearer " + employerToken))

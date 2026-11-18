@@ -100,6 +100,20 @@ class SecurityConfigTest {
                 .isInstanceOf(BadJwtException.class);
     }
 
+    @Test
+    void configuresPatternBasedCorsWithoutCredentials() {
+        var source = config.corsConfigurationSource("https://frontend.example, https://*.shared.example");
+        var configuration = source.getCorsConfiguration(
+                new org.springframework.mock.web.MockHttpServletRequest("GET", "/api/profile"));
+
+        assertThat(configuration.getAllowedOriginPatterns())
+                .containsExactly("https://frontend.example", "https://*.shared.example");
+        assertThat(configuration.getAllowedMethods()).contains("OPTIONS", "GET", "POST");
+        assertThat(configuration.getAllowedHeaders())
+                .contains("Authorization", "Content-Type", "Accept");
+        assertThat(configuration.getAllowCredentials()).isFalse();
+    }
+
     private String token(String issuer, String audience, Instant expiry, String subject, byte[] key)
             throws Exception {
         var claims = new JWTClaimsSet.Builder().issuer(issuer).audience(audience).subject(subject)

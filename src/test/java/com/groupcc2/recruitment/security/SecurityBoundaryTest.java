@@ -24,6 +24,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -43,6 +44,39 @@ class SecurityBoundaryTest {
     @MockitoBean AuthService authService;
     @MockitoBean AccountJwtValidator accountJwtValidator;
     @MockitoBean ApplicationService applicationService;
+
+    @Test
+    void corsPreflightIsHandledBeforeAuthorizationButDoesNotOpenProtectedRoutes() throws Exception {
+        mvc.perform(options("/api/profile")
+                        .header("Origin", "https://frontend.example")
+                        .header("Access-Control-Request-Method", "GET")
+                        .header("Access-Control-Request-Headers", "Authorization,Content-Type"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string("Access-Control-Allow-Origin", "https://frontend.example"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string("Access-Control-Allow-Credentials", (String) null));
+
+        mvc.perform(get("/api/profile")
+                        .header("Origin", "https://frontend.example"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void publicRoutesRemainAvailableAcrossOrigins() throws Exception {
+        when(authService.register(org.mockito.ArgumentMatchers.any())).thenReturn(
+                new RegisterResponse(UUID.randomUUID(), "cors@example.test",
+                        UserRole.JOB_SEEKER, AccountStatus.ACTIVE));
+        mvc.perform(post("/api/auth/register")
+                        .contentType("application/json")
+                        .content("""
+                                {"email":"cors@example.test","password":"StrongPassword123!"}
+                                """)
+                        .header("Origin", "https://frontend.example"))
+                .andExpect(status().isCreated())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string("Access-Control-Allow-Origin", "https://frontend.example"));
+    }
 
     @Test
     void profileRoutesRejectRolesOtherThanJobSeeker() throws Exception {

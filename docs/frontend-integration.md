@@ -165,15 +165,30 @@ The frontend must:
 
 ## Browser connectivity
 
-The API must be reachable from the browser. The backend/deployment team must
-choose one of these arrangements:
+The API enables browser CORS for arbitrary origins by default using origin
+patterns. CORS preflight supports the API methods and the `Authorization`,
+`Content-Type`, and `Accept` headers. This does not make feature routes public:
+preflight is handled without a bearer token, while the actual protected
+request still requires its JWT and all role/ownership checks.
+
+The default shared-image setting can be narrowed for production by setting
+`CORS_ALLOWED_ORIGIN_PATTERNS` to a comma-separated list, for example:
+
+```env
+CORS_ALLOWED_ORIGIN_PATTERNS=https://app.example.com,https://*.customer.example
+```
+
+Cookies and other credentialed cross-origin requests are disabled. JWT bearer
+authentication remains the only cross-origin authentication mechanism.
+
+If CORS is not desired, the deployment team can instead:
 
 - serve the frontend and API from the same origin;
 - configure a development proxy;
 - allow the deployed frontend origin through a narrowly scoped CORS policy.
 
-Do not work around browser errors by enabling all origins or exposing
-PostgreSQL and MinIO.
+Do not expose PostgreSQL or MinIO. The broad default is intended for the shared
+image; production deployments should prefer the narrow origin setting.
 
 If the frontend runs at `http://localhost:5173` and the API at
 `http://localhost:8080`, the backend team must provide the approved proxy or

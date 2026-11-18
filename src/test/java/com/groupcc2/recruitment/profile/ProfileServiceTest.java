@@ -46,8 +46,9 @@ class ProfileServiceTest {
  @Test void foreignDocumentCannotBeSigned(){UUID foreign=UUID.randomUUID();when(documents.findByIdAndProfileUserId(foreign,owner)).thenReturn(Optional.empty());
  assertThatThrownBy(()->service.downloadOwn(foreign)).isInstanceOf(ProfileFailure.class);verifyNoInteractions(storage);}
  @Test void authorizedDocumentSignsShortLivedGet(){UUID id=UUID.randomUUID();when(documents.findByIdAndProfileUserId(id,owner)).thenReturn(Optional.of(new Document(owner,"generated-key","cv.pdf","application/pdf",20)));
- when(storage.signGet("generated-key",java.time.Duration.ofSeconds(120))).thenReturn(java.net.URI.create("http://example.test/signed"));
- assertThat(service.downloadOwn(id).url().getHost()).isEqualTo("example.test");verify(storage).signGet("generated-key",java.time.Duration.ofSeconds(120));}
+ when(storage.signGet("generated-key",java.time.Duration.ofSeconds(120),"cv.pdf","application/pdf")).thenReturn(java.net.URI.create("http://example.test/signed"));
+ assertThat(service.downloadOwn(id).url().getHost()).isEqualTo("example.test");
+ verify(storage).signGet("generated-key",java.time.Duration.ofSeconds(120),"cv.pdf","application/pdf");}
  @Test void uploadReturnsSafeMetadata(){DocumentResponse d=service.upload(file());assertThat(d.originalFilename()).isEqualTo("cv.pdf");
  verify(storage).upload(matches("documents/[a-f0-9-]{36}"),any(),eq("application/pdf"));verify(storage,never()).delete(any());}
  @Test void storageFailureNeverPersists(){doThrow(new IllegalStateException()).when(storage).upload(any(),any(),any());assertThatThrownBy(()->service.upload(file())).isInstanceOf(ProfileFailure.class);verify(documents,never()).saveAndFlush(any());verify(storage).delete(any());}

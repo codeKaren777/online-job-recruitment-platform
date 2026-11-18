@@ -165,7 +165,12 @@ This enables the storage adapter and private document HTTP flow. Health UP prove
 backend/database readiness; it does not prove bucket credentials or an
 authenticated upload workflow.
 For a shared server, the signed-link endpoint must be reachable by recipients;
-localhost points to each recipient's own machine. Do not rewrite a signed URL.
+localhost points to each recipient's own machine. Set
+PROFILE_STORAGE_PUBLIC_ENDPOINT to the shared MinIO hostname (or reverse-proxy
+endpoint) that recipients can reach. Do not rewrite a signed URL. Employer
+downloads use `GET /api/employer/applications/{applicationId}/cv`; the backend
+checks the employer's ownership of the specific job/application before issuing
+the short-lived link.
 
 ## 7. Test while authentication is being developed
 

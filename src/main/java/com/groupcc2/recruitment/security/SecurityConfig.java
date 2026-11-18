@@ -12,6 +12,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpHeaders;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -47,6 +51,7 @@ public class SecurityConfig {
         return http
                 // REST bearer tokens only; no cookie or HTTP session authentication.
                 .csrf(AbstractHttpConfigurer::disable)
+                .cors(org.springframework.security.config.Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .requestCache(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
@@ -106,6 +111,40 @@ public class SecurityConfig {
                 .oauth2ResourceServer(resourceServer -> resourceServer.jwt(
                         jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))
                 .build();
+    }
+
+    @Bean
+    CorsConfigurationSource corsConfigurationSource(
+            @Value("${app.security.cors.allowed-origin-patterns:*}") String allowedOriginPatterns) {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOriginPatterns(parseOriginPatterns(allowedOriginPatterns));
+        configuration.setAllowedMethods(List.of(
+                HttpMethod.GET.name(), HttpMethod.POST.name(), HttpMethod.PUT.name(),
+                HttpMethod.PATCH.name(), HttpMethod.DELETE.name(), HttpMethod.OPTIONS.name()));
+        configuration.setAllowedHeaders(List.of(
+                HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE, HttpHeaders.ACCEPT));
+        configuration.setExposedHeaders(List.of(HttpHeaders.LOCATION, HttpHeaders.CONTENT_DISPOSITION));
+        // JWT bearer authentication is sent explicitly; cookies are never accepted cross-origin.
+        configuration.setAllowCredentials(false);
+        configuration.setMaxAge(3600L);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
+
+    private static List<String> parseOriginPatterns(String configuredPatterns) {
+        if (configuredPatterns == null || configuredPatterns.isBlank()) {
+            throw new IllegalArgumentException("CORS allowed origin patterns must not be blank");
+        }
+        List<String> patterns = java.util.Arrays.stream(configuredPatterns.split(","))
+                .map(String::trim)
+                .filter(pattern -> !pattern.isEmpty())
+                .toList();
+        if (patterns.isEmpty()) {
+            throw new IllegalArgumentException("CORS allowed origin patterns must not be blank");
+        }
+        return patterns;
     }
 
     @Bean

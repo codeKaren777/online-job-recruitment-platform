@@ -30,7 +30,10 @@ class MinioStorageIT {
  Files.writeString(file,"%PDF-1.7\ncontent\n%%EOF");storage.upload("documents/random-id",file,"application/pdf");
  var http=HttpClient.newHttpClient();
  assertThat(http.send(HttpRequest.newBuilder(endpoint.resolve("/documents-test/documents/random-id")).GET().build(),HttpResponse.BodyHandlers.discarding()).statusCode()).isEqualTo(403);
- URI url=storage.signGet("documents/random-id",Duration.ofSeconds(120));assertThat(url.getQuery()).contains("X-Amz-Expires=120");
+ URI url=storage.signGet("documents/random-id",Duration.ofSeconds(120),"resume.pdf","application/pdf");
+ assertThat(url.getQuery()).contains("X-Amz-Expires=120")
+  .contains("response-content-disposition")
+  .contains("response-content-type");
  assertThat(http.send(HttpRequest.newBuilder(url).GET().build(),HttpResponse.BodyHandlers.ofString()).body()).contains("%PDF-1.7");
  assertThat(http.send(HttpRequest.newBuilder(url).method("PUT",HttpRequest.BodyPublishers.ofString("overwrite")).build(),HttpResponse.BodyHandlers.discarding()).statusCode()).isEqualTo(403);
  storage.delete("documents/random-id");storage.delete("documents/random-id");

@@ -106,7 +106,9 @@ public class ProfileService {
  EmployerApplicationAccess access=employerAccess.getIfAvailable();if(access==null)throw failure(ProfileFailure.Code.INTEGRATION_UNAVAILABLE);
  access.requireSubmittedApplication(employer,jobId,applicant);
  }
- private DownloadResponse sign(Document d){return new DownloadResponse(store().signGet(d.storageKey(),expiry),Instant.now().plus(expiry));}
+ private DownloadResponse sign(Document d){return new DownloadResponse(
+  store().signGet(d.storageKey(),expiry,d.response().originalFilename(),d.response().contentType()),
+  Instant.now().plus(expiry));}
  private Profile profile(UUID id){return profiles.findById(id).orElseThrow(()->failure(ProfileFailure.Code.NOT_FOUND));}
  private Document document(UUID id,UUID owner){return documents.findByIdAndProfileUserId(id,owner).orElseThrow(()->failure(ProfileFailure.Code.NOT_FOUND));}
  private List<DocumentResponse> list(UUID id){profile(id);return documents.findAllByProfileUserIdOrderByCreatedAtDesc(id).stream().map(Document::response).toList();}
