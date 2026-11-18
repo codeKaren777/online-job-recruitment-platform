@@ -215,6 +215,7 @@ the runtime credentials distinct from the bootstrap credentials.
 | `JWT_SECRET_BASE64` | A Base64-encoded secret used for JWT operations. It should represent at least 32 cryptographically random bytes. |
 | `JWT_ISSUER` | Identifies the issuer of the JWT tokens. |
 | `JWT_AUDIENCE` | Identifies the intended audience of the JWT tokens. |
+| `JWT_ACCESS_TOKEN_EXPIRATION` | Access-token lifetime as a Java duration (default `PT30M`, exactly 30 minutes). |
 
 ### Important database connection detail
 

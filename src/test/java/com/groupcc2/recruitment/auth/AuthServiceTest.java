@@ -116,6 +116,7 @@ class AuthServiceTest {
                 .thenReturn(Optional.of(credentials));
         when(passwordHashingService.matches(RAW_PASSWORD, PASSWORD_HASH)).thenReturn(true);
         when(jwtTokenService.generateAccessToken(userId, UserRole.EMPLOYER, 0)).thenReturn("signed-token");
+        when(jwtTokenService.getAccessTokenLifetimeSeconds()).thenReturn(1800L);
 
         LoginResponse response = authService.login(new LoginRequest("person@example.com", RAW_PASSWORD));
 

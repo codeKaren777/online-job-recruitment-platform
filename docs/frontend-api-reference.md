@@ -80,7 +80,7 @@ Response `200`:
 {
   "accessToken": "<JWT>",
   "tokenType": "Bearer",
-  "expiresIn": 3600
+  "expiresIn": 1800
 }
 ```
 

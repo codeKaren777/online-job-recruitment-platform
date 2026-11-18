@@ -13,6 +13,19 @@ import com.groupcc2.recruitment.users.entity.AccountStatus;
 import com.groupcc2.recruitment.users.entity.UserRole;
 import com.groupcc2.recruitment.users.service.UserService;
 import java.util.UUID;
+import java.time.Instant;
+import java.util.List;
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.jwk.JWKSet;
+import com.nimbusds.jose.jwk.KeyUse;
+import com.nimbusds.jose.jwk.OctetSequenceKey;
+import com.nimbusds.jose.jwk.source.JWKSource;
+import com.nimbusds.jose.proc.SecurityContext;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -23,6 +36,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.server.ResponseStatusException;
 
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -43,6 +57,31 @@ class SecurityBoundaryTest {
     @MockitoBean AuthService authService;
     @MockitoBean AccountJwtValidator accountJwtValidator;
     @MockitoBean ApplicationService applicationService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void allowAccountClaimsThroughValidator() {
+        when(accountJwtValidator.validate(any()))
+                .thenReturn(org.springframework.security.oauth2.core.OAuth2TokenValidatorResult.success());
+    }
+
+    @Test
+    void expiredSignedAccessTokenIsRejectedByProtectedEndpoint() throws Exception {
+        byte[] key = new byte[32];
+        var signingKey = new OctetSequenceKey.Builder(key)
+                .keyUse(KeyUse.SIGNATURE).algorithm(JWSAlgorithm.HS256).build();
+        JWKSource<SecurityContext> source = (selector, context) -> selector.select(new JWKSet(signingKey));
+        var encoder = new NimbusJwtEncoder(source);
+        Instant issuedAt = Instant.now().minusSeconds(3600);
+        var claims = JwtClaimsSet.builder().issuer("groupcc2-recruitment")
+                .subject(UUID.randomUUID().toString()).audience(List.of("groupcc2-api"))
+                .issuedAt(issuedAt).expiresAt(issuedAt.plusSeconds(1800))
+                .claim("role", "JOB_SEEKER").claim("tokenVersion", 0).build();
+        String expiredToken = encoder.encode(JwtEncoderParameters.from(
+                JwsHeader.with(MacAlgorithm.HS256).build(), claims)).getTokenValue();
+
+        mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + expiredToken))
+                .andExpect(status().isUnauthorized());
+    }
 
     @Test
     void profileRoutesRejectRolesOtherThanJobSeeker() throws Exception {

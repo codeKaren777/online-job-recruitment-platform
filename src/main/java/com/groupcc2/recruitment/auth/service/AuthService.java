@@ -90,7 +90,7 @@ public class AuthService {
 
         String accessToken = jwtTokenService.generateAccessToken(
                 credentials.getId(), role, credentials.getTokenVersion());
-        return new LoginResponse(accessToken, "Bearer", JwtTokenService.ACCESS_TOKEN_LIFETIME_SECONDS);
+        return new LoginResponse(accessToken, "Bearer", jwtTokenService.getAccessTokenLifetimeSeconds());
     }
 
     @Transactional

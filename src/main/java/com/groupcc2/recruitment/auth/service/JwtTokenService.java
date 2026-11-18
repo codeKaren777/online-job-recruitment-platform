@@ -1,6 +1,7 @@
 package com.groupcc2.recruitment.auth.service;
 
 import java.time.Instant;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
@@ -14,6 +15,7 @@ import com.nimbusds.jose.jwk.OctetSequenceKey;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
@@ -29,11 +31,14 @@ public class JwtTokenService {
     private final JwtEncoder jwtEncoder;
     private final String issuer;
     private final String audience;
+    private final Duration accessTokenExpiration;
 
+    @Autowired
     public JwtTokenService(
             @Value("${app.security.jwt.secret-base64}") String secretBase64,
             @Value("${app.security.jwt.issuer}") String issuer,
-            @Value("${app.security.jwt.audience}") String audience) {
+            @Value("${app.security.jwt.audience}") String audience,
+            @Value("${app.security.jwt.access-token-expiration:PT30M}") Duration accessTokenExpiration) {
         if (issuer.isBlank() || audience.isBlank()) {
             throw new IllegalArgumentException("JWT issuer and audience must not be blank");
         }
@@ -57,6 +62,18 @@ public class JwtTokenService {
         this.jwtEncoder = new NimbusJwtEncoder(jwkSource);
         this.issuer = issuer;
         this.audience = audience;
+        if (accessTokenExpiration.isZero() || accessTokenExpiration.isNegative()) {
+            throw new IllegalArgumentException("JWT access-token expiration must be positive");
+        }
+        this.accessTokenExpiration = accessTokenExpiration;
+    }
+
+    public JwtTokenService(String secretBase64, String issuer, String audience) {
+        this(secretBase64, issuer, audience, Duration.ofSeconds(ACCESS_TOKEN_LIFETIME_SECONDS));
+    }
+
+    public long getAccessTokenLifetimeSeconds() {
+        return accessTokenExpiration.getSeconds();
     }
 
     public String generateAccessToken(User user) {
@@ -83,7 +100,7 @@ public class JwtTokenService {
                 .subject(userId.toString())
                 .audience(List.of(audience))
                 .issuedAt(issuedAt)
-                .expiresAt(issuedAt.plusSeconds(ACCESS_TOKEN_LIFETIME_SECONDS))
+                .expiresAt(issuedAt.plus(accessTokenExpiration))
                 .claim("role", role.name())
                 .claim("tokenVersion", tokenVersion)
                 .build();
