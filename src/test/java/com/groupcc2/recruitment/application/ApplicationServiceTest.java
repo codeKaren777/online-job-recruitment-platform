@@ -310,7 +310,7 @@ class ApplicationServiceTest {
         when(users.findById(employer.getId())).thenReturn(employer);
         when(directory.findAllForEmployer(employer.getId())).thenReturn(Map.of(ownedJobId,
                 new JobSnapshot(ownedJobId, "Owned", "Zomba", TODAY.plusDays(1), JobSnapshot.State.ACTIVE)));
-        when(repository.findAllByJobIdInOrderBySubmittedAtDesc(Set.of(ownedJobId)))
+        when(repository.findAllByJobIdInAndWithdrawnAtIsNullOrderBySubmittedAtDesc(Set.of(ownedJobId)))
                 .thenReturn(List.of(owned));
 
         var result = service.listForEmployer(employer.getId());
@@ -329,7 +329,7 @@ class ApplicationServiceTest {
         when(users.findById(employer.getId())).thenReturn(employer);
         when(directory.findAllForEmployer(employer.getId())).thenReturn(Map.of(jobId,
                 job(TODAY.plusDays(2), JobSnapshot.State.ACTIVE)));
-        when(repository.findAllByJobIdInOrderBySubmittedAtDesc(Set.of(jobId))).thenReturn(List.of(application));
+        when(repository.findAllByJobIdInAndWithdrawnAtIsNullOrderBySubmittedAtDesc(Set.of(jobId))).thenReturn(List.of(application));
         when(cvDocuments.metadataForEmployer(Set.of(cvId))).thenReturn(Map.of(cvId, cv));
         when(cvDocuments.applicantNamesForEmployer(Set.of(applicant))).thenReturn(Map.of(applicant, "Applicant Name"));
 

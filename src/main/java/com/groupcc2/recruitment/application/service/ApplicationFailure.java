@@ -8,6 +8,7 @@ public class ApplicationFailure extends RuntimeException {
         DUPLICATE_APPLICATION,
         JOB_NOT_ACCEPTING_APPLICATIONS,
         INVALID_STATUS_TRANSITION,
+        APPLICATION_WITHDRAWN,
         INTEGRATION_UNAVAILABLE
     }
 

@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import com.groupcc2.recruitment.application.dto.ApplicationResponse;
 import com.groupcc2.recruitment.application.dto.ApplicationSubmissionRequest;
+import com.groupcc2.recruitment.application.dto.ApplicationUpdateRequest;
 import com.groupcc2.recruitment.application.service.ApplicationFailure;
 import com.groupcc2.recruitment.application.service.ApplicationService;
 import com.groupcc2.recruitment.common.exception.ApplicationExceptionHandler;
@@ -16,6 +17,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -88,6 +92,21 @@ public class ApplicationController {
     @ApiResponses({@ApiResponse(responseCode="200",description="Returns the application."),@ApiResponse(responseCode="401",description="A valid bearer token is required."),@ApiResponse(responseCode="403",description="The caller is not permitted to view this application."),@ApiResponse(responseCode="404",description="Application was not found."),@ApiResponse(responseCode="503",description="Application service is unavailable.")})
     public ApplicationResponse one(@AuthenticationPrincipal @io.swagger.v3.oas.annotations.Parameter(hidden = true) Jwt jwt, @PathVariable UUID applicationId) {
         return service.getOwn(userId(jwt), applicationId);
+    }
+
+    @PatchMapping(value="/{applicationId}", consumes="application/json")
+    @Operation(summary="Update my pending application", description="Only coverLetter is editable, and only while status is PENDING and not withdrawn. CV and history remain immutable.")
+    @ApiResponses({@ApiResponse(responseCode="200",description="Application updated"), @ApiResponse(responseCode="400",description="Invalid cover letter"), @ApiResponse(responseCode="404",description="Application not found"), @ApiResponse(responseCode="409",description="Application already decided or withdrawn")})
+    public ApplicationResponse update(@AuthenticationPrincipal @io.swagger.v3.oas.annotations.Parameter(hidden=true) Jwt jwt, @PathVariable UUID applicationId, @Valid @RequestBody ApplicationUpdateRequest request) {
+        return service.updateOwn(userId(jwt), applicationId, request.coverLetter());
+    }
+
+    @DeleteMapping("/{applicationId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary="Withdraw my pending application", description="Logical withdrawal retains application, CV, and decision history. Repeating withdrawal succeeds with 204. Only PENDING applications may be withdrawn.")
+    @ApiResponses({@ApiResponse(responseCode="204",description="Withdrawn or already withdrawn"), @ApiResponse(responseCode="404",description="Application not found"), @ApiResponse(responseCode="409",description="Application already decided")})
+    public void withdraw(@AuthenticationPrincipal @io.swagger.v3.oas.annotations.Parameter(hidden=true) Jwt jwt, @PathVariable UUID applicationId) {
+        service.withdrawOwn(userId(jwt), applicationId);
     }
 
 

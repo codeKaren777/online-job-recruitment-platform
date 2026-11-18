@@ -36,8 +36,11 @@ public class Application {
     @Column(name = "cv_document_id", updatable = false)
     private UUID cvDocumentId;
 
-    @Column(name = "cover_letter", length = 10000, updatable = false)
+    @Column(name = "cover_letter", length = 10000)
     private String coverLetter;
+
+    @Column(name = "withdrawn_at")
+    private Instant withdrawnAt;
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
@@ -133,6 +136,18 @@ public class Application {
 
     public Instant getRejectedAt() {
         return rejectedAt;
+    }
+
+    public Instant getWithdrawnAt() { return withdrawnAt; }
+
+    public void updateCoverLetter(String value) {
+        if (status != ApplicationStatus.PENDING || withdrawnAt != null) throw new IllegalStateException();
+        coverLetter = value;
+    }
+
+    public void withdraw(Instant at) {
+        if (status != ApplicationStatus.PENDING) throw new IllegalStateException();
+        if (withdrawnAt == null) withdrawnAt = at;
     }
 
     public void changeStatus(ApplicationStatus newStatus, Instant changedAt) {
