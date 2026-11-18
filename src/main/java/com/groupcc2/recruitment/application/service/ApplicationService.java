@@ -80,12 +80,18 @@ public class ApplicationService {
 
     /** Every newly submitted application receives a separate, validated CV document. */
     @Transactional
-    public ApplicationResponse applyWithCv(UUID userId, UUID jobId, MultipartFile cv) {
+    public ApplicationResponse applyWithCv(UUID userId, UUID jobId, MultipartFile cv, String coverLetter) {
         if (userId == null || jobId == null || cv == null || cv.isEmpty()) {
             throw new IllegalArgumentException("jobId and a non-empty application CV are required");
         }
-        // Check identity/job/duplicate eligibility before touching object storage.
         JobSnapshot job = validateApplication(userId, jobId);
+        if (coverLetter == null || coverLetter.isBlank() || coverLetter.length() > 10000
+                || coverLetter.codePoints().anyMatch(c -> Character.isISOControl(c)
+                        && c != '\n' && c != '\r' && c != '\t')) {
+            throw new IllegalArgumentException("A valid application cover letter is required");
+        }
+        coverLetter = coverLetter.strip();
+        // Check identity/job/duplicate eligibility before touching object storage.
         if (cvDocuments == null) throw new ApplicationFailure(ApplicationFailure.Code.INTEGRATION_UNAVAILABLE);
         DocumentResponse document = cvDocuments.storeForCurrentApplicant(cv);
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -102,7 +108,7 @@ public class ApplicationService {
                 }
             }
         });
-        return persistApplication(userId, jobId, document.id(), job);
+        return persistApplication(userId, jobId, document.id(), coverLetter, job);
     }
 
     private JobSnapshot validateApplication(UUID userId, UUID jobId) {
@@ -114,9 +120,9 @@ public class ApplicationService {
         return job;
     }
 
-    private ApplicationResponse persistApplication(UUID userId, UUID jobId, UUID cvDocumentId, JobSnapshot job) {
+    private ApplicationResponse persistApplication(UUID userId, UUID jobId, UUID cvDocumentId, String coverLetter, JobSnapshot job) {
         try {
-            Application submission = Application.submit(jobId, userId, cvDocumentId);
+            Application submission = Application.submit(jobId, userId, cvDocumentId, coverLetter);
             Application saved = applications.saveAndFlush(submission);
             notifications.enqueue(saved.getId(), saved.getId(), "SUBMITTED");
             return ApplicationResponse.from(saved, job);

@@ -6,7 +6,7 @@ Job seeker submission/tracking and employer review of applications for owned job
 
 | Method and path | Result |
 |---|---|
-| `POST /api/applications` multipart fields `jobId=<uuid>`, `cv=<PDF>` | 201 with the new application (`status: PENDING`) and its CV metadata |
+| `POST /api/applications` multipart fields `jobId=<uuid>`, `cv=<PDF>`, `coverLetter=<plain text>` | 201 with the new application (`status: PENDING`), CV metadata, and cover letter |
 | `GET /api/applications` | 200, caller's applications, newest first |
 | `GET /api/applications/{applicationId}` | 200, or 404 if it is not the caller's |
 | `GET /api/employer/applications` | 200, applications for the caller's jobs, newest first, with applicant display name and submitted CV metadata |
@@ -26,7 +26,7 @@ Errors are `{"code": "..."}`: 400 `INVALID_REQUEST` or `PROFILE_INCOMPLETE` (cre
 The applicant is always the token subject. The role is read from the persisted, active user
 (like ProfileService), never from token claims or the request body.
 
-`jobId` and a CV are required multipart fields. Each application must upload its own PDF CV; a profile document is never substituted. Profile `displayName` must already be present. The existing validator permits PDF only, up to 5 MiB.
+`jobId`, a CV, and a cover letter are required multipart fields. Each application must upload its own PDF CV; a profile document is never substituted. Profile `displayName` must already be present. The existing validator permits PDF only, up to 5 MiB. Cover letters are plain text, trimmed before persistence, limited to 10,000 characters, and reject unsafe control characters (except line breaks and tabs).
 Application IDs, applicant identity, status, and timestamps are server-managed. The endpoint requires
 an authenticated `JOB_SEEKER`; client fields cannot affect ownership or application state.
 

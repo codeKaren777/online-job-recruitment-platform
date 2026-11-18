@@ -86,8 +86,19 @@ class ApplicationServiceTest {
                 new DocumentResponse(cvId, "application.pdf", "application/pdf", 20L, Instant.now()));
         var cv = new org.springframework.mock.web.MockMultipartFile("cv", "application.pdf", "application/pdf", "%PDF-1.7".getBytes());
         org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
-        try { return service.applyWithCv(applicantId, targetJobId, cv); }
+        try { return service.applyWithCv(applicantId, targetJobId, cv, "  A strong candidate for this role. \n"); }
         finally { org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization(); }
+    }
+
+    @Test
+    void coverLetterIsRequiredBoundedAndRejectsControlCharactersBeforeCvStorage() {
+        when(directory.findById(jobId)).thenReturn(Optional.of(job(TODAY.plusDays(3), JobSnapshot.State.ACTIVE)));
+        var cv = new org.springframework.mock.web.MockMultipartFile("cv", "application.pdf", "application/pdf", "%PDF-1.7".getBytes());
+        for (String invalid : new String[] {null, "", " \t\n ", "x".repeat(10001), "hello\u0000world"}) {
+            assertThatThrownBy(() -> service.applyWithCv(seeker.getId(), jobId, cv, invalid))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+        verifyNoInteractions(cvDocuments);
     }
 
     @Test
@@ -106,11 +117,13 @@ class ApplicationServiceTest {
         var savedApplication = org.mockito.ArgumentCaptor.forClass(Application.class);
 
         assertThat(response.status()).isEqualTo(ApplicationStatus.PENDING);
+        assertThat(response.coverLetter()).isEqualTo("A strong candidate for this role.");
         assertThat(response.jobId()).isEqualTo(jobId);
         assertThat(response.job().title()).isEqualTo("Backend Developer");
         verify(repository).saveAndFlush(savedApplication.capture());
         assertThat(savedApplication.getValue().getJobSeekerId()).isEqualTo(seeker.getId());
         assertThat(savedApplication.getValue().getStatus()).isEqualTo(ApplicationStatus.PENDING);
+        assertThat(savedApplication.getValue().getCoverLetter()).isEqualTo(response.coverLetter());
         verify(notifications).enqueue(response.id(), response.id(), "SUBMITTED");
         verify(rls).establish(seeker.getId(), "JOB_SEEKER");
     }
@@ -125,7 +138,7 @@ class ApplicationServiceTest {
                 "cv", "role-cv.pdf", "application/pdf", "%PDF-1.7".getBytes());
         org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
         try {
-            ApplicationResponse response = service.applyWithCv(seeker.getId(), jobId, cv);
+            ApplicationResponse response = service.applyWithCv(seeker.getId(), jobId, cv, "A strong candidate for this role.");
             var saved = org.mockito.ArgumentCaptor.forClass(Application.class);
             verify(repository).saveAndFlush(saved.capture());
             assertThat(saved.getValue().getCvDocumentId()).isEqualTo(cvId);

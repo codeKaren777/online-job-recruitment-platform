@@ -95,28 +95,29 @@ class ApplicationControllerTest {
 
     @Test
     void applyUsesTheTokenSubjectAndIgnoresAnyApplicantInTheBody() throws Exception {
-        when(service.applyWithCv(eq(userId), eq(jobId), any())).thenReturn(sample());
+        when(service.applyWithCv(eq(userId), eq(jobId), any(), any())).thenReturn(sample());
 
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/applications")
                         .file(new MockMultipartFile("cv", "developer.pdf", "application/pdf", "%PDF-1.7".getBytes()))
+                        .param("coverLetter", "I am interested in this position.")
                         .param("jobId", jobId.toString())
                         .with(seekerToken(userId)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("PENDING"))
                 .andExpect(jsonPath("$.jobId").value(jobId.toString()));
-        org.mockito.Mockito.verify(service).applyWithCv(eq(userId), eq(jobId), any());
+        org.mockito.Mockito.verify(service).applyWithCv(eq(userId), eq(jobId), any(), org.mockito.ArgumentMatchers.eq("I am interested in this position."));
     }
 
     @Test
     void duplicateAndClosedJobsAreConflicts() throws Exception {
-        when(service.applyWithCv(eq(userId), any(), any()))
+        when(service.applyWithCv(eq(userId), any(), any(), any()))
                 .thenThrow(new ApplicationFailure(ApplicationFailure.Code.DUPLICATE_APPLICATION))
                 .thenThrow(new ApplicationFailure(ApplicationFailure.Code.JOB_NOT_ACCEPTING_APPLICATIONS));
         var token = seekerToken(userId);
         MockMultipartFile cv = new MockMultipartFile("cv", "developer.pdf", "application/pdf", "%PDF-1.7".getBytes());
-        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/applications").file(cv).param("jobId", jobId.toString()).with(token))
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/applications").file(cv).param("jobId", jobId.toString()).param("coverLetter", "Please consider my application.").with(token))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DUPLICATE_APPLICATION"));
-        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/applications").file(cv).param("jobId", jobId.toString()).with(token))
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/applications").file(cv).param("jobId", jobId.toString()).param("coverLetter", "Please consider my application.").with(token))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("JOB_NOT_ACCEPTING_APPLICATIONS"));
     }
 
