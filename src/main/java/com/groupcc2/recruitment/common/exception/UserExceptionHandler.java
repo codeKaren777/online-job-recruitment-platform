@@ -4,6 +4,7 @@ import com.groupcc2.recruitment.users.controller.AdminUserController;
 import com.groupcc2.recruitment.users.controller.UserController;
 import com.groupcc2.recruitment.users.service.AuthorizationDeniedException;
 import com.groupcc2.recruitment.users.service.InvalidRoleChangeException;
+import com.groupcc2.recruitment.users.service.DuplicateEmailException;
 import com.groupcc2.recruitment.users.service.UserNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -27,5 +28,10 @@ public class UserExceptionHandler {
     @ExceptionHandler(InvalidRoleChangeException.class)
     ResponseEntity<ErrorResponse> invalidRoleChange(InvalidRoleChangeException exception) {
         return ResponseEntity.badRequest().body(new ErrorResponse("INVALID_ROLE_CHANGE"));
+    }
+
+    @ExceptionHandler(DuplicateEmailException.class)
+    ResponseEntity<ErrorResponse> duplicateEmail(DuplicateEmailException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse("DUPLICATE_EMAIL"));
     }
 }

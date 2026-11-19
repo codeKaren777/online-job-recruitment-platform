@@ -26,6 +26,39 @@ class UserServiceTest {
             new UserServiceImpl(repository, new BCryptPasswordEncoder(), roleChanges, rls);
 
     @Test
+    void administratorCanCreateJobSeekerAndEmployerAccounts() {
+        User administrator = new User("admin@example.com", "hash", UserRole.ADMIN);
+        when(repository.findById(administrator.getId())).thenReturn(Optional.of(administrator));
+        when(repository.existsByEmail(anyString())).thenReturn(false);
+        when(repository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        User employer = service.createAccount(administrator.getId(), " Employer@Example.com ",
+                "StrongPassword123!", UserRole.EMPLOYER);
+        User seeker = service.createAccount(administrator.getId(), "Applicant@example.com",
+                "StrongPassword123!", UserRole.JOB_SEEKER);
+
+        assertThat(employer.getEmail()).isEqualTo("employer@example.com");
+        assertThat(employer.getRole()).isEqualTo(UserRole.EMPLOYER);
+        assertThat(seeker.getEmail()).isEqualTo("applicant@example.com");
+        assertThat(seeker.getRole()).isEqualTo(UserRole.JOB_SEEKER);
+    }
+
+    @Test
+    void accountCreationRejectsAdminRoleAndDuplicateEmail() {
+        User administrator = new User("admin@example.com", "hash", UserRole.ADMIN);
+        when(repository.findById(administrator.getId())).thenReturn(Optional.of(administrator));
+
+        assertThatThrownBy(() -> service.createAccount(administrator.getId(),
+                "admin2@example.com", "StrongPassword123!", UserRole.ADMIN))
+                .isInstanceOf(InvalidRoleChangeException.class);
+
+        when(repository.existsByEmail("existing@example.com")).thenReturn(true);
+        assertThatThrownBy(() -> service.createAccount(administrator.getId(),
+                "existing@example.com", "StrongPassword123!", UserRole.JOB_SEEKER))
+                .isInstanceOf(DuplicateEmailException.class);
+    }
+
+    @Test
     void normalizesEmailAndStoresOnlyBcryptHash() {
         when(repository.existsByEmail("person@example.com")).thenReturn(false);
         when(repository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));

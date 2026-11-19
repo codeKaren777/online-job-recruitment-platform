@@ -420,6 +420,7 @@ These endpoints require an `ADMIN` token:
 
 | Method | Path | Body |
 |---|---|---|
+| POST | `/api/admin/users` | `{"email":"...","password":"...","role":"JOB_SEEKER"}` or `{"role":"EMPLOYER"}` |
 | GET | `/api/admin/users` | — |
 | GET | `/api/admin/users/{id}` | — |
 | PATCH | `/api/admin/users/{id}/suspend` | — |

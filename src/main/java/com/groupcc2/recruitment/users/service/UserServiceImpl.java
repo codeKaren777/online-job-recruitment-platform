@@ -3,6 +3,7 @@ package com.groupcc2.recruitment.users.service;
 import java.util.Locale;
 import java.util.List;
 import java.util.UUID;
+import java.nio.charset.StandardCharsets;
 
 import com.groupcc2.recruitment.users.entity.User;
 import com.groupcc2.recruitment.users.entity.UserRole;
@@ -36,6 +37,34 @@ public class UserServiceImpl implements UserService {
     public User register(String email, String rawPassword, UserRole role) {
         if (role != UserRole.JOB_SEEKER) {
             throw new RoleRegistrationNotAllowedException();
+        }
+        String normalizedEmail = normalizeEmail(email);
+        if (users.existsByEmail(normalizedEmail)) {
+            throw new DuplicateEmailException();
+        }
+        String passwordHash = passwordEncoder.encode(rawPassword);
+        if (!(passwordEncoder instanceof BCryptPasswordEncoder)
+                || !passwordHash.matches("^\\$2[aby]\\$\\d{2}\\$.{53}$")) {
+            throw new IllegalStateException("Only BCrypt password hashes are supported");
+        }
+        try {
+            return users.save(new User(normalizedEmail, passwordHash, role));
+        } catch (DataIntegrityViolationException exception) {
+            throw new DuplicateEmailException();
+        }
+    }
+
+    @Override
+    @Transactional
+    public User createAccount(UUID administratorId, String email, String rawPassword, UserRole role) {
+        requireAdministrator(administratorId);
+        if (role != UserRole.JOB_SEEKER && role != UserRole.EMPLOYER) {
+            throw new InvalidRoleChangeException("Only JOB_SEEKER or EMPLOYER accounts can be created");
+        }
+        if (rawPassword == null || rawPassword.isBlank()
+                || rawPassword.getBytes(StandardCharsets.UTF_8).length < 12
+                || rawPassword.getBytes(StandardCharsets.UTF_8).length > 72) {
+            throw new InvalidRoleChangeException("Password must be 12-72 UTF-8 bytes");
         }
         String normalizedEmail = normalizeEmail(email);
         if (users.existsByEmail(normalizedEmail)) {

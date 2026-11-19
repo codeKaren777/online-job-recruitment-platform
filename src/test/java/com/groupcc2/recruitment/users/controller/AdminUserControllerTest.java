@@ -25,6 +25,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -41,6 +42,48 @@ class AdminUserControllerTest {
     @MockitoBean JobService jobService;
     @MockitoBean ProfileService profileService;
     @MockitoBean ApplicationService applicationService;
+
+    @Test
+    void administratorCanCreateJobSeekerOrEmployerAccount() throws Exception {
+        UUID administratorId = UUID.randomUUID();
+        User employer = new User("employer@example.com", "hash", UserRole.EMPLOYER);
+        when(users.createAccount(administratorId, "employer@example.com",
+                "StrongPassword123!", UserRole.EMPLOYER)).thenReturn(employer);
+
+        mvc.perform(post("/api/admin/users")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))
+                                .jwt(token -> token.subject(administratorId.toString())))
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "email": "employer@example.com",
+                                  "password": "StrongPassword123!",
+                                  "role": "EMPLOYER"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.email").value("employer@example.com"))
+                .andExpect(jsonPath("$.role").value("EMPLOYER"));
+
+        verify(users).createAccount(administratorId, "employer@example.com",
+                "StrongPassword123!", UserRole.EMPLOYER);
+    }
+
+    @Test
+    void accountCreationRejectsAdminRoleAndInvalidPassword() throws Exception {
+        mvc.perform(post("/api/admin/users")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))
+                                .jwt(token -> token.subject(UUID.randomUUID().toString())))
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "email": "admin2@example.com",
+                                  "password": "StrongPassword123!",
+                                  "role": "ADMIN"
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+    }
 
     @Test
     void administratorCanListUsersThroughTheUserService() throws Exception {
