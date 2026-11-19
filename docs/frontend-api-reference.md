@@ -292,6 +292,27 @@ Applications start with status `PENDING`.
 `GET /api/applications` — list the user's applications.
 `GET /api/applications/{applicationId}` — read one application.
 
+`PATCH /api/applications/{applicationId}` — edit a pending application while
+its job is still accepting applications. The JSON form updates the cover
+letter:
+
+```json
+{
+  "coverLetter": "Updated cover letter."
+}
+```
+
+The multipart form can update the cover letter and/or replace the application
+CV:
+
+- `coverLetter`: optional plain-text cover letter
+- `cv`: optional PDF file, maximum 5 MiB
+
+The due-date boundary is inclusive: updates are rejected with HTTP `409` and
+`JOB_NOT_ACCEPTING_APPLICATIONS` on or after the job's UTC due date, even if
+the maintenance job has not marked the posting `EXPIRED`. Decided or
+withdrawn applications remain non-editable.
+
 Application fields include `id`, `jobId`, `applicantId`, `applicantDisplayName`,
 `cv`, `status`, `submittedAt`, `updatedAt`, `shortlistedAt`,
 `rejectedAt`, and `job`. The `cv` and `job` fields use the shapes described
@@ -337,6 +358,8 @@ Company responses contain `id`, `employerId`, the submitted company fields,
 ```
 
 All fields are required. `dueDate` must be in the future.
+Employers may update their own postings with the same `PUT` endpoint while
+preserving company ownership validation.
 
 `GET /api/employer/jobs` — list owned jobs. Optional query parameters:
 `status`, `page`, and `size`.
@@ -429,4 +452,3 @@ may include a safe `code` field, for example `{"code":"FORBIDDEN"}`.
 The local API URL is `http://localhost:8080`. If the frontend runs on another
 port, configure a development proxy or use the deployment's approved CORS
 configuration.
-

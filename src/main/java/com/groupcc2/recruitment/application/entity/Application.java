@@ -33,7 +33,7 @@ public class Application {
     @Column(name = "job_seeker_id", nullable = false, updatable = false)
     private UUID jobSeekerId;
 
-    @Column(name = "cv_document_id", updatable = false)
+    @Column(name = "cv_document_id")
     private UUID cvDocumentId;
 
     @Column(name = "cover_letter", length = 10000)
@@ -117,6 +117,7 @@ public class Application {
 
     public UUID getCvDocumentId() { return cvDocumentId; }
     public String getCoverLetter() { return coverLetter; }
+    public boolean editable() { return status == ApplicationStatus.PENDING && withdrawnAt == null; }
 
     public ApplicationStatus getStatus() {
         return status;
@@ -143,6 +144,13 @@ public class Application {
     public void updateCoverLetter(String value) {
         if (status != ApplicationStatus.PENDING || withdrawnAt != null) throw new IllegalStateException();
         coverLetter = value;
+    }
+
+    public void updateCvDocument(UUID documentId) {
+        if (documentId == null || status != ApplicationStatus.PENDING || withdrawnAt != null) {
+            throw new IllegalStateException();
+        }
+        cvDocumentId = documentId;
     }
 
     public void withdraw(Instant at) {

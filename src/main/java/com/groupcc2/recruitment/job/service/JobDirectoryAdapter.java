@@ -44,6 +44,22 @@ class JobDirectoryAdapter implements JobDirectory {
     }
 
     @Override
+    public Optional<JobSnapshot> findForApplicationUpdate(UUID jobId) {
+        return jdbc.query("""
+                SELECT id, title, location, due_date,
+                       CASE
+                           WHEN status = 'ACTIVE'
+                                AND due_date <= (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date
+                               THEN 'EXPIRED'::text
+                           ELSE status::text
+                       END AS state
+                FROM recruitment.jobs
+                WHERE id = ?
+                FOR UPDATE
+                """, MAPPER, jobId).stream().findFirst();
+    }
+
+    @Override
     public Map<UUID, JobSnapshot> findAllById(Collection<UUID> jobIds) {
         if (jobIds.isEmpty()) {
             return Map.of();

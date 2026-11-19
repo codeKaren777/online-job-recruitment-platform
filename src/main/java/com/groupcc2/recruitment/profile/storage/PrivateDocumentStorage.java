@@ -6,4 +6,7 @@ public interface PrivateDocumentStorage {
  void upload(String key, Path file, String contentType);
  void delete(String key);
  URI signGet(String key, Duration expiry, String filename, String contentType);
+ default URI signGet(String key, Duration expiry) {
+  return signGet(key, expiry, "document", "application/octet-stream");
+ }
 }
