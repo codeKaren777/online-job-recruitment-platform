@@ -95,10 +95,28 @@ public class ApplicationController {
     }
 
     @PatchMapping(value="/{applicationId}", consumes="application/json")
-    @Operation(summary="Update my pending application", description="Only coverLetter is editable, and only while status is PENDING and not withdrawn. CV and history remain immutable.")
+    @Operation(summary="Update my pending application", description="Updates the cover letter while the related job is still accepting applications.")
     @ApiResponses({@ApiResponse(responseCode="200",description="Application updated"), @ApiResponse(responseCode="400",description="Invalid cover letter"), @ApiResponse(responseCode="404",description="Application not found"), @ApiResponse(responseCode="409",description="Application already decided or withdrawn")})
     public ApplicationResponse update(@AuthenticationPrincipal @io.swagger.v3.oas.annotations.Parameter(hidden=true) Jwt jwt, @PathVariable UUID applicationId, @Valid @RequestBody ApplicationUpdateRequest request) {
         return service.updateOwn(userId(jwt), applicationId, request.coverLetter());
+    }
+
+    @PatchMapping(value="/{applicationId}", consumes="multipart/form-data")
+    @Operation(summary="Update application cover letter or CV",
+            description="Replaces the cover letter and/or application PDF CV while the related job is still accepting applications.")
+    @ApiResponses({@ApiResponse(responseCode="200",description="Application updated"),
+            @ApiResponse(responseCode="400",description="Invalid update or CV"),
+            @ApiResponse(responseCode="404",description="Application not found"),
+            @ApiResponse(responseCode="409",description="The related job is expired/closed or the application cannot be edited"),
+            @ApiResponse(responseCode="413",description="CV exceeds the upload limit"),
+            @ApiResponse(responseCode="503",description="Document storage is unavailable")})
+    public ApplicationResponse updateMultipart(
+            @AuthenticationPrincipal @io.swagger.v3.oas.annotations.Parameter(hidden=true) Jwt jwt,
+            @PathVariable UUID applicationId,
+            @org.springframework.web.bind.annotation.RequestParam(required=false) String coverLetter,
+            @org.springframework.web.bind.annotation.RequestPart(value="cv", required=false)
+            org.springframework.web.multipart.MultipartFile cv) {
+        return service.updateOwn(userId(jwt), applicationId, coverLetter, cv);
     }
 
     @DeleteMapping("/{applicationId}")

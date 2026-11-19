@@ -203,6 +203,92 @@ class ApplicationServiceTest {
     }
 
     @Test
+    void updatesCoverLetterBeforeDueDate() {
+        Application application = Application.submit(jobId, seeker.getId(), UUID.randomUUID(),
+                "Original cover letter");
+        when(repository.findByIdAndJobSeekerId(application.getId(), seeker.getId()))
+                .thenReturn(Optional.of(application));
+        when(directory.findForApplicationUpdate(jobId))
+                .thenReturn(Optional.of(job(TODAY.plusDays(1), JobSnapshot.State.ACTIVE)));
+
+        ApplicationResponse response = service.updateOwn(seeker.getId(), application.getId(), "Updated cover letter");
+
+        assertThat(response.coverLetter()).isEqualTo("Updated cover letter");
+        assertThat(application.getCoverLetter()).isEqualTo("Updated cover letter");
+    }
+
+    @Test
+    void rejectsApplicationUpdateOnExactDueDateWithoutStorageSideEffects() {
+        Application application = Application.submit(jobId, seeker.getId(), UUID.randomUUID(),
+                "Original cover letter");
+        when(repository.findByIdAndJobSeekerId(application.getId(), seeker.getId()))
+                .thenReturn(Optional.of(application));
+        when(directory.findForApplicationUpdate(jobId))
+                .thenReturn(Optional.of(job(TODAY, JobSnapshot.State.ACTIVE)));
+
+        assertThatThrownBy(() -> service.updateOwn(seeker.getId(), application.getId(),
+                "Updated cover letter"))
+                .isInstanceOfSatisfying(ApplicationFailure.class, e -> assertThat(e.code())
+                        .isEqualTo(ApplicationFailure.Code.JOB_NOT_ACCEPTING_APPLICATIONS));
+        assertThat(application.getCoverLetter()).isEqualTo("Original cover letter");
+        verifyNoInteractions(cvDocuments);
+    }
+
+    @Test
+    void rejectsApplicationUpdateForPersistedExpiredJobWithoutStorageSideEffects() {
+        Application application = Application.submit(jobId, seeker.getId(), UUID.randomUUID(),
+                "Original cover letter");
+        when(repository.findByIdAndJobSeekerId(application.getId(), seeker.getId()))
+                .thenReturn(Optional.of(application));
+        when(directory.findForApplicationUpdate(jobId))
+                .thenReturn(Optional.of(job(TODAY.plusDays(2), JobSnapshot.State.EXPIRED)));
+
+        assertThatThrownBy(() -> service.updateOwn(seeker.getId(), application.getId(),
+                "Updated cover letter"))
+                .isInstanceOfSatisfying(ApplicationFailure.class, e -> assertThat(e.code())
+                        .isEqualTo(ApplicationFailure.Code.JOB_NOT_ACCEPTING_APPLICATIONS));
+        verifyNoInteractions(cvDocuments);
+    }
+
+    @Test
+    void replacesApplicationCvBeforeDueDate() {
+        UUID originalCv = UUID.randomUUID();
+        UUID replacementCv = UUID.randomUUID();
+        Application application = Application.submit(jobId, seeker.getId(), originalCv, "Original");
+        when(repository.findByIdAndJobSeekerId(application.getId(), seeker.getId()))
+                .thenReturn(Optional.of(application));
+        when(directory.findForApplicationUpdate(jobId))
+                .thenReturn(Optional.of(job(TODAY.plusDays(1), JobSnapshot.State.ACTIVE)));
+        when(cvDocuments.storeForCurrentApplicant(any())).thenReturn(
+                new DocumentResponse(replacementCv, "replacement.pdf", "application/pdf", 20, Instant.now()));
+        var cv = new org.springframework.mock.web.MockMultipartFile(
+                "cv", "replacement.pdf", "application/pdf", "%PDF-1.7".getBytes());
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.updateOwn(seeker.getId(), application.getId(), null, cv);
+            assertThat(application.getCvDocumentId()).isEqualTo(replacementCv);
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
+    void rejectsReplacementCvOnClosedJobBeforeUploading() {
+        Application application = Application.submit(jobId, seeker.getId(), UUID.randomUUID(), "Original");
+        when(repository.findByIdAndJobSeekerId(application.getId(), seeker.getId()))
+                .thenReturn(Optional.of(application));
+        when(directory.findForApplicationUpdate(jobId))
+                .thenReturn(Optional.of(job(TODAY.plusDays(2), JobSnapshot.State.CLOSED)));
+        var cv = new org.springframework.mock.web.MockMultipartFile(
+                "cv", "replacement.pdf", "application/pdf", "%PDF-1.7".getBytes());
+
+        assertThatThrownBy(() -> service.updateOwn(seeker.getId(), application.getId(), null, cv))
+                .isInstanceOfSatisfying(ApplicationFailure.class, e -> assertThat(e.code())
+                        .isEqualTo(ApplicationFailure.Code.JOB_NOT_ACCEPTING_APPLICATIONS));
+        verify(cvDocuments, never()).storeForCurrentApplicant(any());
+    }
+
+    @Test
     void unknownJobIsNotFound() {
         when(directory.findById(jobId)).thenReturn(Optional.empty());
 

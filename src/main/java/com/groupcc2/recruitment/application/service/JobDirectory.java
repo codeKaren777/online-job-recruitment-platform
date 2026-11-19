@@ -15,6 +15,14 @@ import java.util.UUID;
 public interface JobDirectory {
     Optional<JobSnapshot> findById(UUID jobId);
 
+    /**
+     * Locks the canonical job row for an application mutation and derives its
+     * effective status using the database UTC date.
+     */
+    default Optional<JobSnapshot> findForApplicationUpdate(UUID jobId) {
+        return findById(jobId);
+    }
+
     /** Returns only the postings that exist and are visible to the caller; missing ids are simply absent. */
     Map<UUID, JobSnapshot> findAllById(Collection<UUID> jobIds);
 

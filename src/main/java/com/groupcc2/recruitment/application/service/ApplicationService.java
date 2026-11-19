@@ -160,12 +160,96 @@ public class ApplicationService {
 
     @Transactional
     public ApplicationResponse updateOwn(UUID userId, UUID applicationId, String coverLetter) {
+        return updateOwn(userId, applicationId, coverLetter, null);
+    }
+
+    @Transactional
+    public ApplicationResponse updateOwn(UUID userId, UUID applicationId, String coverLetter,
+                                         MultipartFile replacementCv) {
         requireJobSeeker(userId);
-        if (coverLetter == null || coverLetter.isBlank() || coverLetter.length() > 10000 || coverLetter.codePoints().anyMatch(c -> Character.isISOControl(c) && c != '\n' && c != '\r' && c != '\t')) throw new IllegalArgumentException("A valid application cover letter is required");
+        if (coverLetter == null && replacementCv == null) {
+            throw new IllegalArgumentException("An application update is required");
+        }
+        if (coverLetter != null && (coverLetter.isBlank() || coverLetter.length() > 10000
+                || coverLetter.codePoints().anyMatch(c -> Character.isISOControl(c)
+                && c != '\n' && c != '\r' && c != '\t'))) {
+            throw new IllegalArgumentException("A valid application cover letter is required");
+        }
         Application a = applications.findByIdAndJobSeekerId(applicationId, userId).orElseThrow(() -> new ApplicationFailure(ApplicationFailure.Code.NOT_FOUND));
-        try { a.updateCoverLetter(coverLetter.strip()); } catch (IllegalStateException e) { throw new ApplicationFailure(ApplicationFailure.Code.INVALID_STATUS_TRANSITION); }
-        JobSnapshot job = directory().findAllById(Set.of(a.getJobId())).get(a.getJobId());
+        if (!a.editable()) {
+            throw new ApplicationFailure(ApplicationFailure.Code.INVALID_STATUS_TRANSITION);
+        }
+        JobSnapshot job = directory().findForApplicationUpdate(a.getJobId())
+                .orElseThrow(() -> new ApplicationFailure(ApplicationFailure.Code.NOT_FOUND));
+        if (!job.acceptsApplications(LocalDate.now(clock))) {
+            throw new ApplicationFailure(ApplicationFailure.Code.JOB_NOT_ACCEPTING_APPLICATIONS);
+        }
+        UUID previousCv = a.getCvDocumentId();
+        DocumentResponse replacement = null;
+        if (replacementCv != null) {
+            if (cvDocuments == null) {
+                throw new ApplicationFailure(ApplicationFailure.Code.INTEGRATION_UNAVAILABLE);
+            }
+            replacement = cvDocuments.storeForCurrentApplicant(replacementCv);
+            registerReplacementCleanup(replacement.id());
+        }
+        try {
+            if (coverLetter != null) {
+                a.updateCoverLetter(coverLetter.strip());
+            }
+            if (replacement != null) {
+                a.updateCvDocument(replacement.id());
+            }
+        } catch (IllegalStateException e) {
+            if (replacement != null) {
+                removeReplacement(replacement.id());
+            }
+            throw new ApplicationFailure(ApplicationFailure.Code.INVALID_STATUS_TRANSITION);
+        }
+        if (replacement != null && previousCv != null) {
+            registerOldCvCleanup(previousCv);
+        }
         return ApplicationResponse.from(a, job);
+    }
+
+    private void registerReplacementCleanup(UUID documentId) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            removeReplacement(documentId);
+            throw new ApplicationFailure(ApplicationFailure.Code.INTEGRATION_UNAVAILABLE);
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_ROLLED_BACK || status == STATUS_UNKNOWN) {
+                    removeReplacement(documentId);
+                }
+            }
+        });
+    }
+
+    private void registerOldCvCleanup(UUID documentId) {
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_COMMITTED) {
+                    try {
+                        cvDocuments.removeForCurrentApplicant(documentId);
+                    } catch (RuntimeException exception) {
+                        log.error("Application CV replacement cleanup failed; reconciliation document {}",
+                                documentId, exception);
+                    }
+                }
+            }
+        });
+    }
+
+    private void removeReplacement(UUID documentId) {
+        try {
+            cvDocuments.removeForCurrentApplicant(documentId);
+        } catch (RuntimeException exception) {
+            log.error("Application CV replacement rollback cleanup failed; reconciliation document {}",
+                    documentId, exception);
+        }
     }
 
     @Transactional
