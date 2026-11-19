@@ -143,14 +143,16 @@ errors use {"code":"..."}.
 
 ## Download and employer endpoints
 
-There is currently **no employer-profile HTTP endpoint**. `downloadOwn` is
-available at `/api/profile/documents/{documentId}/download`; it verifies
-ownership before issuing a short-lived signed URL. `readForEmployer`,
-`listForEmployer`, and `downloadForEmployer` remain service methods only.
-Employer route contracts require the Jobs/Applications owner to supply real
-specific-job/application authorization; download routes must be deliberately
-registered and tested. The [contract-testing checklist](profile-contract-testing.md)
-records this remaining work.
+Applicants' submitted CVs are available to the owning employer through
+`GET /api/employer/applications/{applicationId}/cv`. The application service
+verifies both the employer's ownership of the job and the application's
+applicant relationship before the profile module signs the stored object.
+Unrelated employers, job seekers, and anonymous callers receive no link.
+The response contains the short-lived URL and `expiresAt`; storage keys are
+never returned. The signed response uses attachment disposition with the
+original filename and content type. `readForEmployer`, `listForEmployer`, and
+`downloadForEmployer` remain service methods behind that application-owned
+route.
 
 ## What you can test before auth is ready
 

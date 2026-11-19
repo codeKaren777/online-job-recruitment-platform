@@ -5,5 +5,5 @@ import java.net.URI;
 public interface PrivateDocumentStorage {
  void upload(String key, Path file, String contentType);
  void delete(String key);
- URI signGet(String key, Duration expiry);
+ URI signGet(String key, Duration expiry, String filename, String contentType);
 }

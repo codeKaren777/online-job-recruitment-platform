@@ -78,6 +78,8 @@ app:
     enabled: ${APP_OPENAPI_ENABLED:false}
     public-in-local: false
   security:
+    cors:
+      allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:*}
     jwt:
       secret-base64: ${JWT_SECRET_BASE64}
       issuer: ${JWT_ISSUER:groupcc2-recruitment}
