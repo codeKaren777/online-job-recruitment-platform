@@ -47,9 +47,15 @@ public class ApplicationService {
     private final ApplicationNotificationOutboxRepository notifications;
     private final Clock clock;
     private ApplicationCvDocuments cvDocuments;
+    private ShortlistCandidateRetention shortlistRetention;
 
     @Autowired
     void setCvDocuments(ApplicationCvDocuments cvDocuments) { this.cvDocuments = cvDocuments; }
+
+    @Autowired
+    void setShortlistRetention(ShortlistCandidateRetention shortlistRetention) {
+        this.shortlistRetention = shortlistRetention;
+    }
 
     @Autowired
     public ApplicationService(ApplicationRepository applications, UserService users, ApplicationRls rls,
@@ -321,6 +327,10 @@ public class ApplicationService {
         }
         ApplicationDecisionAudit audit = decisionAudits.saveAndFlush(new ApplicationDecisionAudit(
                 application.getId(), application.getJobId(), employerId, previousStatus, newStatus, changedAt));
+        if (newStatus == ApplicationStatus.SHORTLISTED && shortlistRetention != null) {
+            shortlistRetention.retain(application, jobs.get(application.getJobId()), employerId,
+                    audit.getId(), changedAt);
+        }
         notifications.enqueue(audit.getId(), application.getId(), newStatus.name());
         return employerResponse(application, jobs.get(application.getJobId()));
     }
