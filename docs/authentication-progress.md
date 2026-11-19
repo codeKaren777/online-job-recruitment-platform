@@ -9,7 +9,8 @@ always creates a `JOB_SEEKER`; the client cannot select an account role.
 Administrator and employer creation/upgrade are not exposed through public
 registration.
 
-Access tokens are HS256 JWTs with a 30-minute expiry, issuer, audience, UUID
+Access tokens are HS256 JWTs that expire 30 minutes after issuance (configured
+by `app.security.jwt.access-token-expiration`, defaulting to `PT30M`), with issuer, audience, UUID
 subject, role, and account `tokenVersion`. Spring Security verifies signature,
 issuer, audience, expiry, account status, role, and current token version for
 each bearer-authenticated request. `ROLE_JOB_SEEKER`, `ROLE_EMPLOYER`, and

@@ -84,6 +84,7 @@ app:
       secret-base64: ${JWT_SECRET_BASE64}
       issuer: ${JWT_ISSUER:groupcc2-recruitment}
       audience: ${JWT_AUDIENCE:groupcc2-api}
+      access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION:PT30M}
 
   profile:
     download-seconds: ${PROFILE_DOWNLOAD_SECONDS:120}

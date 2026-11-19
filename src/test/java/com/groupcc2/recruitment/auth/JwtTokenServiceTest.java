@@ -29,7 +29,7 @@ class JwtTokenServiceTest {
     private static final String AUDIENCE = "test-api";
 
     private final JwtTokenService tokenService =
-            new JwtTokenService(SECRET_BASE64, ISSUER, AUDIENCE);
+            new JwtTokenService(SECRET_BASE64, ISSUER, AUDIENCE, Duration.ofMinutes(30));
     private final SecurityConfig securityConfig = new SecurityConfig();
     private final AccountJwtValidator accountJwtValidator = mock(AccountJwtValidator.class);
 
@@ -52,8 +52,10 @@ class JwtTokenServiceTest {
         assertThat(decoded.getClaims().get("tokenVersion").toString()).isEqualTo("0");
         assertThat(decoded.getIssuedAt()).isNotNull();
         assertThat(decoded.getExpiresAt()).isNotNull();
-        assertThat(Duration.between(decoded.getIssuedAt(), decoded.getExpiresAt()).getSeconds())
-                .isEqualTo(JwtTokenService.ACCESS_TOKEN_LIFETIME_SECONDS);
+        assertThat(Duration.between(decoded.getIssuedAt(), decoded.getExpiresAt()))
+                .isEqualTo(Duration.ofMinutes(30));
+        assertThat(decoded.getExpiresAt()).isEqualTo(decoded.getIssuedAt().plus(Duration.ofMinutes(30)));
+        assertThat(tokenService.getAccessTokenLifetimeSeconds()).isEqualTo(1800);
         assertThat(decoded.getHeaders()).containsEntry("alg", "HS256");
     }
 
