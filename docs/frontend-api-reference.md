@@ -395,6 +395,25 @@ and the stored content type.
 
 Only `PENDING` applications can be changed to `SHORTLISTED` or `REJECTED`.
 
+When an application becomes `SHORTLISTED`, the backend creates an immutable
+retained-candidate record. This snapshot is independent of the live
+application, so it remains available after withdrawal, removal from active
+application lists, or job expiry. It contains only the job and applicant
+references, the profile fields visible to the employer at shortlisting time,
+and CV metadata; it never exposes a storage key.
+
+`GET /api/employer/shortlisted-candidates` — list retained shortlist records
+for jobs owned by the authenticated employer. Query parameters are `page`
+(default `0`) and `size` (default `20`, maximum `50`).
+
+`GET /api/employer/shortlisted-candidates/{candidateId}` — retrieve one
+retained shortlist record. A record belonging to another employer is returned
+as not found. The response includes `id`, `applicationId` (which may be null
+if the live application is later removed), `jobId`, `jobTitle`, `jobSeekerId`,
+the immutable `applicantProfile` snapshot, CV metadata, `shortlistedAt`, and
+`retainedAt`. These endpoints do not provide a document download URL; the
+returned CV metadata must not be used to construct a storage URL.
+
 ## Administrator endpoints
 
 These endpoints require an `ADMIN` token:

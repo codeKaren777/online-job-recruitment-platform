@@ -58,6 +58,11 @@ Public registration creates `JOB_SEEKER` accounts only. Job seekers submit compa
 
 Owns job submissions and application statuses. A job seeker can apply to a particular job only once. New applications start as `PENDING`; employers may review their own applications as `SHORTLISTED` or `REJECTED`.
 
+Shortlisting also creates an immutable candidate-retention snapshot linked to
+the application, job, employer, and job seeker. Employer shortlist reads use
+that retained record rather than the live application, preserving recruitment
+history when an application leaves active views or a job expires.
+
 ### Shared infrastructure
 
 - `security` contains JWT validation, password encoding, and Spring Security configuration.
