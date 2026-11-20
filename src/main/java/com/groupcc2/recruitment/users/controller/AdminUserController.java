@@ -1,6 +1,7 @@
 package com.groupcc2.recruitment.users.controller;
 
 import com.groupcc2.recruitment.users.dto.AssignAdminRoleRequest;
+import com.groupcc2.recruitment.users.dto.CreateAccountRequest;
 import com.groupcc2.recruitment.users.dto.UserResponse;
 import com.groupcc2.recruitment.users.service.UserService;
 import jakarta.validation.Valid;
@@ -21,7 +22,10 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ResponseStatus;
 
 @RestController
 @RequestMapping("/api/admin/users")
@@ -45,6 +49,24 @@ public class AdminUserController {
     public List<UserResponse> list(@AuthenticationPrincipal Jwt principal) {
         UUID administratorId = userId(principal);
         return users.findAllForAdministrator(administratorId).stream().map(UserResponse::from).toList();
+    }
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Create a job seeker or employer account",
+            description = "Creates an active account for the selected role. Only JOB_SEEKER and EMPLOYER are allowed; ADMIN accounts must use the role-assignment workflow.")
+    @ApiResponses({
+        @ApiResponse(responseCode="201", description="The account was created."),
+        @ApiResponse(responseCode="400", description="The email, password, or role is invalid."),
+        @ApiResponse(responseCode="401", description="A valid bearer token is required."),
+        @ApiResponse(responseCode="403", description="The caller must have the ADMIN role."),
+        @ApiResponse(responseCode="409", description="The email is already registered.")
+    })
+    public UserResponse create(
+            @AuthenticationPrincipal Jwt principal,
+            @Valid @RequestBody CreateAccountRequest request) {
+        return UserResponse.from(users.createAccount(userId(principal),
+                request.email(), request.password(), request.role()));
     }
 
     @GetMapping("/{id}")

@@ -80,6 +80,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/companies", "/api/companies/*").hasRole("EMPLOYER")
                         .requestMatchers(HttpMethod.PUT, "/api/companies/*").hasRole("EMPLOYER")
                         .requestMatchers(HttpMethod.GET, "/api/admin/users", "/api/admin/users/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/admin/users").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PATCH, "/api/admin/users/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST,
                                 "/api/auth/logout", "/api/auth/change-password").authenticated()
