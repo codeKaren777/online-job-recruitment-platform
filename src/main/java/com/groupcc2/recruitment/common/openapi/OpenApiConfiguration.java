@@ -40,6 +40,8 @@ public class OpenApiConfiguration {
                                 .description("Browse and manage job postings"),
                         new io.swagger.v3.oas.models.tags.Tag().name("Application")
                                 .description("Submit applications and review applications for employer-owned jobs"),
+                        new io.swagger.v3.oas.models.tags.Tag().name("Shortlisting")
+                                .description("Shortlist applications and access immutable retained candidate history"),
                         new io.swagger.v3.oas.models.tags.Tag().name("Profile")
                                 .description("Manage job seeker profiles and private documents"),
                         new io.swagger.v3.oas.models.tags.Tag().name("Health").description("Application health")))

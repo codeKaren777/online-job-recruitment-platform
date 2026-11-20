@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/employer/shortlisted-candidates")
-@Tag(name = "Shortlisted candidates", description = "Immutable candidate history retained when applications are shortlisted")
+@Tag(name = "Shortlisting", description = "Shortlist applications and access immutable retained candidate history")
 @SecurityRequirement(name = "bearerAuth")
 public class ShortlistCandidateController {
     private static final int MAX_PAGE_SIZE = 50;

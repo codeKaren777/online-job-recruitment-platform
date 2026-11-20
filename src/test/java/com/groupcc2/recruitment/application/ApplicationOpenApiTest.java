@@ -2,7 +2,9 @@ package com.groupcc2.recruitment.application;
 
 import com.groupcc2.recruitment.application.controller.ApplicationController;
 import com.groupcc2.recruitment.application.controller.EmployerApplicationController;
+import com.groupcc2.recruitment.application.controller.ShortlistCandidateController;
 import com.groupcc2.recruitment.application.service.ApplicationService;
+import com.groupcc2.recruitment.application.service.ShortlistCandidateRetention;
 import com.groupcc2.recruitment.users.employer.controller.EmployerUpgradeController;
 import com.groupcc2.recruitment.users.employer.controller.AdminEmployerUpgradeController;
 import com.groupcc2.recruitment.users.employer.service.EmployerUpgradeService;
@@ -29,6 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.hamcrest.Matchers.containsString;
 
 @WebMvcTest(controllers = {ApplicationController.class, EmployerApplicationController.class,
+        ShortlistCandidateController.class,
         EmployerUpgradeController.class, AdminEmployerUpgradeController.class}, properties = {
         "app.security.jwt.secret-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "app.openapi.enabled=true",
@@ -42,6 +45,7 @@ import static org.hamcrest.Matchers.containsString;
 class ApplicationOpenApiTest {
     @Autowired MockMvc mvc;
     @MockitoBean ApplicationService applicationService;
+    @MockitoBean ShortlistCandidateRetention shortlistCandidateRetention;
     @MockitoBean EmployerUpgradeService employerUpgradeService;
     @MockitoBean AccountJwtValidator accountJwtValidator;
 
@@ -57,6 +61,14 @@ class ApplicationOpenApiTest {
     void applicationCreationSchemaDocumentsRequiredMultipartCv() throws Exception {
         mvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tags[*].name")
+                        .value(org.hamcrest.Matchers.hasItem("Shortlisting")))
+                .andExpect(jsonPath("$.paths['/api/employer/applications/{applicationId}/status'].patch.tags")
+                        .value(org.hamcrest.Matchers.hasItem("Shortlisting")))
+                .andExpect(jsonPath("$.paths['/api/employer/shortlisted-candidates'].get.tags")
+                        .value(org.hamcrest.Matchers.hasItem("Shortlisting")))
+                .andExpect(jsonPath("$.paths['/api/employer/shortlisted-candidates/{candidateId}'].get.tags")
+                        .value(org.hamcrest.Matchers.hasItem("Shortlisting")))
                 .andExpect(jsonPath("$.paths['/api/applications'].post.requestBody.required").value(true))
                 .andExpect(jsonPath("$.paths['/api/applications'].post.requestBody.content['multipart/form-data'].schema.$ref")
                         .value("#/components/schemas/ApplicationSubmissionRequest"))
