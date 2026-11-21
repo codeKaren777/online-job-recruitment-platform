@@ -1,0 +1,148 @@
+name: Build and deploy production backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/deploy-production.yml'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'pom.xml'
+      - 'mvnw'
+      - '.mvn/**'
+      - 'src/**'
+      - 'docker/**'
+      - 'docker-compose.prod.yml'
+      - 'scripts/deploy-production.sh'
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: recruitment-production
+  cancel-in-progress: false
+
+env:
+  IMAGE: ${{ vars.GHCR_IMAGE || format('ghcr.io/{0}/online-job-recruitment-platform-backend', github.repository_owner) }}
+  DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/recruitment' }}
+
+jobs:
+  build-and-publish:
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+      sha_tag: ${{ steps.image.outputs.sha_tag }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Run unit tests
+        run: ./mvnw -B -ntp test
+
+      - name: Build application package
+        run: ./mvnw -B -ntp package -DskipTests
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Normalize image name and prepare deployment tag
+        id: image
+        env:
+          IMAGE_VALUE: ${{ env.IMAGE }}
+        run: |
+          IMAGE_VALUE="$(printf '%s' "$IMAGE_VALUE" | tr '[:upper:]' '[:lower:]')"
+          echo "image=$IMAGE_VALUE" >> "$GITHUB_OUTPUT"
+          echo "sha_tag=sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.image.outputs.image }}
+          tags: |
+            type=sha,format=long
+            type=ref,event=tag
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.event_name == 'release' }}
+
+      - name: Build and publish image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-publish
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Check out deployment files
+        uses: actions/checkout@v4
+
+      - name: Configure pinned SSH host key
+        env:
+          LIGHTSAIL_KNOWN_HOSTS: ${{ secrets.LIGHTSAIL_KNOWN_HOSTS }}
+        run: |
+          test -n "$LIGHTSAIL_KNOWN_HOSTS" || { echo 'LIGHTSAIL_KNOWN_HOSTS secret is required'; exit 1; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$LIGHTSAIL_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Install SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.LIGHTSAIL_SSH_PRIVATE_KEY }}
+
+      - name: Copy deployment configuration
+        env:
+          HOST: ${{ secrets.LIGHTSAIL_HOST }}
+          SSH_USER: ${{ secrets.LIGHTSAIL_SSH_USER }}
+          DEPLOY_PATH_VALUE: ${{ env.DEPLOY_PATH }}
+        run: |
+          test -n "$HOST" && test -n "$SSH_USER" || { echo 'Lightsail host and SSH user secrets are required'; exit 1; }
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$SSH_USER@$HOST" "mkdir -p '$DEPLOY_PATH_VALUE/docker'"
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes docker-compose.prod.yml "$SSH_USER@$HOST:$DEPLOY_PATH_VALUE/docker-compose.prod.yml"
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes docker/minio.Dockerfile docker/minio-client.Dockerfile docker/minio-init.sh docker/db-runtime-init.sh "$SSH_USER@$HOST:$DEPLOY_PATH_VALUE/docker/"
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/deploy-production.sh "$SSH_USER@$HOST:$DEPLOY_PATH_VALUE/deploy-production.sh"
+
+      - name: Deploy immutable image and verify health
+        env:
+          HOST: ${{ secrets.LIGHTSAIL_HOST }}
+          SSH_USER: ${{ secrets.LIGHTSAIL_SSH_USER }}
+          GHCR_USER: ${{ vars.GHCR_DEPLOY_USER || github.repository_owner }}
+          GHCR_TOKEN: ${{ secrets.GHCR_DEPLOY_TOKEN }}
+          IMAGE_VALUE: ${{ needs.build-and-publish.outputs.image }}
+          IMAGE_TAG: ${{ needs.build-and-publish.outputs.sha_tag }}
+          DEPLOY_PATH_VALUE: ${{ env.DEPLOY_PATH }}
+        run: |
+          test -n "$GHCR_TOKEN" || { echo 'GHCR_DEPLOY_TOKEN secret is required'; exit 1; }
+          printf '%s' "$GHCR_TOKEN" | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$SSH_USER@$HOST" \
+            "DEPLOY_PATH='$DEPLOY_PATH_VALUE' GHCR_USER='$GHCR_USER' BACKEND_IMAGE='$IMAGE_VALUE' IMAGE_TAG='$IMAGE_TAG' bash '$DEPLOY_PATH_VALUE/deploy-production.sh' --token-stdin"
