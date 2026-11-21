@@ -122,6 +122,7 @@ PostgreSQL lives in the named `postgres_data` volume across container recreation
 
 ## Project guidance
 
+- [Production deployment to AWS Lightsail](docs/deployment/architecture.md) — CI/CD architecture, GitHub Actions setup, server setup, deployment and rollback.
 - [Architecture and boundaries](docs/architecture.md)
 - [Database design and security](docs/database.md)
 - [Frontend integration guide](docs/frontend-integration.md)
