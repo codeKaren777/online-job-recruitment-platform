@@ -102,7 +102,6 @@ jobs:
     environment: production
     permissions:
       contents: read
-      packages: read
     steps:
       - name: Check out deployment files
         uses: actions/checkout@v4
@@ -137,12 +136,9 @@ jobs:
         env:
           HOST: ${{ secrets.LIGHTSAIL_HOST }}
           SSH_USER: ${{ secrets.LIGHTSAIL_SSH_USER }}
-          GHCR_USER: ${{ vars.GHCR_DEPLOY_USER || github.repository_owner }}
-          GHCR_TOKEN: ${{ secrets.GHCR_DEPLOY_TOKEN }}
           IMAGE_VALUE: ${{ needs.build-and-publish.outputs.image }}
           IMAGE_TAG: ${{ needs.build-and-publish.outputs.sha_tag }}
           DEPLOY_PATH_VALUE: ${{ env.DEPLOY_PATH }}
         run: |
-          test -n "$GHCR_TOKEN" || { echo 'GHCR_DEPLOY_TOKEN secret is required'; exit 1; }
-          printf '%s' "$GHCR_TOKEN" | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$SSH_USER@$HOST" \
-            "DEPLOY_PATH='$DEPLOY_PATH_VALUE' GHCR_USER='$GHCR_USER' BACKEND_IMAGE='$IMAGE_VALUE' IMAGE_TAG='$IMAGE_TAG' bash '$DEPLOY_PATH_VALUE/deploy-production.sh' --token-stdin"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$SSH_USER@$HOST" \
+            "DEPLOY_PATH='$DEPLOY_PATH_VALUE' BACKEND_IMAGE='$IMAGE_VALUE' IMAGE_TAG='$IMAGE_TAG' bash '$DEPLOY_PATH_VALUE/deploy-production.sh'"
