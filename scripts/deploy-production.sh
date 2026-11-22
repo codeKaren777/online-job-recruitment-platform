@@ -14,7 +14,6 @@ fail() {
 
 on_exit() {
   local status=$?
-  docker logout ghcr.io >/dev/null 2>&1 || true
   [[ "$status" -ne 0 ]] || return 0
   trap - EXIT
   printf '\nDeployment failed (exit %s). Recent backend logs:\n' "$status" >&2
@@ -54,12 +53,6 @@ cd "$DEPLOY_PATH"
 [[ -n "${BACKEND_IMAGE:-}" ]] || fail 'BACKEND_IMAGE is required'
 [[ -n "${IMAGE_TAG:-}" ]] || fail 'IMAGE_TAG is required'
 [[ "$IMAGE_TAG" =~ ^sha-[0-9a-f]{40}$ ]] || fail 'IMAGE_TAG must be an immutable sha-<40 character commit> tag'
-[[ -n "${GHCR_USER:-}" ]] || fail 'GHCR_USER is required'
-[[ "${1:-}" == "--token-stdin" ]] || fail 'expected --token-stdin; GHCR token must be passed through standard input'
-
-GHCR_TOKEN=''
-IFS= read -r -d '' GHCR_TOKEN || true
-[[ -n "$GHCR_TOKEN" ]] || fail 'no GHCR token received on standard input'
 
 export COMPOSE_PROJECT_NAME BACKEND_IMAGE IMAGE_TAG
 compose=(docker compose --project-name "$COMPOSE_PROJECT_NAME" --env-file .env -f "$COMPOSE_FILE")
@@ -71,9 +64,7 @@ if [[ -f "$DEPLOYED_IMAGE_FILE" ]]; then
   fi
 fi
 
-printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GHCR_USER" --password-stdin >/dev/null
-unset GHCR_TOKEN
-"${compose[@]}" pull backend
+docker pull "${BACKEND_IMAGE}:${IMAGE_TAG}"
 # These two supporting images are built from the repository's pinned source
 # configurations. Docker reuses cached layers on routine deployments.
 "${compose[@]}" build minio minio-init
@@ -87,6 +78,5 @@ fi
 printf '%s:%s\n' "$BACKEND_IMAGE" "$IMAGE_TAG" > "$DEPLOYED_IMAGE_FILE.tmp"
 chmod 600 "$DEPLOYED_IMAGE_FILE.tmp"
 mv "$DEPLOYED_IMAGE_FILE.tmp" "$DEPLOYED_IMAGE_FILE"
-docker logout ghcr.io >/dev/null 2>&1 || true
 trap - EXIT
 printf 'Deployment healthy: %s:%s\n' "$BACKEND_IMAGE" "$IMAGE_TAG"

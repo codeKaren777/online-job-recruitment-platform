@@ -4,7 +4,7 @@
 
 For a relevant push to `main`, a published GitHub release, or a manual run on `main`, GitHub Actions checks out the repository, runs Java 21 Maven unit tests, packages the application, and builds the root-context Dockerfile. It publishes the image to GHCR with the full `sha-<40 character commit>` tag. `latest` is published for production branch/release builds, and releases also publish the release tag. The workflow deploys only the immutable SHA tag after the publish job succeeds.
 
-The deploy job verifies SSH against the pinned `LIGHTSAIL_KNOWN_HOSTS`, copies the production Compose and supporting Docker files, logs in to GHCR with the read-only deployment token, and executes `/opt/recruitment/deploy-production.sh`. The script pulls the target image, builds the repository's MinIO server/client support images as needed, runs Compose, and polls `/actuator/health` on loopback. The currently running service may have a short restart interruption while Spring Boot and Flyway start; health is verified before success is reported. No live Lightsail deployment was performed as part of repository implementation.
+The deploy job verifies SSH against the pinned `LIGHTSAIL_KNOWN_HOSTS`, copies the production Compose and supporting Docker files, and executes `/opt/recruitment/deploy-production.sh`. The script pulls the public target image anonymously, builds the repository's MinIO server/client support images as needed, runs Compose, and polls `/actuator/health` on loopback. The currently running service may have a short restart interruption while Spring Boot and Flyway start; health is verified before success is reported. No live Lightsail deployment was performed as part of repository implementation.
 
 ## Identify the deployed image
 
@@ -38,7 +38,7 @@ docker compose --project-name recruitment --env-file .env -f docker-compose.prod
 curl --fail --retry 12 --retry-delay 5 http://127.0.0.1:8080/actuator/health
 ```
 
-Replace `OWNER` and the SHA with actual values. For a private package, run `docker login ghcr.io` first using a `read:packages` token via `--password-stdin`, and `docker logout ghcr.io` after. Update `.deployed-image` to the restored image only after health is verified. Rollback restores application code, but database migrations are forward-only; review migration compatibility before rolling back an image if the new release migrated the database.
+Replace `OWNER` and the SHA with actual values. The package is public, so rollback pulls the image anonymously; do not add `docker login ghcr.io` or server-side GHCR credentials. Update `.deployed-image` to the restored image only after health is verified. Rollback restores application code, but database migrations are forward-only; review migration compatibility before rolling back an image if the new release migrated the database.
 
 ## Troubleshooting
 
@@ -50,4 +50,4 @@ curl -i --max-time 5 http://127.0.0.1:8080/actuator/health
 docker inspect --format '{{json .State}}' "$(docker compose --project-name recruitment --env-file .env -f docker-compose.prod.yml ps -q backend)"
 ```
 
-Common causes include incorrect GHCR package access/token, untrusted SSH host key, missing production `.env` values, database credentials inconsistent with the initialized PostgreSQL volume, insufficient disk space for source image builds, MinIO endpoint configuration, Flyway failure, or Nginx pointing at the wrong upstream. The health endpoint uses the application's aggregate health status and returns a non-success response when unavailable. Never troubleshoot by deleting named volumes, Flyway history, or the production `.env`.
+Common causes include an inaccessible/non-public GHCR package, an untrusted SSH host key, missing production `.env` values, database credentials inconsistent with the initialized PostgreSQL volume, insufficient disk space for source image builds, MinIO endpoint configuration, Flyway failure, or Nginx pointing at the wrong upstream. The health endpoint uses the application's aggregate health status and returns a non-success response when unavailable. Never troubleshoot by deleting named volumes, Flyway history, or the production `.env`.
