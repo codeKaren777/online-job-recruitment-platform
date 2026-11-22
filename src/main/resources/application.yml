@@ -76,6 +76,7 @@ app:
       password: ${APP_BOOTSTRAP_ADMIN_PASSWORD:}
   openapi:
     enabled: ${APP_OPENAPI_ENABLED:false}
+    public: ${APP_OPENAPI_PUBLIC:false}
     public-in-local: false
   security:
     cors:

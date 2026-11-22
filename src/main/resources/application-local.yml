@@ -1,4 +1,5 @@
 app:
   openapi:
     enabled: true
+    public: false
     public-in-local: true

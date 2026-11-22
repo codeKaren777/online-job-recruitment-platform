@@ -80,9 +80,12 @@ documentation is enabled at [Swagger UI](http://localhost:8080/swagger-ui/index.
 and [OpenAPI JSON](http://localhost:8080/v3/api-docs). These paths expose only
 the API specification and UI; API operations still enforce Spring Security.
 Outside the local profile, documentation is disabled by default. Set
-`APP_OPENAPI_ENABLED=false` to disable it, including in local development. If
-enabled in another profile, documentation endpoints remain behind the
-default-deny security policy. See [setup](docs/setup.md) for details.
+`APP_OPENAPI_ENABLED=true` and `APP_OPENAPI_PUBLIC=true` to expose Swagger UI
+and OpenAPI docs to unauthenticated users during frontend integration. Both
+settings default to `false`. Set `APP_OPENAPI_ENABLED=false` to disable
+documentation after integration; public access remains ineffective if
+documentation is disabled. Business API routes retain JWT and role
+authorization. See [setup](docs/setup.md) for details.
 
 In a second PowerShell window:
 

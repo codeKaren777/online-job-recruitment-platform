@@ -44,10 +44,11 @@ public class SecurityConfig {
     SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationConverter jwtAuthenticationConverter,
                                             Environment environment,
                                             @Value("${app.openapi.enabled:false}") boolean openApiEnabled,
+                                            @Value("${app.openapi.public:false}") boolean openApiPublic,
                                             @Value("${app.openapi.public-in-local:false}") boolean openApiPublicInLocal)
             throws Exception {
-        boolean localPublicDocs = openApiEnabled && openApiPublicInLocal
-                && environment.acceptsProfiles(Profiles.of("local"));
+        boolean publicDocs = openApiEnabled && (openApiPublic
+                || (openApiPublicInLocal && environment.acceptsProfiles(Profiles.of("local"))));
         return http
                 // REST bearer tokens only; no cookie or HTTP session authentication.
                 .csrf(AbstractHttpConfigurer::disable)
@@ -59,7 +60,7 @@ public class SecurityConfig {
                 .logout(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(authorize -> {
                     authorize.requestMatchers(HttpMethod.GET, "/actuator/health").permitAll();
-                    if (localPublicDocs) {
+                    if (publicDocs) {
                         authorize.requestMatchers(HttpMethod.GET, "/v3/api-docs", "/v3/api-docs/**",
                                 "/v3/api-docs.yaml",
                                 "/swagger-ui.html", "/swagger-ui/**").permitAll();

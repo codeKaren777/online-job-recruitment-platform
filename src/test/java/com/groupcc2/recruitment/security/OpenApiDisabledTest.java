@@ -19,6 +19,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(properties = {
         "app.security.jwt.secret-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "app.openapi.enabled=false",
+        "app.openapi.public=true",
         "springdoc.api-docs.enabled=false",
         "springdoc.swagger-ui.enabled=false"
 })
