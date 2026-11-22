@@ -10,9 +10,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springdoc.core.configuration.SpringDocConfiguration;
+import org.springdoc.core.properties.SpringDocConfigProperties;
+import org.springdoc.webmvc.core.configuration.SpringDocWebMvcConfiguration;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -20,12 +25,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(properties = {
         "app.security.jwt.secret-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "app.openapi.enabled=true",
-        "app.openapi.public-in-local=true",
+        "app.openapi.public=false",
+        "app.openapi.public-in-local=false",
         "springdoc.api-docs.enabled=true",
         "springdoc.swagger-ui.enabled=true"
 })
 @ActiveProfiles("test")
 @Import({SecurityConfig.class, OpenApiConfiguration.class})
+@ImportAutoConfiguration({SpringDocConfiguration.class, SpringDocWebMvcConfiguration.class})
+@EnableConfigurationProperties(SpringDocConfigProperties.class)
 class OpenApiSecurityTest {
     @MockitoBean com.groupcc2.recruitment.company.service.CompanyService companyService;
     @MockitoBean com.groupcc2.recruitment.users.employer.service.EmployerUpgradeService employerUpgradeService;
@@ -38,7 +46,7 @@ class OpenApiSecurityTest {
     @MockitoBean ApplicationService applicationService;
 
     @Test
-    void enablingDocumentationOutsideLocalProfileDoesNotMakeItPublic() throws Exception {
+    void publicAccessDisabledRequiresAuthenticationOutsideLocalProfile() throws Exception {
         mvc.perform(get("/v3/api-docs")).andExpect(status().isUnauthorized());
         mvc.perform(get("/v3/api-docs.yaml")).andExpect(status().isUnauthorized());
         mvc.perform(get("/swagger-ui/index.html")).andExpect(status().isUnauthorized());

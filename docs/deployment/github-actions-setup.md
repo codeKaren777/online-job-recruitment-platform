@@ -24,6 +24,8 @@ In the Actions **Variables** tab, set:
 | `DEPLOY_PATH` | Optional; defaults to `/opt/recruitment`. Keep the requested path unless there is a deliberate server-side change. |
 | `GHCR_IMAGE` | Optional full lowercase image name, such as `ghcr.io/<owner>/online-job-recruitment-platform-backend`. Defaults to the repository owner plus that image name. |
 
+OpenAPI environment settings are configured in `/opt/recruitment/.env`, not in GitHub Actions. `APP_OPENAPI_ENABLED=false` disables Swagger/OpenAPI; `APP_OPENAPI_PUBLIC=false` keeps documentation behind JWT authentication. To enable public Swagger for frontend integration, set both to `true`; set `APP_OPENAPI_ENABLED=false` to disable it afterward.
+
 Configure the GHCR package as public. Publishing uses the workflow's `GITHUB_TOKEN`, with `contents: read` and `packages: write`; these permissions are set in the build and publish job. If organization policy restricts `GITHUB_TOKEN` package publishing, enable package write for Actions in the organization/repository settings. The Lightsail deploy job does not need package-read permissions or a deployment token.
 
 ## SSH key setup
