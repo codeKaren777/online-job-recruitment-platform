@@ -86,7 +86,7 @@ Forwarded addresses are accepted only when the direct peer is in `APP_RATE_LIMIT
 cd /opt/recruitment
 docker compose --project-name recruitment --env-file .env -f docker-compose.prod.yml ps
 docker compose --project-name recruitment --env-file .env -f docker-compose.prod.yml logs --tail=100 backend
-curl --fail http://127.0.0.1:8080/actuator/health
+curl --fail http://127.0.0.1:8080/actuator/health/readiness
 ```
 
 The first run builds the existing source-defined MinIO server and client images, initializes the restricted MinIO bucket user and DB runtime user, starts PostgreSQL/MinIO, and starts the backend. The Compose volumes persist across later deployments. Startup may take several minutes while the MinIO source image layers are built.

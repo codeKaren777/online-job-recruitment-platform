@@ -4,7 +4,7 @@
 
 For a relevant push to `main`, a published GitHub release, or a manual run on `main`, GitHub Actions checks out the repository, runs Java 21 Maven unit tests, packages the application, and builds the root-context Dockerfile. It publishes the image to GHCR with the full `sha-<40 character commit>` tag. `latest` is published for production branch/release builds, and releases also publish the release tag. The workflow deploys only the immutable SHA tag after the publish job succeeds.
 
-The deploy job verifies SSH against the pinned `LIGHTSAIL_KNOWN_HOSTS`, copies the production Compose and supporting Docker files, and executes `/opt/recruitment/deploy-production.sh`. The script pulls the public target image anonymously, builds the repository's MinIO server/client support images as needed, runs Compose, and polls `/actuator/health` on loopback. The currently running service may have a short restart interruption while Spring Boot and Flyway start; health is verified before success is reported. No live Lightsail deployment was performed as part of repository implementation.
+The deploy job verifies SSH against the pinned `LIGHTSAIL_KNOWN_HOSTS`, copies the production Compose and supporting Docker files, and executes `/opt/recruitment/deploy-production.sh`. The script pulls the public target image anonymously, builds the repository's MinIO server/client support images as needed, runs Compose with the `prod` Spring profile, and polls `/actuator/health/readiness` on loopback. The currently running service may have a short restart interruption while Spring Boot and Flyway start; health is verified before success is reported. No live Lightsail deployment was performed as part of repository implementation.
 
 ## Identify the deployed image
 
@@ -35,7 +35,7 @@ BACKEND_IMAGE=ghcr.io/OWNER/online-job-recruitment-platform-backend \
 IMAGE_TAG=sha-FULL_40_CHARACTER_COMMIT_SHA \
 COMPOSE_PROJECT_NAME=recruitment \
 docker compose --project-name recruitment --env-file .env -f docker-compose.prod.yml up -d --no-build backend
-curl --fail --retry 12 --retry-delay 5 http://127.0.0.1:8080/actuator/health
+curl --fail --retry 12 --retry-delay 5 http://127.0.0.1:8080/actuator/health/readiness
 ```
 
 Replace `OWNER` and the SHA with actual values. The package is public, so rollback pulls the image anonymously; do not add `docker login ghcr.io` or server-side GHCR credentials. Update `.deployed-image` to the restored image only after health is verified. Rollback restores application code, but database migrations are forward-only; review migration compatibility before rolling back an image if the new release migrated the database.
@@ -46,7 +46,7 @@ Replace `OWNER` and the SHA with actual values. The package is public, so rollba
 cd /opt/recruitment
 docker compose --project-name recruitment --env-file .env -f docker-compose.prod.yml ps -a
 docker compose --project-name recruitment --env-file .env -f docker-compose.prod.yml logs --tail=200 backend db minio
-curl -i --max-time 5 http://127.0.0.1:8080/actuator/health
+curl -i --max-time 5 http://127.0.0.1:8080/actuator/health/readiness
 docker inspect --format '{{json .State}}' "$(docker compose --project-name recruitment --env-file .env -f docker-compose.prod.yml ps -q backend)"
 ```
 
