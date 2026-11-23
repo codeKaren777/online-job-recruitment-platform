@@ -61,10 +61,9 @@ specific job/applicant relationships through EmployerApplicationAccess.
 URL plus expiresAt. URLs are bearer capabilities: do not log or persist them.
 Expiry defaults to 120 seconds and accepts only 30..300 seconds.
 
-Profile errors use safe codes: 400 INVALID_FILE/INVALID_REQUEST, 403 FORBIDDEN,
+Profile errors use the shared contract described in [error-responses.md](error-responses.md), with safe codes: 400 INVALID_FILE/BAD_REQUEST, 403 FORBIDDEN,
 404 NOT_FOUND, 413 FILE_TOO_LARGE, 503 STORAGE_UNAVAILABLE,
-INTEGRATION_UNAVAILABLE/PROFILE_UNAVAILABLE. Shared translation is scoped to this
-controller, preserving other modules' handlers.
+INTEGRATION_UNAVAILABLE. Shared translation is global to the API.
 
 ## Files and consistency
 

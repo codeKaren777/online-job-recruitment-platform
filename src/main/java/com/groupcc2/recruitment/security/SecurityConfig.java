@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.UUID;
 import javax.crypto.spec.SecretKeySpec;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.groupcc2.recruitment.users.entity.UserRole;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -41,7 +42,13 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 @EnableMethodSecurity
 public class SecurityConfig {
     @Bean
+    ApiSecurityErrorHandlers apiSecurityErrorHandlers(ObjectMapper objectMapper) {
+        return new ApiSecurityErrorHandlers(objectMapper);
+    }
+
+    @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationConverter jwtAuthenticationConverter,
+                                            ApiSecurityErrorHandlers apiSecurityErrorHandlers,
                                             Environment environment,
                                             @Value("${app.openapi.enabled:false}") boolean openApiEnabled,
                                             @Value("${app.openapi.public:false}") boolean openApiPublic,
@@ -112,8 +119,13 @@ public class SecurityConfig {
                         // Open routes deliberately as each feature gains authorization tests.
                         .anyRequest().denyAll();
                 })
-                .oauth2ResourceServer(resourceServer -> resourceServer.jwt(
-                        jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))
+                .exceptionHandling(errors -> errors
+                        .authenticationEntryPoint(apiSecurityErrorHandlers)
+                        .accessDeniedHandler(apiSecurityErrorHandlers))
+                .oauth2ResourceServer(resourceServer -> resourceServer
+                        .authenticationEntryPoint(apiSecurityErrorHandlers)
+                        .accessDeniedHandler(apiSecurityErrorHandlers)
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))
                 .build();
     }
 
