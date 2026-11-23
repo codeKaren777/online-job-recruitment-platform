@@ -22,9 +22,12 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class AuthService {
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
     private static final String INVALID_CREDENTIALS_MESSAGE = "Invalid email or password";
     private static final String RESET_MESSAGE =
             "If the account exists, the reset request has been accepted.";
@@ -133,12 +136,18 @@ public class AuthService {
         NotificationEmailSender emailSender = notificationEmails == null
                 ? null : notificationEmails.getIfAvailable();
         if (updated == 1 && emailSender != null) {
-            emailSender.sendPasswordReset(request.email(), rawToken, expiresAt);
+            try {
+                emailSender.sendPasswordReset(request.email(), rawToken, expiresAt);
+            } catch (RuntimeException deliveryFailure) {
+                // Never log exception text or the token: mail transports may include message data.
+                log.warn("Password reset delivery failed; account reference redacted");
+            }
         }
-        String exposedToken = updated == 1
-                ? passwordResetTokenExposure.exposeForLocalDevelopment(rawToken).orElse(null)
-                : null;
-        return new PasswordResetResponse(RESET_MESSAGE, exposedToken);
+        if (updated == 1 && emailSender == null) {
+            // Never disclose reset credentials through an API response. Operational delivery must
+            // be configured independently; the generic response avoids account enumeration.
+        }
+        return new PasswordResetResponse(RESET_MESSAGE);
     }
 
     @Transactional
