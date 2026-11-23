@@ -109,6 +109,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PATCH, "/api/employer/applications/*/status").hasRole("EMPLOYER")
                         .requestMatchers(HttpMethod.GET, "/api/applications", "/api/applications/*")
                                 .hasRole("JOB_SEEKER")
+                        .requestMatchers(HttpMethod.PATCH, "/api/applications/*").hasRole("JOB_SEEKER")
+                        .requestMatchers(HttpMethod.DELETE, "/api/applications/*").hasRole("JOB_SEEKER")
                         .requestMatchers(HttpMethod.POST, "/api/jobs").hasRole("EMPLOYER")
                         .requestMatchers(HttpMethod.GET, "/api/jobs").hasRole("JOB_SEEKER")
                         .requestMatchers(HttpMethod.GET, "/api/jobs/{jobId}").hasAnyRole("JOB_SEEKER", "EMPLOYER")

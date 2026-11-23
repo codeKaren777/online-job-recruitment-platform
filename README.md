@@ -59,6 +59,11 @@ Spring Boot does not automatically load `.env`; the import script sets process e
 
 `test` runs token validation and MVC route-security unit/slice checks without a database. `package` also produces `target/recruitment.jar`. `verify` additionally runs `FoundationIT` with an isolated Testcontainers PostgreSQL database, validates/re-runs Flyway and checks aggregate health. Integration tests deliberately fail if Docker is unavailable rather than silently skipping. Tests inject test-only settings and do not require `.env`. Reports are in `target/surefire-reports` and `target/failsafe-reports`.
 
+The protected HTTP end-to-end suite uses real login-issued JWTs, PostgreSQL and
+private MinIO Testcontainers to verify roles, ownership and application CV
+access. It runs with `verify`; see [Protected API E2E](docs/protected-api-e2e.md)
+for coverage, Docker requirements and the command to run this suite alone.
+
 On Unix, use `sh ./mvnw -B -ntp verify`. Wrapper downloads Maven on first run; no wrapper JAR is required. Optional project-local caches (used during initialization):
 
 ```powershell
