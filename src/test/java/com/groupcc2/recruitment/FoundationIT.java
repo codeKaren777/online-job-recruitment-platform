@@ -32,8 +32,14 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import com.groupcc2.recruitment.profile.storage.PrivateDocumentStorage;
+import com.groupcc2.recruitment.common.ratelimit.RateLimitRepository;
 import java.net.URI;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -73,6 +79,7 @@ class FoundationIT {
         registry.add("spring.flyway.user", POSTGRES::getUsername);
         registry.add("spring.flyway.password", POSTGRES::getPassword);
         registry.add("app.security.jwt.secret-base64", () -> "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");
+        registry.add("app.rate-limit.enabled", () -> false);
     }
 
     private static void bootstrapNonSuperuserApplicationRole() {
@@ -94,6 +101,8 @@ class FoundationIT {
                     + APPLICATION_USERNAME);
             statement.execute("GRANT USAGE ON TYPE recruitment.user_role, recruitment.account_status, "
                     + "recruitment.job_status, recruitment.application_status TO " + APPLICATION_USERNAME);
+            statement.execute("GRANT EXECUTE ON FUNCTION recruitment.increment_rate_limit(varchar, integer) TO "
+                    + APPLICATION_USERNAME);
             statement.execute("GRANT SELECT ON recruitment.current_jobs TO " + APPLICATION_USERNAME);
             statement.execute("GRANT EXECUTE ON FUNCTION recruitment.auth_lookup_user(text), "
                     + "recruitment.auth_bootstrap_admin(text, text) TO "
@@ -123,11 +132,12 @@ class FoundationIT {
     @Autowired PlatformTransactionManager transactionManager;
     @Autowired PasswordHashingService passwordHashingService;
     @Autowired PasswordResetTokenService passwordResetTokenService;
+    @Autowired RateLimitRepository rateLimitRepository;
 
     @Test
     void bootsAgainstPostgresAndAppliesMigrationOnlyOnce() throws Exception {
         assertThat(flyway.getConfiguration().getDefaultSchema()).isEqualTo("public");
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("25");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("26");
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
         try (var connection = dataSource.getConnection(); var statement = connection.prepareStatement("""
@@ -187,6 +197,30 @@ class FoundationIT {
         }
         mvc.perform(get("/actuator/health")).andExpect(status().isOk())
                 .andExpect(content().json("{\"status\":\"UP\"}", true));
+    }
+
+    @Test
+    void rateLimitCountersAreAtomicAcrossParallelRequests() throws Exception {
+        String bucket = "parallel-" + UUID.randomUUID();
+        try (var executor = Executors.newFixedThreadPool(8)) {
+            List<Callable<Integer>> requests = new ArrayList<>();
+            for (int i = 0; i < 40; i++) {
+                requests.add(() -> rateLimitRepository.incrementAndGet(bucket, 3600));
+            }
+            List<Future<Integer>> futures = executor.invokeAll(requests);
+            List<Integer> counts = futures.stream()
+                    .map(future -> {
+                        try {
+                            return future.get();
+                        } catch (Exception exception) {
+                            throw new RuntimeException(exception);
+                        }
+                    })
+                    .toList();
+            assertThat(counts).hasSize(40);
+            assertThat(counts).contains(40);
+            assertThat(counts).doesNotContain(41);
+        }
     }
 
     @Test

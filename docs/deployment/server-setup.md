@@ -68,6 +68,12 @@ Keep the installed host Nginx. Its API upstream should point to `http://127.0.0.
 
 Do not open ports 5432, 9000, or 9001 in UFW or the Lightsail firewall. Compose exposes MinIO only on host loopback and does not publish PostgreSQL. The backend is published only on host loopback for Nginx.
 
+## Abuse controls and proxy trust
+
+The backend uses PostgreSQL-backed fixed-window counters, so limits remain effective across application restarts and multiple instances. The default policies are 10 login attempts per 15 minutes, 5 registrations per hour, 5 recovery requests per hour, 10 password resets per hour, and 20 uploads per hour. Login and recovery limits combine client-address and account identity; upload limits combine JWT principal and client address. Exceeding a limit returns `429` with `Retry-After` and the standardized `ApiErrorResponse` contract using code `RATE_LIMIT_EXCEEDED`.
+
+Forwarded addresses are accepted only when the direct peer is in `APP_RATE_LIMIT_TRUSTED_PROXIES`. Nginx is on host loopback in the documented topology, so `127.0.0.1,::1` is the default. Confirm the actual proxy topology before changing this value. Add only verified proxy IP addresses or CIDRs; never set the trusted list to `0.0.0.0/0`. Configure Nginx to replace or remove client-supplied forwarding headers and set the correct leftmost original address. Tuning variables are listed in `docs/deployment/production.env.example`. Set `APP_RATE_LIMIT_ENABLED=false` only for a reviewed maintenance or test environment.
+
 ## Initial deployment
 
 1. Verify SSH login as `ubuntu`, Docker/Compose access, Nginx upstream, firewall, and existing database/MinIO volume names.

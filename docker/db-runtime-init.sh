@@ -69,6 +69,7 @@ WITH function_signatures(signature) AS (
         ('auth_bootstrap_admin(text, text)'),
         ('auth_store_password_reset_token(text, text, timestamptz)'),
         ('auth_consume_password_reset_token(text, text)'),
+        ('increment_rate_limit(varchar, integer)'),
         ('enqueue_application_notification(uuid, uuid, text)'),
         ('claim_application_notifications(integer)'),
         ('mark_application_notification_sent(uuid, uuid)'),
