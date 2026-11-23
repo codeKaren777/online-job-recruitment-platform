@@ -25,4 +25,4 @@ Validation errors use `VALIDATION_ERROR`, the message `One or more fields are in
 | 429 | `RATE_LIMIT_EXCEEDED` | Rate-limit integration rejected the request |
 | 500 | `INTERNAL_SERVER_ERROR` | Unexpected failure; response is generic and diagnostics are logged server-side |
 
-OpenAPI publishes the reusable `ApiErrorResponse` and `ApiFieldError` schemas and references them from documented error responses. The repository currently has no rate-limiting implementation; an integration can throw `RateLimitExceededException` to use the shared 429 mapping.
+OpenAPI publishes the reusable `ApiErrorResponse` and `ApiFieldError` schemas and references them from documented error responses. PostgreSQL-backed abuse controls return `429` with `RATE_LIMIT_EXCEEDED`; integrations can also throw `RateLimitExceededException` to use the shared 429 mapping.

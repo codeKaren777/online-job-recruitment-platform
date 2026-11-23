@@ -48,7 +48,7 @@ springdoc:
     enabled: ${app.openapi.enabled:false}
 server:
   port: 8080
-  forward-headers-strategy: framework
+  forward-headers-strategy: none
   error:
     include-message: never
     include-stacktrace: never
@@ -66,6 +66,24 @@ management:
       show-details: never
       show-components: never
 app:
+  rate-limit:
+    enabled: ${APP_RATE_LIMIT_ENABLED:true}
+    trusted-proxies: ${APP_RATE_LIMIT_TRUSTED_PROXIES:127.0.0.1,::1}
+    login:
+      requests: ${APP_RATE_LIMIT_LOGIN_REQUESTS:10}
+      window-seconds: ${APP_RATE_LIMIT_LOGIN_WINDOW_SECONDS:900}
+    registration:
+      requests: ${APP_RATE_LIMIT_REGISTRATION_REQUESTS:5}
+      window-seconds: ${APP_RATE_LIMIT_REGISTRATION_WINDOW_SECONDS:3600}
+    recovery:
+      requests: ${APP_RATE_LIMIT_RECOVERY_REQUESTS:5}
+      window-seconds: ${APP_RATE_LIMIT_RECOVERY_WINDOW_SECONDS:3600}
+    reset:
+      requests: ${APP_RATE_LIMIT_RESET_REQUESTS:10}
+      window-seconds: ${APP_RATE_LIMIT_RESET_WINDOW_SECONDS:3600}
+    upload:
+      requests: ${APP_RATE_LIMIT_UPLOAD_REQUESTS:20}
+      window-seconds: ${APP_RATE_LIMIT_UPLOAD_WINDOW_SECONDS:3600}
   mail:
     enabled: ${APP_MAIL_ENABLED:false}
     from: ${APP_MAIL_FROM:}
