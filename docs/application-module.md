@@ -21,7 +21,7 @@ Employers may delete a job only when they own its associated company. Jobs
 with applications are retained so application and decision history cannot be
 removed as a side effect; deleting such a job returns `409 Conflict`.
 
-Errors are `{"code": "..."}`: 400 `INVALID_REQUEST` or `PROFILE_INCOMPLETE` (create a profile with a displayName), 403 `FORBIDDEN`, 404 `NOT_FOUND`,
+Errors use the shared contract described in [error-responses.md](error-responses.md): 400 `BAD_REQUEST`/`VALIDATION_ERROR` or `PROFILE_INCOMPLETE` (create a profile with a displayName), 403 `FORBIDDEN`, 404 `NOT_FOUND`,
 409 `DUPLICATE_APPLICATION`, 409 `JOB_NOT_ACCEPTING_APPLICATIONS`, 409 `INVALID_STATUS_TRANSITION`,
 503 `INTEGRATION_UNAVAILABLE`.
 

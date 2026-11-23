@@ -95,12 +95,20 @@ class AuthControllerTest {
 
     @Test
     void registrationRejectsInvalidInputBeforeCallingService() throws Exception {
-        mvc.perform(post("/api/auth/register")
+        var result = mvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"email":"invalid","password":"short","role":"ADMIN"}
                                 """))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value("One or more fields are invalid."))
+                .andExpect(jsonPath("$.path").value("/api/auth/register"))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andExpect(jsonPath("$.fieldErrors[0].field").isNotEmpty());
+        org.assertj.core.api.Assertions.assertThat(result.andReturn().getResponse().getContentAsString())
+                .doesNotContain("short", "StrongPassword", "ADMIN");
 
         verify(authService, never()).register(org.mockito.ArgumentMatchers.any());
     }
@@ -115,7 +123,26 @@ class AuthControllerTest {
                         .content("""
                                 {"email":"person@example.com","password":"StrongPassword123!"}
                                 """))
-                .andExpect(status().isConflict());
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DUPLICATE_EMAIL"))
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
+    }
+
+    @Test
+    void invalidCredentialsReturnSafeUnauthorizedContract() throws Exception {
+        when(authService.login(org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new org.springframework.security.authentication.BadCredentialsException("secret password"));
+        var result = mvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"person@example.com\",\"password\":\"CorrectHorseBatteryStaple!\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andReturn();
+        org.assertj.core.api.Assertions.assertThat(result.getResponse().getContentAsString())
+                .doesNotContain("secret password", "CorrectHorseBatteryStaple!");
     }
 
     @Test

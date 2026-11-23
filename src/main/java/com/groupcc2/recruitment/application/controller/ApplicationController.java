@@ -8,7 +8,7 @@ import com.groupcc2.recruitment.application.dto.ApplicationSubmissionRequest;
 import com.groupcc2.recruitment.application.dto.ApplicationUpdateRequest;
 import com.groupcc2.recruitment.application.service.ApplicationFailure;
 import com.groupcc2.recruitment.application.service.ApplicationService;
-import com.groupcc2.recruitment.common.exception.ApplicationExceptionHandler;
+import com.groupcc2.recruitment.common.exception.ApiErrorResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -60,18 +60,18 @@ public class ApplicationController {
             @ApiResponse(responseCode = "201", description = "Application created",
                     content = @Content(schema = @Schema(implementation = ApplicationResponse.class))),
             @ApiResponse(responseCode = "400", description = "Missing job ID/CV, PROFILE_INCOMPLETE, or invalid CV",
-                    content = @Content(schema = @Schema(implementation = ApplicationExceptionHandler.ErrorResponse.class))),
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "413", description = "CV exceeds the 5 MiB upload limit",
-                    content = @Content(schema = @Schema(implementation = ApplicationExceptionHandler.ErrorResponse.class))),
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "401", description = "Authentication is required"),
             @ApiResponse(responseCode = "403", description = "Only active job seekers may apply",
-                    content = @Content(schema = @Schema(implementation = ApplicationExceptionHandler.ErrorResponse.class))),
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "404", description = "Job posting does not exist",
-                    content = @Content(schema = @Schema(implementation = ApplicationExceptionHandler.ErrorResponse.class))),
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "409", description = "Job is not accepting applications or this seeker already applied",
-                    content = @Content(schema = @Schema(implementation = ApplicationExceptionHandler.ErrorResponse.class))),
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "503", description = "Job posting service is unavailable",
-                    content = @Content(schema = @Schema(implementation = ApplicationExceptionHandler.ErrorResponse.class)))
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public ApplicationResponse apply(
             @AuthenticationPrincipal @io.swagger.v3.oas.annotations.Parameter(hidden = true) Jwt jwt,

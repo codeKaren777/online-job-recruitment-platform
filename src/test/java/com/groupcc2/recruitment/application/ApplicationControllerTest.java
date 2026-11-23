@@ -11,6 +11,9 @@ import com.groupcc2.recruitment.application.service.ApplicationFailure;
 import com.groupcc2.recruitment.application.service.ApplicationService;
 import com.groupcc2.recruitment.security.SecurityConfig;
 import com.groupcc2.recruitment.security.AccountJwtValidator;
+import com.groupcc2.recruitment.security.ApiSecurityErrorHandlers;
+import com.groupcc2.recruitment.common.exception.CorrelationIdFilter;
+import com.groupcc2.recruitment.common.exception.RateLimitExceededException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -31,11 +34,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = ApplicationController.class,
         properties = "app.security.jwt.secret-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
-@Import(SecurityConfig.class)
+@Import({SecurityConfig.class, CorrelationIdFilter.class})
 class ApplicationControllerTest {
     @Autowired MockMvc mvc;
     @MockBean ApplicationService service;
@@ -65,7 +69,12 @@ class ApplicationControllerTest {
 
     @Test
     void anonymousCallersAreUnauthorized() throws Exception {
-        mvc.perform(get("/api/applications")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/applications"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andExpect(header().exists("X-Correlation-ID"));
         mvc.perform(post("/api/applications").contentType("application/json").content("{\"jobId\":\"" + jobId + "\"}"))
                 .andExpect(status().isUnauthorized());
         verifyNoInteractions(service);
@@ -74,7 +83,9 @@ class ApplicationControllerTest {
     @Test
     void administratorsCannotUseJobSeekerApplicationEndpoints() throws Exception {
         mvc.perform(get("/api/applications").with(adminToken(userId)))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
         mvc.perform(post("/api/applications").with(adminToken(userId))
                         .contentType("application/json")
                         .content("{\"jobId\":\"" + jobId + "\"}"))
@@ -116,7 +127,9 @@ class ApplicationControllerTest {
         var token = seekerToken(userId);
         MockMultipartFile cv = new MockMultipartFile("cv", "developer.pdf", "application/pdf", "%PDF-1.7".getBytes());
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/applications").file(cv).param("jobId", jobId.toString()).param("coverLetter", "Please consider my application.").with(token))
-                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DUPLICATE_APPLICATION"));
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DUPLICATE_APPLICATION"))
+                .andExpect(jsonPath("$.status").value(409)).andExpect(jsonPath("$.path").value("/api/applications"))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/applications").file(cv).param("jobId", jobId.toString()).param("coverLetter", "Please consider my application.").with(token))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("JOB_NOT_ACCEPTING_APPLICATIONS"));
     }
@@ -155,7 +168,30 @@ class ApplicationControllerTest {
         when(service.getOwn(userId, id)).thenThrow(new ApplicationFailure(ApplicationFailure.Code.NOT_FOUND));
 
         mvc.perform(get("/api/applications/" + id).with(seekerToken(userId)))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("The requested resource was not found."))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
+    }
+
+    @Test
+    void rateLimitAndUnexpectedFailuresUseSafeSharedResponses() throws Exception {
+        when(service.listOwn(userId)).thenThrow(new RateLimitExceededException())
+                .thenThrow(new IllegalStateException("SQL password=secret-token jwt=eyJhbGciOiJIUzI1NiJ9 reset-token=private-reset-token"));
+        var token = seekerToken(userId);
+        mvc.perform(get("/api/applications").with(token))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.code").value("RATE_LIMIT_EXCEEDED"))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
+        var result = mvc.perform(get("/api/applications").with(token))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"))
+                .andExpect(jsonPath("$.message").value("An unexpected error occurred."))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                .andReturn();
+        org.assertj.core.api.Assertions.assertThat(result.getResponse().getContentAsString())
+                .doesNotContain("IllegalStateException", "SQL", "password", "secret-token", "stackTrace",
+                        "eyJhbGciOiJIUzI1NiJ9", "private-reset-token");
     }
 
     @Test

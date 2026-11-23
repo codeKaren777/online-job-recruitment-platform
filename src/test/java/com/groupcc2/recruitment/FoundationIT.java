@@ -492,7 +492,8 @@ class FoundationIT {
                         UPDATE recruitment.applications
                            SET status = 'REJECTED', rejected_at = CURRENT_TIMESTAMP
                          WHERE id = '%s'
-                        """.formatted(applicationId))).hasMessageContaining("applicant may only edit cover letter or withdraw");
+                        """.formatted(applicationId))).hasMessageContaining(
+                                "applicant may only edit cover letter, application CV, or withdraw");
             }
             connection.commit();
 

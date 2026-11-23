@@ -12,6 +12,7 @@ import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.responses.ApiResponse;
 import io.swagger.v3.oas.models.responses.ApiResponses;
+import io.swagger.v3.oas.models.media.Schema;
 import java.util.List;
 import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springframework.context.annotation.Bean;
@@ -51,11 +52,55 @@ public class OpenApiConfiguration {
                                 .scheme("bearer")
                                 .bearerFormat("JWT")
                                 .description("Send a signed access token as: Authorization: Bearer <token>"))
-                        .addResponses("BadRequest", new ApiResponse().description("The request is invalid"))
-                        .addResponses("Unauthorized", new ApiResponse().description("A valid bearer token is required"))
-                        .addResponses("Forbidden", new ApiResponse().description("The caller is not permitted"))
-                        .addResponses("NotFound", new ApiResponse().description("The requested resource was not found"))
-                        .addResponses("Conflict", new ApiResponse().description("The request conflicts with existing state")));
+                        .addSchemas("ApiFieldError", new Schema<>().type("object")
+                                .addProperty("field", new Schema<String>().type("string"))
+                                .addProperty("message", new Schema<String>().type("string")))
+                        .addSchemas("ApiErrorResponse", new Schema<>().type("object")
+                                .addProperty("timestamp", new Schema<String>().type("string").format("date-time"))
+                                .addProperty("status", new Schema<Integer>().type("integer").format("int32"))
+                                .addProperty("code", new Schema<String>().type("string"))
+                                .addProperty("message", new Schema<String>().type("string"))
+                                .addProperty("path", new Schema<String>().type("string"))
+                                .addProperty("correlationId", new Schema<String>().type("string"))
+                                .addProperty("fieldErrors", new Schema<>().type("array")
+                                        .items(new Schema<>().$ref("#/components/schemas/ApiFieldError"))))
+                        .addResponses("BadRequest", errorResponse("Invalid request; see the shared error schema."))
+                        .addResponses("Unauthorized", errorResponse("Authentication is required or credentials are invalid."))
+                        .addResponses("Forbidden", errorResponse("The caller is not permitted."))
+                        .addResponses("NotFound", errorResponse("The requested resource was not found."))
+                        .addResponses("Conflict", errorResponse("The request conflicts with existing state."))
+                        .addResponses("TooManyRequests", errorResponse("The request rate limit was exceeded."))
+                        .addResponses("InternalServerError", errorResponse("An unexpected error occurred.")));
+    }
+
+    private static ApiResponse errorResponse(String description) {
+        return new ApiResponse().description(description)
+                .content(new Content().addMediaType("application/json", new MediaType()
+                        .schema(new Schema<>().$ref("#/components/schemas/ApiErrorResponse"))));
+    }
+
+    @Bean
+    OpenApiCustomizer sharedErrorResponses() {
+        return openApi -> openApi.getPaths().values().forEach(path -> path.readOperations().forEach(operation -> {
+            ApiResponses responses = operation.getResponses();
+            addIfMissing(responses, "400", "BadRequest");
+            addIfMissing(responses, "401", "Unauthorized");
+            addIfMissing(responses, "403", "Forbidden");
+            addIfMissing(responses, "404", "NotFound");
+            addIfMissing(responses, "409", "Conflict");
+            addIfMissing(responses, "429", "TooManyRequests");
+            addIfMissing(responses, "500", "InternalServerError");
+        }));
+    }
+
+    private static void addIfMissing(ApiResponses responses, String status, String component) {
+        ApiResponse existing = responses.get(status);
+        if (existing == null) {
+            responses.addApiResponse(status, new ApiResponse().$ref("#/components/responses/" + component));
+        } else {
+            existing.setContent(new Content().addMediaType("application/json", new MediaType()
+                    .schema(new Schema<>().$ref("#/components/schemas/ApiErrorResponse"))));
+        }
     }
 
     /** Actuator endpoints are not controller methods, so publish only the deliberately public health contract. */
