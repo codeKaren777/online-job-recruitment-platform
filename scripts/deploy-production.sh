@@ -5,7 +5,8 @@ DEPLOY_PATH="${DEPLOY_PATH:-/opt/recruitment}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-recruitment}"
 COMPOSE_FILE="${DEPLOY_PATH}/docker-compose.prod.yml"
 DEPLOYED_IMAGE_FILE="${DEPLOY_PATH}/.deployed-image"
-HEALTH_URL="http://127.0.0.1:8080/actuator/health/readiness"
+READINESS_URL="http://127.0.0.1:8080/actuator/health/readiness"
+LEGACY_HEALTH_URL="http://127.0.0.1:8080/actuator/health"
 
 fail() {
   printf 'Deployment error: %s\n' "$*" >&2
@@ -22,7 +23,8 @@ on_exit() {
   if [[ -n "${PREVIOUS_TAG:-}" && -n "${IMAGE_TAG:-}" && "$PREVIOUS_TAG" != "$IMAGE_TAG" ]]; then
     printf '\nAttempting rollback to %s:%s\n' "$BACKEND_IMAGE" "$PREVIOUS_TAG" >&2
     IMAGE_TAG="$PREVIOUS_TAG" docker compose --project-name "$COMPOSE_PROJECT_NAME" --env-file .env -f "$COMPOSE_FILE" up -d --no-build backend >&2 || true
-    if wait_for_health 12; then
+    # Older known-good images may predate readiness/liveness probe endpoints.
+    if wait_for_health 12 "$LEGACY_HEALTH_URL"; then
       printf 'Rollback health check passed. Current deployment restored to %s:%s\n' "$BACKEND_IMAGE" "$PREVIOUS_TAG" >&2
     else
       printf 'Rollback could not be verified. Inspect backend logs and container state immediately.\n' >&2
@@ -33,10 +35,15 @@ on_exit() {
 
 wait_for_health() {
   local attempts="$1"
+  local health_url="${2:-$READINESS_URL}"
   local attempt
   for ((attempt = 1; attempt <= attempts; attempt++)); do
-    if curl --silent --show-error --fail --max-time 4 "$HEALTH_URL" >/dev/null 2>&1; then
+    if curl --silent --show-error --fail --max-time 4 "$health_url" >/dev/null 2>&1; then
       return 0
+    fi
+    if (( attempt == attempts )); then
+      printf 'Health probe failed: url=%s attempt=%s/%s\n' "$health_url" "$attempt" "$attempts" >&2
+      curl --silent --show-error --max-time 4 -i "$health_url" >&2 || true
     fi
     sleep 5
   done
@@ -70,8 +77,8 @@ docker pull "${BACKEND_IMAGE}:${IMAGE_TAG}"
 "${compose[@]}" build minio minio-init
 "${compose[@]}" up -d --no-build
 
-if ! wait_for_health 60; then
-  printf 'Health check did not pass at %s\n' "$HEALTH_URL" >&2
+if ! wait_for_health 60 "$READINESS_URL"; then
+  printf 'Readiness check did not pass at %s\n' "$READINESS_URL" >&2
   false
 fi
 
