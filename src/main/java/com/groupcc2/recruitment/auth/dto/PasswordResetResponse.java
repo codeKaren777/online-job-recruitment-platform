@@ -1,4 +1,4 @@
 package com.groupcc2.recruitment.auth.dto;
 
-public record PasswordResetResponse(String message, String resetToken) {
+public record PasswordResetResponse(String message) {
 }

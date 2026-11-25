@@ -219,8 +219,6 @@ class AuthServiceTest {
     void forgotPasswordReturnsGenericMessageAndOnlyLocalTokenForKnownAccount() {
         when(passwordResetTokenService.generateToken()).thenReturn("generated-reset-token");
         when(passwordResetTokenService.hashToken("generated-reset-token")).thenReturn("sha256-hash");
-        when(passwordResetTokenExposure.exposeForLocalDevelopment("generated-reset-token"))
-                .thenReturn(Optional.of("generated-reset-token"));
         when(userRepository.storePasswordResetToken(
                 org.mockito.ArgumentMatchers.eq("person@example.com"),
                 org.mockito.ArgumentMatchers.eq("sha256-hash"),
@@ -230,7 +228,8 @@ class AuthServiceTest {
 
         assertThat(known.message()).isEqualTo(
                 "If the account exists, the reset request has been accepted.");
-        assertThat(known.resetToken()).isEqualTo("generated-reset-token");
+        assertThat(known).isEqualTo(new PasswordResetResponse(
+                "If the account exists, the reset request has been accepted."));
 
         when(userRepository.storePasswordResetToken(
                 org.mockito.ArgumentMatchers.eq("missing@example.com"),
@@ -238,9 +237,8 @@ class AuthServiceTest {
                 org.mockito.ArgumentMatchers.any(Instant.class))).thenReturn(0);
         PasswordResetResponse missing = authService.forgotPassword(new ForgotPasswordRequest("missing@example.com"));
         assertThat(missing.message()).isEqualTo(known.message());
-        assertThat(missing.resetToken()).isNull();
-        verify(passwordResetTokenExposure, never()).exposeForLocalDevelopment(
-                org.mockito.ArgumentMatchers.argThat(token -> !"generated-reset-token".equals(token)));
+        assertThat(missing).isEqualTo(known);
+        verifyNoInteractions(passwordResetTokenExposure);
     }
 
     @Test
