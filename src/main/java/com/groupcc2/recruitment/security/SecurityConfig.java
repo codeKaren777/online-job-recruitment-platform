@@ -153,16 +153,11 @@ public class SecurityConfig {
     }
 
     private static List<String> parseOriginPatterns(String configuredPatterns) {
-        if (configuredPatterns == null || configuredPatterns.isBlank()) {
-            throw new IllegalArgumentException("CORS allowed origin patterns must not be blank");
-        }
+        if (configuredPatterns == null || configuredPatterns.isBlank()) return List.of();
         List<String> patterns = java.util.Arrays.stream(configuredPatterns.split(","))
                 .map(String::trim)
                 .filter(pattern -> !pattern.isEmpty())
                 .toList();
-        if (patterns.isEmpty()) {
-            throw new IllegalArgumentException("CORS allowed origin patterns must not be blank");
-        }
         return patterns;
     }
 

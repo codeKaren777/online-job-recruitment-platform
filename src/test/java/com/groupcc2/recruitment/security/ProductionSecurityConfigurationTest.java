@@ -16,6 +16,14 @@ class ProductionSecurityConfigurationTest {
                 false, false, true, "https://jobs.example.com")).doesNotThrowAnyException();
     }
 
+    @Test void allowsSameOriginDeploymentWithCrossOriginAccessDisabled() {
+        assertThatCode(() -> new ProductionSecurityConfiguration(new MockEnvironment(), KEY,
+                false, false, true, "")).doesNotThrowAnyException();
+        var cors = new SecurityConfig().corsConfigurationSource("")
+                .getCorsConfiguration(new org.springframework.mock.web.MockHttpServletRequest("GET", "/api/jobs"));
+        org.assertj.core.api.Assertions.assertThat(cors.getAllowedOriginPatterns()).isEmpty();
+    }
+
     @Test void rejectsWeakKeyOpenApiDisabledLimitsWildcardCorsAndLocalProfile() {
         assertThatThrownBy(() -> new ProductionSecurityConfiguration(new MockEnvironment(), "AA==",
                 false, false, true, "https://jobs.example.com")).isInstanceOf(IllegalStateException.class);
