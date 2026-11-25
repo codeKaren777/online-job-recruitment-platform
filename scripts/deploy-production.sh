@@ -5,7 +5,7 @@ DEPLOY_PATH="${DEPLOY_PATH:-/opt/recruitment}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-recruitment}"
 COMPOSE_FILE="${DEPLOY_PATH}/docker-compose.prod.yml"
 DEPLOYED_IMAGE_FILE="${DEPLOY_PATH}/.deployed-image"
-HEALTH_URL="http://127.0.0.1:8080/actuator/health"
+HEALTH_URL="http://127.0.0.1:8080/actuator/health/readiness"
 
 fail() {
   printf 'Deployment error: %s\n' "$*" >&2

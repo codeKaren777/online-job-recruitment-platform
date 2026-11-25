@@ -66,7 +66,8 @@ public class SecurityConfig {
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(authorize -> {
-                    authorize.requestMatchers(HttpMethod.GET, "/", "/actuator/health").permitAll();
+                    authorize.requestMatchers(HttpMethod.GET, "/", "/actuator/health",
+                            "/actuator/health/liveness", "/actuator/health/readiness").permitAll();
                     if (publicDocs) {
                         authorize.requestMatchers(HttpMethod.GET, "/v3/api-docs", "/v3/api-docs/**",
                                 "/v3/api-docs.yaml",

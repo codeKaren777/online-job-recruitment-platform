@@ -65,6 +65,17 @@ management:
     health:
       show-details: never
       show-components: never
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db
+          show-details: never
+          show-components: never
+        liveness:
+          include: livenessState
+          show-details: never
+          show-components: never
 app:
   rate-limit:
     enabled: ${APP_RATE_LIMIT_ENABLED:true}
