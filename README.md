@@ -1,6 +1,7 @@
 # Group CC2 Online Job Board backend
 
 See the [API contract](docs/api-contract.md) for endpoint paths, roles, request formats, and usage examples.
+See [UAT test case design](docs/uat-test-cases.md) for planned acceptance tests; cases are design artifacts and have not been executed.
 
 Backend foundation only. Java 21, Spring Boot 3.5.16, Maven 3.9.16 via official Wrapper 3.3.4, PostgreSQL 17, Spring Data JPA/Hibernate, Spring Security JWT, Flyway, and Springdoc OpenAPI 2.8.17. Spring Boot manages compatible library versions; Springdoc is explicitly pinned because it is not part of the Boot BOM. See [decisions](docs/decisions.md) for rationale and primary version references.
 

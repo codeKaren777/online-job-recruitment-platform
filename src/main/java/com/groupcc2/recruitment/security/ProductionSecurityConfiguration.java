@@ -31,8 +31,8 @@ public class ProductionSecurityConfiguration {
         }
         if (openApiEnabled || openApiPublic) throw new IllegalStateException("OpenAPI must be disabled in production");
         if (!rateLimitEnabled) throw new IllegalStateException("Rate limiting must be enabled in production");
-        if (corsOrigins == null || corsOrigins.isBlank() || corsOrigins.contains("*")) {
-            throw new IllegalStateException("Production CORS origins must be explicit and must not use wildcards");
+        if (corsOrigins != null && corsOrigins.contains("*")) {
+            throw new IllegalStateException("Production CORS origins must not use wildcards");
         }
     }
 

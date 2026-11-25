@@ -23,4 +23,5 @@ app:
     enabled: true
   security:
     cors:
-      allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS}
+      # Empty disables cross-origin browser access; configure explicit origins if needed.
+      allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:}
