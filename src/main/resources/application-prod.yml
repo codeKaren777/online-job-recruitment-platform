@@ -16,8 +16,8 @@ app:
     enabled: true
     from: ${APP_MAIL_FROM}
   openapi:
-    enabled: true
-    public: true
+    enabled: ${APP_OPENAPI_ENABLED:false}
+    public: ${APP_OPENAPI_PUBLIC:false}
     public-in-local: false
   rate-limit:
     enabled: true

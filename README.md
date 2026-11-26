@@ -90,10 +90,9 @@ the API specification and UI; API operations still enforce Spring Security.
 Outside the local profile, documentation is disabled by default. Set
 `APP_OPENAPI_ENABLED=true` and `APP_OPENAPI_PUBLIC=true` to expose Swagger UI
 and OpenAPI docs to unauthenticated users during frontend integration. Both
-settings default to `false`. Set `APP_OPENAPI_ENABLED=false` to disable
-documentation after integration; public access remains ineffective if
-documentation is disabled. Business API routes retain JWT and role
-authorization. See [setup](docs/setup.md) for details.
+settings default to `false`. Set both to `false` to disable documentation
+after integration. Business API routes retain JWT and role authorization.
+See [setup](docs/setup.md) for details.
 
 In a second PowerShell window:
 
