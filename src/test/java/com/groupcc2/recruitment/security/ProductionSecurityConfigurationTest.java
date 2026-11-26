@@ -24,11 +24,18 @@ class ProductionSecurityConfigurationTest {
         org.assertj.core.api.Assertions.assertThat(cors.getAllowedOriginPatterns()).isEmpty();
     }
 
+    @Test void allowsPublicSwaggerOnlyWhenExplicitlyEnabled() {
+        assertThatCode(() -> new ProductionSecurityConfiguration(new MockEnvironment(), KEY,
+                true, true, true, "https://jobs.example.com")).doesNotThrowAnyException();
+    }
+
     @Test void rejectsWeakKeyOpenApiDisabledLimitsWildcardCorsAndLocalProfile() {
         assertThatThrownBy(() -> new ProductionSecurityConfiguration(new MockEnvironment(), "AA==",
                 false, false, true, "https://jobs.example.com")).isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> new ProductionSecurityConfiguration(new MockEnvironment(), KEY,
                 true, false, true, "https://jobs.example.com")).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> new ProductionSecurityConfiguration(new MockEnvironment(), KEY,
+                false, true, true, "https://jobs.example.com")).isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> new ProductionSecurityConfiguration(new MockEnvironment(), KEY,
                 false, false, false, "https://jobs.example.com")).isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> new ProductionSecurityConfiguration(new MockEnvironment(), KEY,

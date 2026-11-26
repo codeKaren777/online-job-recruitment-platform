@@ -163,6 +163,11 @@ The frontend must:
 - never access MinIO directly;
 - never receive or store MinIO credentials.
 
+The URL host is the configured `PROFILE_STORAGE_PUBLIC_ENDPOINT` and must be
+reachable from the user's browser. In production, configure an HTTPS Nginx route
+to the MinIO API and set that public endpoint to the route's origin; the
+backend's internal `http://minio:9000` address is not a download URL.
+
 ## Browser connectivity
 
 The API enables browser CORS for arbitrary origins by default using origin
@@ -205,9 +210,12 @@ The local development bundle exposes these URLs at `http://localhost:8080`:
 
 Docker Compose activates the `local` Spring profile, which enables the
 documentation endpoints and permits unauthenticated access to them only in
-that profile. OpenAPI generation is disabled by default in other profiles;
-do not expose the documentation publicly in a deployed environment. The
-frontend can use the live OpenAPI document for tooling, while
+that profile. OpenAPI generation is disabled by default in other profiles.
+For frontend integration against a deployed API, the deployment operator can
+deliberately set both `APP_OPENAPI_ENABLED=true` and `APP_OPENAPI_PUBLIC=true`;
+this makes only the Swagger UI and OpenAPI specification public, not the
+business API routes. Disable both settings after integration. The frontend can
+use the live OpenAPI document for tooling, while
 [frontend-api-reference.md](frontend-api-reference.md) remains the human-readable
 contract guide.
 

@@ -2,11 +2,14 @@ package com.groupcc2.recruitment.profile.storage;
 
 import java.net.URI;
 import java.time.Duration;
+import java.util.Locale;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -26,8 +29,14 @@ public class StorageConfiguration {
             @Value("${app.profile.storage.bucket}") String bucket,
             @Value("${app.profile.storage.access-key}") String accessKey,
             @Value("${app.profile.storage.secret-key}") String secretKey,
-            @Value("${app.profile.storage.path-style:true}") boolean pathStyle) {
-        return validateSettings(endpoint, publicEndpoint, region, bucket, accessKey, secretKey, pathStyle);
+            @Value("${app.profile.storage.path-style:true}") boolean pathStyle,
+            Environment environment) {
+        Settings settings = validateSettings(
+                endpoint, publicEndpoint, region, bucket, accessKey, secretKey, pathStyle);
+        if (environment.acceptsProfiles(Profiles.of("prod"))) {
+            validateProductionPublicEndpoint(settings.publicEndpoint());
+        }
+        return settings;
     }
 
     @Bean(destroyMethod = "close")
@@ -97,6 +106,23 @@ public class StorageConfiguration {
             return endpoint;
         } catch (IllegalArgumentException exception) {
             throw invalid(property + " must be a valid http(s) endpoint");
+        }
+    }
+
+    static void validateProductionPublicEndpoint(URI endpoint) {
+        String host = endpoint.getHost();
+        if (host == null) {
+            throw invalid("PROFILE_STORAGE_PUBLIC_ENDPOINT must use HTTPS and a client-reachable hostname in production");
+        }
+        host = host.toLowerCase(Locale.ROOT);
+        if (host.startsWith("[") && host.endsWith("]")) {
+            host = host.substring(1, host.length() - 1);
+        }
+        boolean localOnlyHost = host.equals("localhost") || host.endsWith(".localhost")
+                || host.equals("minio") || host.endsWith(".local")
+                || host.equals("0.0.0.0") || host.equals("::1") || host.startsWith("127.");
+        if (!"https".equalsIgnoreCase(endpoint.getScheme()) || localOnlyHost) {
+            throw invalid("PROFILE_STORAGE_PUBLIC_ENDPOINT must use HTTPS and a client-reachable hostname in production");
         }
     }
 
