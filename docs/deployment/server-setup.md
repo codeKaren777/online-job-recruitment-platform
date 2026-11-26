@@ -64,7 +64,7 @@ The app connects to PostgreSQL and MinIO by Compose service DNS names. Flyway us
 
 ## Host Nginx and firewall
 
-Keep the installed host Nginx. Its API upstream should point to `http://127.0.0.1:8080`. Existing Nginx configuration was not available for inspection, so review it before reloading and retain its TLS, headers, and routing. If document links are enabled, configure a separate suitable HTTPS MinIO API route and use its externally reachable origin for `PROFILE_STORAGE_PUBLIC_ENDPOINT`; signed URLs require the route to preserve the request path and query. Do not proxy the MinIO console publicly.
+Keep the installed host Nginx. Its API upstream should point to `http://127.0.0.1:8080`. Existing Nginx configuration was not available for inspection, so review it before reloading and retain its TLS, headers, and routing. The backend uses forwarded headers so OpenAPI reflects the public HTTPS host; Nginx must set/overwrite `X-Forwarded-Host` and `X-Forwarded-Proto`, not pass through untrusted client values. If document links are enabled, configure a separate suitable HTTPS MinIO API route and use its externally reachable origin for `PROFILE_STORAGE_PUBLIC_ENDPOINT`; signed URLs require the route to preserve the request path and query. Do not proxy the MinIO console publicly.
 
 Do not open ports 5432, 9000, or 9001 in UFW or the Lightsail firewall. Compose exposes MinIO only on host loopback and does not publish PostgreSQL. The backend is published only on host loopback for Nginx.
 

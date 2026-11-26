@@ -773,6 +773,13 @@ class FoundationIT {
                 .andExpect(jsonPath("$.paths['/api/profile'].put.security[0].bearerAuth").exists())
                 .andExpect(jsonPath("$.paths['/api/auth/me'].get.security[0].bearerAuth").exists());
 
+        mvc.perform(get("/v3/api-docs")
+                        .header("X-Forwarded-Proto", "https")
+                        .header("X-Forwarded-Host", "api.example.com")
+                        .header("X-Forwarded-Port", "443"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.servers[0].url").value("https://api.example.com"));
+
         mvc.perform(get("/swagger-ui/index.html")).andExpect(status().isOk());
     }
 

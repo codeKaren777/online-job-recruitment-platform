@@ -48,7 +48,7 @@ springdoc:
     enabled: ${app.openapi.enabled:false}
 server:
   port: 8080
-  forward-headers-strategy: none
+  forward-headers-strategy: framework
   error:
     include-message: never
     include-stacktrace: never
