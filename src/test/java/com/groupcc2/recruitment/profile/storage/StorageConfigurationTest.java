@@ -3,6 +3,7 @@ package com.groupcc2.recruitment.profile.storage;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.net.URI;
 import org.junit.jupiter.api.Test;
 
 class StorageConfigurationTest {
@@ -39,6 +40,24 @@ class StorageConfigurationTest {
         assertThatThrownBy(() -> StorageConfiguration.validateSettings(
                 ENDPOINT, ENDPOINT, "us-east-1", "bad..bucket",
                 "access", "secret", true))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void productionDownloadEndpointMustBeHttpsAndExternallyAddressable() {
+        StorageConfiguration.validateProductionPublicEndpoint(URI.create("https://files.example.com"));
+
+        assertThatThrownBy(() -> StorageConfiguration.validateProductionPublicEndpoint(
+                URI.create("http://files.example.com")))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> StorageConfiguration.validateProductionPublicEndpoint(
+                URI.create("https://localhost:9000")))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> StorageConfiguration.validateProductionPublicEndpoint(
+                URI.create("https://minio:9000")))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> StorageConfiguration.validateProductionPublicEndpoint(
+                URI.create("https://[::1]:9000")))
                 .isInstanceOf(IllegalStateException.class);
     }
 }

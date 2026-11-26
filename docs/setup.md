@@ -380,14 +380,12 @@ These are expected local addresses, not guarantees. Confirm the actual port mapp
 
 The `local` Spring profile enables Swagger UI and the OpenAPI JSON and YAML
 documents. Docker Compose already activates this profile. The documentation
-routes are public only in this profile, and they expose the API contract
-without exposing Actuator environment/configuration endpoints. Other API
-routes continue to use their existing Spring Security rules. Documentation is
-disabled by default outside `local`; set `APP_OPENAPI_ENABLED=false` to disable
-it in any profile. Set `APP_OPENAPI_PUBLIC=true` to permit unauthenticated GET
-access to Swagger UI and OpenAPI docs in any profile. Both switches are
-independent: public access has no effect while `APP_OPENAPI_ENABLED=false`.
-The default is `APP_OPENAPI_ENABLED=false` and `APP_OPENAPI_PUBLIC=false`.
+routes are public only in this profile by default, and they expose the API
+contract without exposing Actuator environment/configuration endpoints. Other
+API routes continue to use their existing Spring Security rules. Documentation
+is disabled by default outside `local`. For deliberate frontend integration in
+production, set both `APP_OPENAPI_ENABLED=true` and `APP_OPENAPI_PUBLIC=true`;
+production rejects a mismatched pair. Set both to `false` to disable the docs.
 Business API routes remain protected by their existing JWT and role rules.
 
 ### Why the full stack matters

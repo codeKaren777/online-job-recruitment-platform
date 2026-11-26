@@ -29,7 +29,10 @@ public class ProductionSecurityConfiguration {
         if (key.length < 32 || allZero(key)) {
             throw new IllegalStateException("Production JWT secret must contain at least 32 random bytes");
         }
-        if (openApiEnabled || openApiPublic) throw new IllegalStateException("OpenAPI must be disabled in production");
+        if (openApiEnabled != openApiPublic) {
+            throw new IllegalStateException(
+                    "Production OpenAPI must be disabled or explicitly enabled and public");
+        }
         if (!rateLimitEnabled) throw new IllegalStateException("Rate limiting must be enabled in production");
         if (corsOrigins != null && corsOrigins.contains("*")) {
             throw new IllegalStateException("Production CORS origins must not use wildcards");
