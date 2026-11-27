@@ -220,9 +220,11 @@ class AuthServiceTest {
     }
 
     @Test
-    void forgotPasswordReturnsGenericMessageAndOnlyLocalTokenForKnownAccount() {
+    void forgotPasswordReturnsGenericMessageAndTokenForKnownAccount() {
         when(passwordResetTokenService.generateToken()).thenReturn("generated-reset-token");
         when(passwordResetTokenService.hashToken("generated-reset-token")).thenReturn("sha256-hash");
+        when(passwordResetTokenExposure.exposeForLocalDevelopment("generated-reset-token"))
+                .thenReturn(Optional.of("generated-reset-token"));
         when(userRepository.storePasswordResetToken(
                 org.mockito.ArgumentMatchers.eq("person@example.com"),
                 org.mockito.ArgumentMatchers.eq("sha256-hash"),
