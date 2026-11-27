@@ -39,7 +39,13 @@ public class EmployerUpgradeController {
             requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true,
                     content = @io.swagger.v3.oas.annotations.media.Content(mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
                             schema = @io.swagger.v3.oas.annotations.media.Schema(
-                                    implementation = EmployerVerificationMultipartRequest.class))))
+                                    implementation = EmployerVerificationMultipartRequest.class),
+                            encoding = {
+                                    @io.swagger.v3.oas.annotations.media.Encoding(
+                                            name = "application", contentType = MediaType.APPLICATION_JSON_VALUE),
+                                    @io.swagger.v3.oas.annotations.media.Encoding(
+                                            name = "document", contentType = MediaType.APPLICATION_PDF_VALUE)
+                            })))
     @ApiResponses({@ApiResponse(responseCode="201",description="Request submitted; returns request details."),@ApiResponse(responseCode="400",description="Multipart parts are malformed or fail validation."),@ApiResponse(responseCode="401",description="A valid bearer token is required."),@ApiResponse(responseCode="403",description="The account is not permitted to submit this request."),@ApiResponse(responseCode="409",description="An upgrade request cannot be submitted in the account's current state."),@ApiResponse(responseCode="413",description="Registration document exceeds 5 MiB."),@ApiResponse(responseCode="503",description="Private document storage is unavailable.")})
     public EmployerUpgradeResponse submit(@io.swagger.v3.oas.annotations.Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestPart("application") EmployerUpgradeRequestBody body,
