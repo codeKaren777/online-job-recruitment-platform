@@ -30,11 +30,36 @@ class ProfileServiceTest {
  }
  <T> ObjectProvider<T> provider(T value){ObjectProvider<T> p=mock(ObjectProvider.class);when(p.getIfAvailable()).thenReturn(value);return p;}
  @BeforeEach void setup(){manager.setRollbackOnCommitFailure(true);service=new ProfileService(provider(()->owner),provider(access),provider(storage),users,rls,profiles,documents,
- new DocumentValidator(),Validation.buildDefaultValidatorFactory().getValidator(),manager,120);
+ new DocumentValidator(),new ProfileImageValidator(),Validation.buildDefaultValidatorFactory().getValidator(),manager,120);
  when(users.findById(owner)).thenReturn(seeker);
  when(profiles.findById(owner)).thenReturn(Optional.of(new Profile(owner,new ProfileRequest("Name",null,null))));
  when(profiles.saveAndFlush(any())).thenAnswer(i->i.getArgument(0));when(documents.saveAndFlush(any())).thenAnswer(i->i.getArgument(0));}
  MockMultipartFile file(){return new MockMultipartFile("file","cv.pdf","application/pdf","%PDF-1.7\ncontent\n%%EOF".getBytes());}
+ @Test void optionalProfileImageCanBeUploadedAndIsMarkedAvailable(){
+  byte[] png={(byte)0x89,'P','N','G',13,10,26,10,1,2,3,4};
+  MockMultipartFile image=new MockMultipartFile("file","avatar.png","image/png",png);
+  ProfileResponse response=service.uploadProfileImage(image);
+  assertThat(response.profileImageAvailable()).isTrue();
+  verify(storage).upload(matches("profile-images/[a-f0-9-]{36}"),any(),eq("image/png"));
+  verify(profiles).saveAndFlush(argThat(p->((Profile)p).getProfileImageStorageKey()!=null));
+ }
+ @Test void profileImageIsReturnedAsPrivateShortLivedUrl(){
+  Profile p=new Profile(owner,new ProfileRequest("Name",null,null));p.setProfileImage("profile-images/random","image/png");
+  when(profiles.findById(owner)).thenReturn(Optional.of(p));
+  when(storage.signGetInline("profile-images/random",java.time.Duration.ofSeconds(120),"profile-image.png","image/png"))
+   .thenReturn(java.net.URI.create("https://files.example.test/signed"));
+  assertThat(service.viewOwnProfileImage().url().getHost()).isEqualTo("files.example.test");
+ }
+ @Test void employerCanViewImageOnlyAfterApplicationAccessIsVerified(){
+  UUID employer=owner,job=UUID.randomUUID(),applicant=UUID.randomUUID();
+  when(users.findById(owner)).thenReturn(new User("employer@example.test","hash",UserRole.EMPLOYER));
+  Profile p=new Profile(applicant,new ProfileRequest("Applicant",null,null));p.setProfileImage("profile-images/random","image/jpeg");
+  when(profiles.findById(applicant)).thenReturn(Optional.of(p));
+  when(storage.signGetInline("profile-images/random",java.time.Duration.ofSeconds(120),"profile-image.jpg","image/jpeg"))
+   .thenReturn(java.net.URI.create("https://files.example.test/signed"));
+  service.viewProfileImageForEmployer(job,applicant);
+  verify(access).requireSubmittedApplication(employer,job,applicant);
+ }
  @Test void createUpdateRead(){when(profiles.findById(owner)).thenReturn(Optional.empty());assertThat(service.upsert(new ProfileRequest("Created",null,null)).displayName()).isEqualTo("Created");
  when(profiles.findById(owner)).thenReturn(Optional.of(new Profile(owner,new ProfileRequest("Old",null,null))));
  assertThat(service.upsert(new ProfileRequest("Updated","123","bio")).displayName()).isEqualTo("Updated");assertThat(service.readOwn().displayName()).isEqualTo("Updated");}

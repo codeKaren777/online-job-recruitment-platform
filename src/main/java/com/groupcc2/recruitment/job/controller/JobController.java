@@ -55,21 +55,22 @@ public class JobController {
 
     @GetMapping("/jobs")
     @PreAuthorize("hasRole('JOB_SEEKER')")
-    @Operation(summary = "Browse job postings", description = "Returns a page of active, non-expired jobs to a JOB_SEEKER. Requires a bearer token. Page defaults to 0 and size to 20; results are sorted newest first.")
+    @Operation(summary = "Browse job postings", description = "Returns a page of active jobs by default. Pass status=CLOSED to list closed vacancies, or status=EXPIRED to list expired vacancies. Requires a JOB_SEEKER bearer token. Page defaults to 0 and size to 20; results are sorted newest first.")
     @ApiResponses({@ApiResponse(responseCode="200",description="Returns a page of matching jobs."),@ApiResponse(responseCode="401",description="A valid bearer token is required."),@ApiResponse(responseCode="403",description="The caller does not have the JOB_SEEKER role.")})
     public PageResponse<JobResponse> browse(@Parameter(description="Filter by location text.") @RequestParam(required = false) String location,
                                             @Parameter(description="Search job title and description.") @RequestParam(required = false, name = "q") String text,
+                                            @Parameter(description="Optional effective status filter: ACTIVE, CLOSED, or EXPIRED. Defaults to ACTIVE.") @RequestParam(required = false) JobStatus status,
                                             @Parameter(description="Zero-based page index (default 0).") @RequestParam(defaultValue = "0") int page,
                                             @Parameter(description="Page size (default 20; maximum 100).") @RequestParam(defaultValue = "20") int size,
                                             @AuthenticationPrincipal Jwt jwt) {
-        return jobService.browseJobs(userId(jwt), userRole(jwt), location, text, page, size);
+        return jobService.browseJobs(userId(jwt), userRole(jwt), location, text, status, page, size);
     }
 
     @GetMapping("/jobs/{jobId}")
     @PreAuthorize("hasAnyRole('JOB_SEEKER','EMPLOYER')")
-    @Operation(summary = "Get a job posting", description = "Returns the job identified by jobId. Employers can view their own jobs; job seekers can view active jobs. Requires a bearer token.")
+    @Operation(summary = "Get a job posting", description = "Returns the job identified by jobId. Employers can view their own jobs; job seekers can view active or closed vacancies. Requires a bearer token.")
     @Parameter(name="jobId",description="UUID of the job posting.",required=true)
-    @ApiResponses({@ApiResponse(responseCode="200",description="Returns the job posting."),@ApiResponse(responseCode="401",description="A valid bearer token is required."),@ApiResponse(responseCode="403",description="The caller is not permitted to view jobs."),@ApiResponse(responseCode="404",description="Job was not found or is not visible to this caller.")})
+    @ApiResponses({@ApiResponse(responseCode="200",description="Returns the job posting, including its ACTIVE, CLOSED, or EXPIRED status."),@ApiResponse(responseCode="401",description="A valid bearer token is required."),@ApiResponse(responseCode="403",description="The caller is not permitted to view jobs."),@ApiResponse(responseCode="404",description="Job was not found or is not visible to this caller.")})
     public JobResponse get(@PathVariable UUID jobId, @AuthenticationPrincipal Jwt jwt) {
         return jobService.getJob(jobId, userId(jwt), userRole(jwt));
     }

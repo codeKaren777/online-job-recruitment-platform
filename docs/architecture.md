@@ -40,11 +40,11 @@ Owns credential verification and token issuance. Authentication consumes the use
 
 ### Profile
 
-Owns job seeker profiles and private document metadata. A job seeker's profile and documents are visible to an employer only when that job seeker has applied to one of the employer's jobs.
+Owns job seeker profiles, optional private profile images, and private document metadata. A job seeker's profile, image, and documents are visible to an employer only when that job seeker has applied to one of the employer's jobs.
 
 ### Jobs
 
-Owns employer job postings. Every posting references a company represented by the authenticated employer. Employers can manage their own postings. A posting is considered expired when its due date is reached or has passed. An employer may delete only a job for an owned company, and a job with submitted applications cannot be deleted so application history is retained.
+Owns employer job postings. Every posting references a company represented by the authenticated employer. Employers can manage and view all their own postings, including closed ones. Job seekers can browse active postings by default and request closed postings by status. A posting is considered expired when its due date is reached or has passed. An employer may delete only a job for an owned company, and a job with submitted applications cannot be deleted so application history is retained.
 
 ### Companies
 

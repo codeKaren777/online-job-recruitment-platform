@@ -135,7 +135,8 @@ mc admin policy create recruitment-local recruitment-document-service docs/minio
 mc admin policy attach recruitment-local recruitment-document-service --user "$PROFILE_STORAGE_ACCESS_KEY"
 ```
 
-The supplied policy is scoped to recruitment-documents/documents/* and bucket
+The supplied policy is scoped to recruitment-documents/documents/*,
+recruitment-documents/profile-images/*, and bucket
 privacy inspection/location lookup (needed by mc). If you change the bucket name, update both resource names in
 a local copy of that policy and PROFILE_STORAGE_BUCKET. Do not grant root or
 full-server permissions to the application.

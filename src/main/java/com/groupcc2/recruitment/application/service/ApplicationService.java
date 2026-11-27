@@ -398,6 +398,17 @@ public class ApplicationService {
         return profile;
     }
 
+    @Transactional(readOnly = true)
+    public com.groupcc2.recruitment.profile.dto.DownloadResponse viewApplicantProfileImage(
+            UUID employerId, UUID applicationId) {
+        requireEmployer(employerId);
+        Map<UUID, JobSnapshot> jobs = directory().findAllForEmployer(employerId);
+        Application application = applications.findByIdAndJobIdIn(applicationId, jobs.keySet())
+                .orElseThrow(() -> new ApplicationFailure(ApplicationFailure.Code.NOT_FOUND));
+        if (cvDocuments == null) throw new ApplicationFailure(ApplicationFailure.Code.INTEGRATION_UNAVAILABLE);
+        return cvDocuments.profileImageForEmployer(application.getJobId(), application.getJobSeekerId());
+    }
+
     /**
      * Verifies the relationship required before an employer can read an applicant's profile.
      * The job ownership check and application lookup are both scoped to the supplied identifiers.

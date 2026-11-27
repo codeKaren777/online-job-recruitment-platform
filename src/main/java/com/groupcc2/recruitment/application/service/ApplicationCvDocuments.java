@@ -17,4 +17,5 @@ public interface ApplicationCvDocuments {
     Map<UUID, DocumentResponse> metadataForEmployer(Set<UUID> documentIds);
     Map<UUID, String> applicantNamesForEmployer(Set<UUID> applicantIds);
     Map<UUID, ProfileResponse> applicantProfilesForEmployer(Set<UUID> applicantIds);
+    DownloadResponse profileImageForEmployer(UUID jobId, UUID applicantId);
 }

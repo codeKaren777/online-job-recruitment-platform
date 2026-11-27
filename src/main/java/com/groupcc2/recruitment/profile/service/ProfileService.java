@@ -23,13 +23,14 @@ public class ProfileService {
  private final UserService users;private final ProfileRls rls;
  private final ProfileRepository profiles;private final DocumentRepository documents;
  private final DocumentValidator files;private final Validator validator;private final TransactionTemplate tx;
+ private final ProfileImageValidator imageFiles;
  private final Duration expiry;
  public ProfileService(ObjectProvider<ProfileIdentity> identities,ObjectProvider<EmployerApplicationAccess> employerAccess,
  ObjectProvider<PrivateDocumentStorage> storage,UserService users,ProfileRls rls,ProfileRepository profiles,
- DocumentRepository documents,DocumentValidator files,Validator validator,PlatformTransactionManager manager,
+ DocumentRepository documents,DocumentValidator files,ProfileImageValidator imageFiles,Validator validator,PlatformTransactionManager manager,
  @org.springframework.beans.factory.annotation.Value("${app.profile.download-seconds:120}") long seconds) {
  this.identities=identities;this.employerAccess=employerAccess;this.storage=storage;this.users=users;this.rls=rls;
- this.profiles=profiles;this.documents=documents;this.files=files;this.validator=validator;tx=new TransactionTemplate(manager);
+ this.profiles=profiles;this.documents=documents;this.files=files;this.imageFiles=imageFiles;this.validator=validator;tx=new TransactionTemplate(manager);
  // Each operation owns its commit, including compensations. Never silently join caller transactions.
  tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
  if(seconds<30||seconds>300)throw new IllegalArgumentException("Download expiry must be 30..300 seconds");expiry=Duration.ofSeconds(seconds);
@@ -46,6 +47,43 @@ public class ProfileService {
  if(request==null || !validator.validate(request).isEmpty())throw new IllegalArgumentException("Invalid profile fields");
  return tx.execute(s->{UUID id=actor(UserRole.JOB_SEEKER);Profile p=profiles.findById(id).orElseGet(()->new Profile(id,request));
  p.update(request);return profiles.saveAndFlush(p).response();});
+ }
+ public ProfileResponse uploadProfileImage(MultipartFile file) {
+  return tx.execute(s->{
+   UUID id=actor(UserRole.JOB_SEEKER);Profile p=profile(id);PrivateDocumentStorage store=store();
+   String operation=UUID.randomUUID().toString();String key="profile-images/"+operation;
+   try(var image=imageFiles.validate(file)) {
+    String previousKey=p.getProfileImageStorageKey();
+    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization(){
+     @Override public void afterCompletion(int status) {
+      if(status==STATUS_ROLLED_BACK)cleanup(store,key,operation);
+      else if(status==STATUS_UNKNOWN)log.error("Profile image commit outcome unknown; reconciliation operation {}",operation);
+      else if(status==STATUS_COMMITTED && previousKey!=null)deleteOldImage(store,previousKey,operation);
+     }
+    });
+    try {store.upload(key,image.path(),image.contentType());}
+    catch(RuntimeException exception) {throw failure(ProfileFailure.Code.STORAGE_UNAVAILABLE);}
+    p.setProfileImage(key,image.contentType());
+    return profiles.saveAndFlush(p).response();
+   } catch(java.io.IOException exception) {throw failure(ProfileFailure.Code.STORAGE_UNAVAILABLE);}
+  });
+ }
+ public void deleteProfileImage() {
+  tx.executeWithoutResult(s->{
+   UUID id=actor(UserRole.JOB_SEEKER);Profile p=profile(id);String key=p.getProfileImageStorageKey();
+   if(key==null)return;
+   PrivateDocumentStorage store=store();String operation=UUID.randomUUID().toString();
+   p.setProfileImage(null,null);profiles.saveAndFlush(p);
+   TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization(){
+    @Override public void afterCompletion(int status) {
+     if(status==STATUS_COMMITTED)deleteOldImage(store,key,operation);
+     else if(status==STATUS_UNKNOWN)log.error("Profile image removal outcome unknown; reconciliation operation {}",operation);
+    }
+   });
+  });
+ }
+ public DownloadResponse viewOwnProfileImage() {
+  return tx.execute(s->viewProfileImage(profile(actor(UserRole.JOB_SEEKER))));
  }
  public List<DocumentResponse> listOwn() {return tx.execute(s->list(actor(UserRole.JOB_SEEKER)));}
  public DocumentResponse upload(MultipartFile file) {
@@ -74,6 +112,9 @@ public class ProfileService {
  }
  public ProfileResponse readForEmployer(UUID jobId,UUID applicant) {
  return tx.execute(s->{employer(jobId,applicant);return profile(applicant).response();});
+ }
+ public DownloadResponse viewProfileImageForEmployer(UUID jobId,UUID applicant) {
+  return tx.execute(s->{employer(jobId,applicant);return viewProfileImage(profile(applicant));});
  }
  public List<DocumentResponse> listForEmployer(UUID jobId,UUID applicant) {
  return tx.execute(s->{employer(jobId,applicant);return list(applicant);});
@@ -118,6 +159,17 @@ public class ProfileService {
  private DownloadResponse signInline(Document d){return new DownloadResponse(
   store().signGetInline(d.storageKey(),expiry,d.response().originalFilename(),d.response().contentType()),
   Instant.now().plus(expiry));}
+ private DownloadResponse viewProfileImage(Profile profile) {
+  if(profile.getProfileImageStorageKey()==null)throw failure(ProfileFailure.Code.NOT_FOUND);
+  String type=profile.getProfileImageContentType();
+  String extension=switch(type){case "image/jpeg"->"jpg";case "image/png"->"png";case "image/webp"->"webp";default->throw failure(ProfileFailure.Code.NOT_FOUND);};
+  return new DownloadResponse(store().signGetInline(profile.getProfileImageStorageKey(),expiry,"profile-image."+extension,type),Instant.now().plus(expiry));
+ }
+ private void deleteOldImage(PrivateDocumentStorage store,String key,String operation) {
+  try {store.delete(key);} catch(RuntimeException exception) {
+   log.error("Profile image cleanup failed; reconciliation operation {}",operation);
+  }
+ }
  private Profile profile(UUID id){return profiles.findById(id).orElseThrow(()->failure(ProfileFailure.Code.NOT_FOUND));}
  private Document document(UUID id,UUID owner){return documents.findByIdAndProfileUserId(id,owner).orElseThrow(()->failure(ProfileFailure.Code.NOT_FOUND));}
  private List<DocumentResponse> list(UUID id){profile(id);return documents.findAllByProfileUserIdOrderByCreatedAtDesc(id).stream().map(Document::response).toList();}

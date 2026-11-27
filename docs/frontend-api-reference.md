@@ -267,8 +267,12 @@ and `updatedAt`. It does not expose the private storage key.
 
 ### Browse and apply for jobs
 
-`GET /api/jobs` — browse active jobs. Optional query parameters:
-`location`, `q`, `page` (default `0`), and `size` (default `20`, maximum `100`).
+`GET /api/jobs` — browse active jobs by default. Optional query parameters:
+`location`, `q`, `status` (`ACTIVE`, `CLOSED`, or `EXPIRED`), `page` (default `0`),
+and `size` (default `20`, maximum `100`). Use `status=CLOSED` to show closed
+vacancies, and render the returned `status` field. Job seekers can also retrieve
+an active or closed vacancy by ID; expired vacancies are not available through
+the detail endpoint.
 
 `GET /api/jobs/{jobId}` — read a job.
 
@@ -370,8 +374,8 @@ All fields are required. `dueDate` must be in the future.
 Employers may update their own postings with the same `PUT` endpoint while
 preserving company ownership validation.
 
-`GET /api/employer/jobs` — list owned jobs. Optional query parameters:
-`status`, `page`, and `size`.
+`GET /api/employer/jobs` — list all vacancies owned by the employer, including
+closed vacancies. Optional query parameters: `status`, `page`, and `size`.
 
 `PATCH /api/jobs/{jobId}/close` — close an owned job.
 `DELETE /api/jobs/{jobId}` — delete an owned job with no applications;
@@ -386,6 +390,10 @@ query parameters: `jobId` and `status`.
 
 `GET /api/employer/applications/{applicationId}/profile` — read the applicant's
 profile.
+
+`GET /api/employer/applications/{applicationId}/profile/image` — receive a
+short-lived viewing URL when the applicant has uploaded an image. The endpoint
+checks that the employer owns the job and the applicant has applied to it.
 
 `GET /api/employer/applications/{applicationId}/cv` — receive a temporary CV
 download URL. The URL is authorized for the employer that owns the application's

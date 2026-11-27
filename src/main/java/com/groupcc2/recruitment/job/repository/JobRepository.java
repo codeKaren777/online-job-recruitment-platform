@@ -14,10 +14,9 @@ public interface JobRepository extends JpaRepository<Job, UUID>, JpaSpecificatio
     /** Ownership is enforced in the query itself: someone else's job simply isn't found. */
     Optional<Job> findByIdAndEmployerId(UUID id, UUID employerId);
 
-    /**
-     * Public lookup for job seekers. Uses the database's own current date (local_date) so the
-     * rule "due date of today or earlier is expired" matches the DB policy and view exactly.
-     */
-    @Query("select j from Job j where j.id = :id and j.status = :status and j.dueDate > local_date")
-    Optional<Job> findPublicById(@Param("id") UUID id, @Param("status") JobStatus status);
+    /** Job seekers can inspect currently active jobs and explicitly closed vacancies. */
+    @Query("select j from Job j where j.id = :id and "
+            + "((j.status = com.groupcc2.recruitment.job.entity.JobStatus.ACTIVE and j.dueDate > local_date) "
+            + "or j.status = com.groupcc2.recruitment.job.entity.JobStatus.CLOSED)")
+    Optional<Job> findVisibleToJobSeekerById(@Param("id") UUID id);
 }

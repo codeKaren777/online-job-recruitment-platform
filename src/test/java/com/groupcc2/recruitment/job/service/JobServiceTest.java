@@ -208,14 +208,24 @@ class JobServiceTest {
 
     @Test
     void getJob_forJobSeeker_usesPublicActiveNonExpiredLookup() {
-        when(jobRepository.findPublicById(JOB_ID, JobStatus.ACTIVE)).thenReturn(Optional.empty());
+        when(jobRepository.findVisibleToJobSeekerById(JOB_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getJob(JOB_ID, SEEKER, UserRole.JOB_SEEKER))
                 .isInstanceOf(ResponseStatusException.class);
         InOrder order = inOrder(rlsTransactionContext, jobRepository);
         order.verify(rlsTransactionContext).setAuthenticatedUser(SEEKER, UserRole.JOB_SEEKER);
-        order.verify(jobRepository).findPublicById(JOB_ID, JobStatus.ACTIVE);
+        order.verify(jobRepository).findVisibleToJobSeekerById(JOB_ID);
         verify(jobRepository, never()).findByIdAndEmployerId(any(), any());
+    }
+
+    @Test
+    void getJob_forJobSeekerCanSeeClosedVacancyAndItsStatus() {
+        Job closed = ownedJob(TODAY.plusDays(5));
+        closed.setStatus(JobStatus.CLOSED);
+        when(jobRepository.findVisibleToJobSeekerById(JOB_ID)).thenReturn(Optional.of(closed));
+
+        assertThat(service.getJob(JOB_ID, SEEKER, UserRole.JOB_SEEKER).status()).isEqualTo(JobStatus.CLOSED);
+        verify(jobRepository).findVisibleToJobSeekerById(JOB_ID);
     }
 
     @Test
@@ -225,7 +235,7 @@ class JobServiceTest {
         assertThatThrownBy(() -> service.getJob(JOB_ID, OTHER_EMPLOYER, UserRole.EMPLOYER))
                 .isInstanceOf(ResponseStatusException.class);
         verify(rlsTransactionContext).setAuthenticatedUser(OTHER_EMPLOYER, UserRole.EMPLOYER);
-        verify(jobRepository, never()).findPublicById(any(), any());
+        verify(jobRepository, never()).findVisibleToJobSeekerById(any());
     }
 
     @Test
@@ -235,7 +245,7 @@ class JobServiceTest {
 
         assertThat(service.getJob(JOB_ID, EMPLOYER, UserRole.EMPLOYER).status()).isEqualTo(JobStatus.EXPIRED);
         verify(jobRepository).findByIdAndEmployerId(JOB_ID, EMPLOYER);
-        verify(jobRepository, never()).findPublicById(any(), any());
+        verify(jobRepository, never()).findVisibleToJobSeekerById(any());
     }
 
     @Test
@@ -245,7 +255,7 @@ class JobServiceTest {
                 .thenReturn(Page.empty());
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
 
-        service.browseJobs(SEEKER, UserRole.JOB_SEEKER, null, null, -3, 5000);
+        service.browseJobs(SEEKER, UserRole.JOB_SEEKER, null, null, null, -3, 5000);
 
         verify(jobRepository).findAll(any(Specification.class), captor.capture());
         InOrder order = inOrder(rlsTransactionContext, jobRepository);
@@ -257,7 +267,7 @@ class JobServiceTest {
 
     @Test
     void browseJobs_rejectsEmployerRole() {
-        assertThatThrownBy(() -> service.browseJobs(EMPLOYER, UserRole.EMPLOYER, null, null, 0, 20))
+        assertThatThrownBy(() -> service.browseJobs(EMPLOYER, UserRole.EMPLOYER, null, null, null, 0, 20))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("403");
         verify(rlsTransactionContext, never()).setAuthenticatedUser(any(), any());

@@ -131,7 +131,7 @@ class JobsRlsIT {
             setContext(app, UUID.randomUUID(), "JOB_SEEKER");
             assertThat(jobCount(app, ownJob)).isEqualTo(1);
             assertThat(jobCount(app, otherActiveJob)).isEqualTo(1);
-            assertThat(jobCount(app, closedJob)).isZero();
+            assertThat(jobCount(app, closedJob)).isEqualTo(1);
             assertThat(jobCount(app, expiredJob)).isZero();
             app.commit();
         }

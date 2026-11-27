@@ -83,12 +83,14 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     private PolicyMatch match(String method, String path) {
-        if (!"POST".equalsIgnoreCase(method)) return null;
+        if (!"POST".equalsIgnoreCase(method)
+                && !("PUT".equalsIgnoreCase(method) && path.equals("/api/profile/image"))) return null;
         if (path.equals("/api/auth/login")) return new PolicyMatch("login", properties.getLogin());
         if (path.equals("/api/auth/register")) return new PolicyMatch("registration", properties.getRegistration());
         if (path.equals("/api/auth/forgot-password")) return new PolicyMatch("recovery", properties.getRecovery());
         if (path.equals("/api/auth/reset-password")) return new PolicyMatch("reset", properties.getReset());
         if (path.equals("/api/profile/documents")
+                || path.equals("/api/profile/image")
                 || path.equals("/api/applications")
                 || path.equals("/api/employer-requests")
                 || path.equals("/api/employer-requests/")) {

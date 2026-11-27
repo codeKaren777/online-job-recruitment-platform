@@ -46,6 +46,9 @@ account status and expected role on every call, including employer calls.
 | GET /api/profile | Own profile; 404 if absent |
 | PUT /api/profile | Create/update own profile; 200 |
 | POST /api/profile/documents | Multipart part `file`; own existing profile required; 201 |
+| PUT /api/profile/image | Optional JPEG/PNG/WebP image, max 2 MiB; profile must exist |
+| GET /api/profile/image | Short-lived private image URL; own image only |
+| DELETE /api/profile/image | Remove own optional image |
 | GET /api/profile/documents | Own metadata only; profile required |
 | DELETE /api/profile/documents/{documentId} | Own document only; 204; foreign/missing ID gives 404 |
 
@@ -120,7 +123,7 @@ Create a distinct application identity with this identity policy (placeholders):
 ```json
 {"Version":"2012-10-17","Statement":[
  {"Effect":"Allow","Action":["s3:GetBucketPolicy","s3:GetBucketAcl","s3:GetBucketLocation"],"Resource":["arn:aws:s3:::recruitment-documents"]},
- {"Effect":"Allow","Action":["s3:GetObject","s3:PutObject","s3:DeleteObject"],"Resource":["arn:aws:s3:::recruitment-documents/documents/*"]}
+ {"Effect":"Allow","Action":["s3:GetObject","s3:PutObject","s3:DeleteObject"],"Resource":["arn:aws:s3:::recruitment-documents/documents/*","arn:aws:s3:::recruitment-documents/profile-images/*"]}
 ]}
 ```
 

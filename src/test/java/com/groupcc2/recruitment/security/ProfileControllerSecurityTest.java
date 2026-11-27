@@ -66,6 +66,10 @@ class ProfileControllerSecurityTest {
                 .thenReturn(new ProfileResponse("Name", null, null, now, now));
         when(profileService.upload(any()))
                 .thenReturn(new DocumentResponse(documentId, "cv.pdf", "application/pdf", 20, now));
+        when(profileService.uploadProfileImage(any()))
+                .thenReturn(new ProfileResponse("Name", "Name", null, null, null, null, now, now, true));
+        when(profileService.viewOwnProfileImage()).thenReturn(new com.groupcc2.recruitment.profile.dto.DownloadResponse(
+                java.net.URI.create("https://files.mikhy.me/image"), now.plusSeconds(120)));
         when(profileService.listOwn()).thenReturn(List.of());
         when(profileService.viewOwn(documentId)).thenReturn(new com.groupcc2.recruitment.profile.dto.DownloadResponse(
                 java.net.URI.create("https://files.mikhy.me/signed"), now.plusSeconds(120)));
@@ -79,6 +83,13 @@ class ProfileControllerSecurityTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"displayName\":\"Name\"}"))
                 .andExpect(status().isOk());
+        mvc.perform(multipart("/api/profile/image")
+                        .file(new MockMultipartFile("file", "avatar.png", "image/png", new byte[]{1}))
+                        .with(request -> { request.setMethod("PUT"); return request; })
+                        .with(token))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/profile/image").with(token)).andExpect(status().isOk());
+        mvc.perform(delete("/api/profile/image").with(token)).andExpect(status().isNoContent());
         mvc.perform(multipart("/api/profile/documents")
                         .file(new MockMultipartFile("file", "cv.pdf", "application/pdf", new byte[]{1}))
                         .with(token))
@@ -94,6 +105,9 @@ class ProfileControllerSecurityTest {
         verify(profileService).readOwn();
         verify(profileService).upsert(new ProfileRequest("Name", null, null));
         verify(profileService).upload(any());
+        verify(profileService).uploadProfileImage(any());
+        verify(profileService).viewOwnProfileImage();
+        verify(profileService).deleteProfileImage();
         verify(profileService).listOwn();
         verify(profileService).viewOwn(documentId);
         verify(profileService).deleteOwn(documentId);
@@ -104,6 +118,11 @@ class ProfileControllerSecurityTest {
         mvc.perform(withToken(put("/api/profile")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"displayName\":\"Name\"}"), token)).andExpect(expected);
+        mvc.perform(withToken(multipart("/api/profile/image")
+                .file(new MockMultipartFile("file", "avatar.png", "image/png", new byte[]{1}))
+                .with(request -> { request.setMethod("PUT"); return request; }), token)).andExpect(expected);
+        mvc.perform(withToken(get("/api/profile/image"), token)).andExpect(expected);
+        mvc.perform(withToken(delete("/api/profile/image"), token)).andExpect(expected);
         mvc.perform(withToken(multipart("/api/profile/documents")
                 .file(new MockMultipartFile("file", "cv.pdf", "application/pdf", new byte[]{1})), token))
                 .andExpect(expected);

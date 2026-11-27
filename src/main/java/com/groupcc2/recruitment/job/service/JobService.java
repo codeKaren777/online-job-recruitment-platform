@@ -110,15 +110,17 @@ public class JobService {
 
     @Transactional(readOnly = true)
     public PageResponse<JobResponse> browseJobs(
-            UUID requesterId, UserRole role, String location, String text, int page, int size) {
+            UUID requesterId, UserRole role, String location, String text,
+            JobStatus status, int page, int size) {
         establishContext(requesterId, role, UserRole.JOB_SEEKER);
-        Specification<Job> spec = JobSpecifications.activeAndNotExpired()
+        Specification<Job> spec = JobSpecifications.hasEffectiveStatus(
+                        status == null ? JobStatus.ACTIVE : status)
                 .and(JobSpecifications.locationContains(location))
                 .and(JobSpecifications.textMatches(text));
         return PageResponse.from(jobRepository.findAll(spec, pageable(page, size)).map(this::toResponse));
     }
 
-    /** Employers see only their own jobs; job seekers see only active, non-expired jobs. */
+    /** Employers see only their own jobs; seekers see active or explicitly closed jobs. */
     @Transactional(readOnly = true)
     public JobResponse getJob(UUID jobId, UUID requesterId, UserRole role) {
         if (role != UserRole.EMPLOYER && role != UserRole.JOB_SEEKER) {
@@ -127,7 +129,7 @@ public class JobService {
         rlsTransactionContext.setAuthenticatedUser(requesterId, role);
         Job job = role == UserRole.EMPLOYER
                 ? jobRepository.findByIdAndEmployerId(jobId, requesterId).orElseThrow(JobService::notFound)
-                : jobRepository.findPublicById(jobId, JobStatus.ACTIVE).orElseThrow(JobService::notFound);
+                : jobRepository.findVisibleToJobSeekerById(jobId).orElseThrow(JobService::notFound);
         return toResponse(job);
     }
 

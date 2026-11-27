@@ -80,6 +80,14 @@ public class EmployerApplicationController {
         return service.getApplicantProfile(userId(jwt), applicationId);
     }
 
+    @org.springframework.web.bind.annotation.GetMapping("/{applicationId}/profile/image")
+    @Operation(summary = "Get an applicant profile image", description = "Returns a short-lived private image URL for an applicant profile on one of the authenticated employer's jobs. A missing optional image returns 404.")
+    public com.groupcc2.recruitment.profile.dto.DownloadResponse applicationProfileImage(
+            @AuthenticationPrincipal @io.swagger.v3.oas.annotations.Parameter(hidden = true) Jwt jwt,
+            @PathVariable UUID applicationId) {
+        return service.viewApplicantProfileImage(userId(jwt), applicationId);
+    }
+
     @PatchMapping("/{applicationId}/status")
     @Operation(summary = "Update an application status", description = "Sets the status of an application belonging to an authenticated employer's job. Requires an EMPLOYER bearer token.", tags = "Shortlisting", requestBody=@io.swagger.v3.oas.annotations.parameters.RequestBody(description="New application status.",required=true,content=@io.swagger.v3.oas.annotations.media.Content(examples=@ExampleObject(value="{\"status\":\"SHORTLISTED\"}"))))
     @Parameter(name="applicationId", description="UUID of the application.", required=true)

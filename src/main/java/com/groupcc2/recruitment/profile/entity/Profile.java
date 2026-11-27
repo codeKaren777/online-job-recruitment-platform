@@ -13,6 +13,8 @@ public class Profile {
  @Column(columnDefinition="text") private String phone;
  @Column(columnDefinition="text") private String location;
  @Column(columnDefinition="text") private String biography;
+ @Column(name="profile_image_storage_key",columnDefinition="text") private String profileImageStorageKey;
+ @Column(name="profile_image_content_type",columnDefinition="text") private String profileImageContentType;
  @Column(name="created_at",nullable=false,updatable=false) private Instant createdAt;
  @Column(name="updated_at",nullable=false) private Instant updatedAt;
  protected Profile() {}
@@ -26,7 +28,11 @@ public class Profile {
   biography=r.biography();
   updatedAt=Instant.now();
  }
- public ProfileResponse response() {return new ProfileResponse(displayName,fullName,dateOfBirth,phone,location,biography,createdAt,updatedAt);}
+ public ProfileResponse response() {return response(profileImageStorageKey != null);}
+ public ProfileResponse response(boolean hasProfileImage) {return new ProfileResponse(displayName,fullName,dateOfBirth,phone,location,biography,createdAt,updatedAt,hasProfileImage);}
+ public String getProfileImageStorageKey() {return profileImageStorageKey;}
+ public String getProfileImageContentType() {return profileImageContentType;}
+ public void setProfileImage(String storageKey,String contentType) {profileImageStorageKey=storageKey;profileImageContentType=contentType;updatedAt=Instant.now();}
  public UUID getUserId() {return userId;}
  public String displayName() {return displayName;}
 }

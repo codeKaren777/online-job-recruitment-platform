@@ -49,9 +49,9 @@ Common outcomes include `400` invalid input, `401` missing/invalid/expired token
 | `GET /api/companies/{companyId}` | Employer | Read owned company. |
 | `PUT /api/companies/{companyId}` | Employer | Replace company details. |
 | `POST /api/jobs` | Employer | JSON `JobRequest`: `companyId`, `title`, `description`, `requiredQualifications`, future `dueDate` (`YYYY-MM-DD`), `location`. Company must belong to caller. Returns `201` and `Location`. |
-| `GET /api/jobs?location=&q=&page=0&size=20` | Job seeker | Browse active jobs; page size maximum 100. |
-| `GET /api/jobs/{jobId}` | Job seeker or employer | Read a visible job. |
-| `GET /api/employer/jobs?status=&page=0&size=20` | Employer | List caller-owned jobs. |
+| `GET /api/jobs?location=&q=&status=ACTIVE&page=0&size=20` | Job seeker | Browse active jobs by default. Use `status=CLOSED` or `status=EXPIRED` to see those vacancies; responses include the effective status. |
+| `GET /api/jobs/{jobId}` | Job seeker or employer | Read an owned job, or an active/closed job as a job seeker. |
+| `GET /api/employer/jobs?status=&page=0&size=20` | Employer | List all caller-owned vacancies by default, including closed ones; optionally filter by status. |
 | `PUT /api/jobs/{jobId}` | Employer | Replace job details using `JobRequest`; caller must own its company/job. |
 | `PATCH /api/jobs/{jobId}/close` | Employer | Close an owned job. |
 | `DELETE /api/jobs/{jobId}` | Employer | Delete an owned job only if it has no applications (`204`). |
@@ -62,6 +62,9 @@ Common outcomes include `400` invalid input, `401` missing/invalid/expired token
 |---|---|---|
 | `GET /api/profile` | Job seeker | Read own profile. |
 | `PUT /api/profile` | Job seeker | Create/update profile JSON: required `displayName`; optional `fullName`, `dateOfBirth`, `phone`, `location`, `biography`. A profile is required before applying. |
+| `PUT /api/profile/image` | Job seeker | Optional JPEG, PNG, or WebP profile image upload (multipart part `file`, max 2 MiB); profile must already exist. |
+| `GET /api/profile/image` | Job seeker | Obtain a short-lived private viewing URL for own image. |
+| `DELETE /api/profile/image` | Job seeker | Remove own optional profile image (`204`). |
 | `POST /api/profile/documents` | Job seeker | Upload own PDF using `multipart/form-data` file part `file` (max 5 MiB). |
 | `GET /api/profile/documents` | Job seeker | List own document metadata. |
 | `GET /api/profile/documents/{documentId}/download` | Job seeker | Obtain short-lived private download link. |
@@ -76,6 +79,7 @@ Common outcomes include `400` invalid input, `401` missing/invalid/expired token
 | `GET /api/employer/applications/{applicationId}` | Employer | Read application for caller-owned job. |
 | `GET /api/employer/applications/{applicationId}/cv` | Employer | Get short-lived CV link after job ownership check. |
 | `GET /api/employer/applications/{applicationId}/cv/view` | Employer | Get short-lived inline CV link after job ownership check. |
+| `GET /api/employer/applications/{applicationId}/profile/image` | Employer | Get short-lived profile image URL after job ownership and application checks. |
 | `GET /api/employer/applications/{applicationId}/profile` | Employer | Read applicant profile after job ownership check. |
 | `PATCH /api/employer/applications/{applicationId}/status` | Employer | JSON `{ "status": "SHORTLISTED" }` or `{ "status": "REJECTED" }`; only the job owner may decide. |
 | `GET /api/employer/shortlisted-candidates` | Employer | List retained shortlisted candidates for caller's jobs. |

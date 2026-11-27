@@ -1,6 +1,6 @@
-# Profile and document-upload endpoints
+# Profile, image, and document endpoints
 
-Base URL: http://localhost:8080. These five routes exist in ProfileController.
+Base URL: http://localhost:8080. The following routes exist in ProfileController.
 All require an active JOB_SEEKER acting on their own records. No request accepts
 a userId or role to choose an owner.
 
@@ -12,8 +12,11 @@ database and private storage integrations.
 
 | Method | Endpoint | Input | Success after integration |
 |---|---|---|---|
-| PUT | /api/profile | JSON profile fields | 200, created/updated own profile |
+| PUT | /api/profile | JSON profile fields | 200, created/updated own profile; response says whether an image exists |
 | GET | /api/profile | None | 200, own profile; 404 if absent |
+| PUT | /api/profile/image | multipart/form-data, part named file | 200, replace optional JPEG/PNG/WebP image (max 2 MiB) |
+| GET | /api/profile/image | None | 200, short-lived private URL; 404 if no image |
+| DELETE | /api/profile/image | None | 204, remove optional image |
 | POST | /api/profile/documents | multipart/form-data, part named file | 201, document metadata |
 | GET | /api/profile/documents | None | 200, own document metadata array |
 | GET | /api/profile/documents/{documentId}/download | None | 200, short-lived signed GET URL |
@@ -63,8 +66,25 @@ curl -i http://localhost:8080/api/profile \
 ```
 
 Same response shape as PUT. Missing profile returns 404 instead of creating one.
+The `profileImageAvailable` field is false until an optional image is uploaded.
 
-## 3. Upload a PDF
+## 3. Upload or replace your profile image
+
+Create the profile first. Use JPEG, PNG, or WebP, with a matching filename and
+MIME type, no larger than 2 MiB. SVG is not accepted.
+
+```bash
+curl -i -X PUT http://localhost:8080/api/profile/image \
+  -H 'Authorization: Bearer <JOB_SEEKER_TOKEN>' \
+  -F 'file=@avatar.png;type=image/png'
+```
+
+The response is the updated profile with `profileImageAvailable: true`. Use
+`GET /api/profile/image` to obtain a short-lived URL for display. The URL is
+private and expires; do not save it as a permanent image address. Delete with
+`DELETE /api/profile/image` to remove the optional image.
+
+## 4. Upload a PDF
 
 Create your profile first. Use a real disposable PDF, maximum 5 MiB, a safe filename
 like sample.pdf, extension .pdf, and MIME application/pdf. Empty/spoofed files,
@@ -91,7 +111,7 @@ Expected 201 response shape (illustrative metadata only):
 Save the actual returned id as documentId. No storage key or public URL is returned.
 The private bucket remains private throughout this workflow.
 
-## 4. List your documents
+## 5. List your documents
 
 ```bash
 curl -i http://localhost:8080/api/profile/documents \
@@ -101,7 +121,7 @@ curl -i http://localhost:8080/api/profile/documents \
 Expected 200 array of the same metadata objects; [] when an existing profile has
 no documents. A missing profile returns 404.
 
-## 5. Delete your own document
+## 6. Delete your own document
 
 ```bash
 curl -i -X DELETE http://localhost:8080/api/profile/documents/<DOCUMENT_ID> \
@@ -113,7 +133,7 @@ seeker's document UUID or a missing document returns 404 after integration.
 Storage failures can return 503 and require an owner retry, as described in
 [the document module](profile-module.md#files-and-consistency).
 
-## 6. View or download your own document
+## 7. View or download your own document
 
 ```bash
 curl -i http://localhost:8080/api/profile/documents/<DOCUMENT_ID>/view \
