@@ -22,8 +22,9 @@ class UserServiceTest {
     private final UserRepository repository = mock(UserRepository.class);
     private final AdminRoleChangeRepository roleChanges = mock(AdminRoleChangeRepository.class);
     private final RlsTransactionContext rls = mock(RlsTransactionContext.class);
+    private final EmployerJobSuspender employerJobSuspender = mock(EmployerJobSuspender.class);
     private final UserServiceImpl service =
-            new UserServiceImpl(repository, new BCryptPasswordEncoder(), roleChanges, rls);
+            new UserServiceImpl(repository, new BCryptPasswordEncoder(), roleChanges, rls, employerJobSuspender);
 
     @Test
     void administratorCanCreateJobSeekerAndEmployerAccounts() {
@@ -89,6 +90,7 @@ class UserServiceTest {
         User administrator = new User("admin@example.com", "hash", UserRole.ADMIN);
         when(repository.findById(administrator.getId())).thenReturn(Optional.of(administrator));
         when(repository.findById(user.getId())).thenReturn(Optional.of(user));
+        when(repository.findByIdForUpdate(user.getId())).thenReturn(Optional.of(user));
         when(repository.findByEmail("person@example.com")).thenReturn(Optional.of(user));
 
         service.suspend(administrator.getId(), user.getId());
@@ -98,6 +100,46 @@ class UserServiceTest {
         service.remove(administrator.getId(), user.getId());
         assertThat(user.getAccountStatus()).isEqualTo(AccountStatus.REMOVED);
         assertThatThrownBy(() -> service.requireActive(user)).isInstanceOf(InactiveAccountException.class);
+    }
+
+    @Test
+    void suspendingAnEmployerUnpublishesJobsAndRepeatedSuspensionIsSafe() {
+        User administrator = new User("admin@example.com", "hash", UserRole.ADMIN);
+        User employer = new User("employer@example.com", "hash", UserRole.EMPLOYER);
+        when(repository.findById(administrator.getId())).thenReturn(Optional.of(administrator));
+        when(repository.findByIdForUpdate(employer.getId())).thenReturn(Optional.of(employer));
+
+        service.suspend(administrator.getId(), employer.getId());
+        service.suspend(administrator.getId(), employer.getId());
+
+        assertThat(employer.getAccountStatus()).isEqualTo(AccountStatus.SUSPENDED);
+        verify(employerJobSuspender, times(2)).unpublishActiveJobs(employer.getId());
+    }
+
+    @Test
+    void reactivatingAnEmployerChangesOnlyAccountStatus() {
+        User administrator = new User("admin@example.com", "hash", UserRole.ADMIN);
+        User employer = new User("employer@example.com", "hash", UserRole.EMPLOYER);
+        employer.suspend();
+        when(repository.findById(administrator.getId())).thenReturn(Optional.of(administrator));
+        when(repository.findByIdForUpdate(employer.getId())).thenReturn(Optional.of(employer));
+
+        assertThat(service.reactivateEmployer(administrator.getId(), employer.getId())).isSameAs(employer);
+
+        assertThat(employer.getAccountStatus()).isEqualTo(AccountStatus.ACTIVE);
+        verifyNoInteractions(employerJobSuspender);
+    }
+
+    @Test
+    void onlyAdministratorsCanReactivateEmployers() {
+        User seeker = new User("seeker@example.com", "hash", UserRole.JOB_SEEKER);
+        User employer = new User("employer@example.com", "hash", UserRole.EMPLOYER);
+        employer.suspend();
+        when(repository.findById(seeker.getId())).thenReturn(Optional.of(seeker));
+
+        assertThatThrownBy(() -> service.reactivateEmployer(seeker.getId(), employer.getId()))
+                .isInstanceOf(AuthorizationDeniedException.class);
+        verifyNoInteractions(employerJobSuspender);
     }
 
     @Test

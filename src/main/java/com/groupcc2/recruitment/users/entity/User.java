@@ -135,6 +135,13 @@ public class User {
         accountStatus = AccountStatus.SUSPENDED;
     }
 
+    public void reactivate() {
+        if (accountStatus != AccountStatus.SUSPENDED) {
+            throw new IllegalStateException("Only suspended accounts can be reactivated");
+        }
+        accountStatus = AccountStatus.ACTIVE;
+    }
+
     public void remove() {
         accountStatus = AccountStatus.REMOVED;
     }

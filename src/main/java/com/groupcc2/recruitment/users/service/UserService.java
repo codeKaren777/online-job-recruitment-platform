@@ -25,7 +25,11 @@ public interface UserService {
 
     void requireActive(User user);
 
+    User requireActiveEmployer(UUID employerId);
+
     void suspend(UUID administratorId, UUID id);
+
+    User reactivateEmployer(UUID administratorId, UUID id);
 
     void remove(UUID administratorId, UUID id);
 

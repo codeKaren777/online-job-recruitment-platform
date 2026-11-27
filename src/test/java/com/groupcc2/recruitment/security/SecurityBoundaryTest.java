@@ -151,6 +151,8 @@ class SecurityBoundaryTest {
                 .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Job not found"));
         when(jobService.closeJob(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
                 .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Job not found"));
+        when(jobService.publishJob(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Job not found"));
         String companyId = UUID.randomUUID().toString();
 
         mvc.perform(get("/api/jobs")).andExpect(status().isUnauthorized());
@@ -202,6 +204,11 @@ class SecurityBoundaryTest {
         mvc.perform(patch("/api/jobs/{jobId}/close", jobId)).andExpect(status().isUnauthorized());
         mvc.perform(patch("/api/jobs/{jobId}/close", jobId).with(seekerToken)).andExpect(status().isForbidden());
         mvc.perform(patch("/api/jobs/{jobId}/close", jobId).with(employerToken)).andExpect(status().isNotFound());
+
+        mvc.perform(patch("/api/jobs/{jobId}/publish", jobId)).andExpect(status().isUnauthorized());
+        mvc.perform(patch("/api/jobs/{jobId}/publish", jobId).with(seekerToken)).andExpect(status().isForbidden());
+        mvc.perform(patch("/api/jobs/{jobId}/publish", jobId).with(adminToken)).andExpect(status().isForbidden());
+        mvc.perform(patch("/api/jobs/{jobId}/publish", jobId).with(employerToken)).andExpect(status().isNotFound());
 
         mvc.perform(delete("/api/jobs/{jobId}", jobId)).andExpect(status().isUnauthorized());
         mvc.perform(delete("/api/jobs/{jobId}", jobId).with(seekerToken)).andExpect(status().isForbidden());

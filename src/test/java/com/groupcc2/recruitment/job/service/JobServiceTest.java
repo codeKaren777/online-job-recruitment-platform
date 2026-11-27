@@ -15,6 +15,9 @@ import com.groupcc2.recruitment.job.entity.JobStatus;
 import com.groupcc2.recruitment.job.repository.JobRepository;
 import com.groupcc2.recruitment.security.RlsTransactionContext;
 import com.groupcc2.recruitment.users.entity.UserRole;
+import com.groupcc2.recruitment.users.entity.User;
+import com.groupcc2.recruitment.users.service.UserService;
+import com.groupcc2.recruitment.users.service.InactiveAccountException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -54,12 +57,19 @@ class JobServiceTest {
     @Mock
     private CompanyDirectory companyDirectory;
 
+    @Mock
+    private UserService users;
+
     private JobService service;
 
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(TODAY.atStartOfDay().toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
-        service = new JobService(jobRepository, rlsTransactionContext, companyDirectory, clock);
+        service = new JobService(jobRepository, rlsTransactionContext, companyDirectory, users, clock);
+        org.mockito.Mockito.lenient().when(users.findById(any())).thenAnswer(invocation ->
+                new User("employer@example.com", "hash", UserRole.EMPLOYER));
+        org.mockito.Mockito.lenient().when(users.requireActiveEmployer(any())).thenAnswer(invocation ->
+                new User("employer@example.com", "hash", UserRole.EMPLOYER));
     }
 
     private JobRequest request(LocalDate due) {
@@ -92,6 +102,38 @@ class JobServiceTest {
         InOrder order = inOrder(rlsTransactionContext, jobRepository);
         order.verify(rlsTransactionContext).setAuthenticatedUser(EMPLOYER, UserRole.EMPLOYER);
         order.verify(jobRepository).save(any(Job.class));
+    }
+
+    @Test
+    void suspendedEmployerCannotCreateJobsEvenWithEmployerRoleClaim() {
+        when(users.requireActiveEmployer(EMPLOYER)).thenThrow(new InactiveAccountException());
+
+        assertThatThrownBy(() -> service.createJob(EMPLOYER, UserRole.EMPLOYER, request(TODAY.plusDays(2))))
+                .isInstanceOf(InactiveAccountException.class);
+        verify(jobRepository, never()).save(any());
+    }
+
+    @Test
+    void activeEmployerCanExplicitlyRepublishClosedOwnedJob() {
+        Job closed = ownedJob(TODAY.plusDays(3));
+        closed.setStatus(JobStatus.CLOSED);
+        when(jobRepository.findByIdAndEmployerId(JOB_ID, EMPLOYER)).thenReturn(Optional.of(closed));
+        when(companyDirectory.findOwnedByEmployer(COMPANY_ID, EMPLOYER))
+                .thenReturn(Optional.of(new CompanyReference(COMPANY_ID, EMPLOYER)));
+
+        JobResponse published = service.publishJob(EMPLOYER, UserRole.EMPLOYER, JOB_ID);
+
+        assertThat(published.status()).isEqualTo(JobStatus.ACTIVE);
+        assertThat(closed.getStatus()).isEqualTo(JobStatus.ACTIVE);
+    }
+
+    @Test
+    void suspendedEmployerCannotExplicitlyRepublishAClosedJob() {
+        when(users.requireActiveEmployer(EMPLOYER)).thenThrow(new InactiveAccountException());
+
+        assertThatThrownBy(() -> service.publishJob(EMPLOYER, UserRole.EMPLOYER, JOB_ID))
+                .isInstanceOf(InactiveAccountException.class);
+        verify(jobRepository, never()).findByIdAndEmployerId(any(), any());
     }
 
     @Test

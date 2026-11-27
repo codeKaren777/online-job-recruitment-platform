@@ -104,6 +104,15 @@ public class JobController {
         return jobService.closeJob(userId(jwt), userRole(jwt), jobId);
     }
 
+    @PatchMapping("/jobs/{jobId}/publish")
+    @PreAuthorize("hasRole('EMPLOYER')")
+    @Operation(summary = "Publish a closed job posting", description = "Explicitly republishes an owned closed job for an active employer. Suspended employers cannot publish jobs. The due date must still be in the future.")
+    @Parameter(name="jobId",description="UUID of the job posting.",required=true)
+    @ApiResponses({@ApiResponse(responseCode="200",description="Returns the active job posting."),@ApiResponse(responseCode="401",description="A valid active employer bearer token is required."),@ApiResponse(responseCode="403",description="The caller does not have the EMPLOYER role."),@ApiResponse(responseCode="404",description="Job or company was not found for this employer."),@ApiResponse(responseCode="409",description="Only a closed job with an eligible status may be published."),@ApiResponse(responseCode="400",description="The job due date is not in the future.")})
+    public JobResponse publish(@PathVariable UUID jobId, @AuthenticationPrincipal Jwt jwt) {
+        return jobService.publishJob(userId(jwt), userRole(jwt), jobId);
+    }
+
     @DeleteMapping("/jobs/{jobId}")
     @PreAuthorize("hasRole('EMPLOYER')")
     @Operation(summary = "Delete a job posting", description = "Deletes jobId if it belongs to the authenticated EMPLOYER. Requires a bearer token.")

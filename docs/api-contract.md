@@ -37,6 +37,7 @@ Common outcomes include `400` invalid input, `401` missing/invalid/expired token
 | `POST /api/admin/users` | Admin | Create account using `CreateAccountRequest`; public registration remains job-seeker only. |
 | `GET /api/admin/users/{id}` | Admin | Read user. |
 | `PATCH /api/admin/users/{id}/suspend` | Admin | Suspend user. |
+| `PATCH /api/admin/users/{id}/reactivate` | Admin | Reactivate a suspended employer. Jobs closed during suspension stay closed. |
 | `PATCH /api/admin/users/{id}/remove` | Admin | Remove user. |
 | `PATCH /api/admin/users/{id}/role` | Admin | Assign permitted admin role using `{ "role": "ADMIN" }`. |
 
@@ -54,6 +55,7 @@ Common outcomes include `400` invalid input, `401` missing/invalid/expired token
 | `GET /api/employer/jobs?status=&page=0&size=20` | Employer | List caller-owned jobs. |
 | `PUT /api/jobs/{jobId}` | Employer | Replace job details using `JobRequest`; caller must own its company/job. |
 | `PATCH /api/jobs/{jobId}/close` | Employer | Close an owned job. |
+| `PATCH /api/jobs/{jobId}/publish` | Active employer | Explicitly publish an owned closed job with a future due date. |
 | `DELETE /api/jobs/{jobId}` | Employer | Delete an owned job only if it has no applications (`204`). |
 
 ## Profiles and applications

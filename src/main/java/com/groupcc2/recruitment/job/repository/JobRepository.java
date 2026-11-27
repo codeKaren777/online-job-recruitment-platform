@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -20,4 +21,13 @@ public interface JobRepository extends JpaRepository<Job, UUID>, JpaSpecificatio
      */
     @Query("select j from Job j where j.id = :id and j.status = :status and j.dueDate > local_date")
     Optional<Job> findPublicById(@Param("id") UUID id, @Param("status") JobStatus status);
+
+    /** Close only jobs that are still published; existing closed/expired records remain untouched. */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update Job j set j.status = :closed, j.updatedAt = CURRENT_TIMESTAMP "
+            + "where j.employerId = :employerId and j.status = :active "
+            + "and j.dueDate > local_date")
+    int closeActiveForEmployer(@Param("employerId") UUID employerId,
+                               @Param("active") JobStatus active,
+                               @Param("closed") JobStatus closed);
 }

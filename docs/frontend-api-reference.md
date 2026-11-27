@@ -365,6 +365,8 @@ preserving company ownership validation.
 `status`, `page`, and `size`.
 
 `PATCH /api/jobs/{jobId}/close` — close an owned job.
+`PATCH /api/jobs/{jobId}/publish` — explicitly republish an owned closed job.
+Only an active employer can publish; the job must have a future due date.
 `DELETE /api/jobs/{jobId}` — delete an owned job with no applications;
 response `204`.
 
@@ -424,6 +426,7 @@ These endpoints require an `ADMIN` token:
 | GET | `/api/admin/users` | — |
 | GET | `/api/admin/users/{id}` | — |
 | PATCH | `/api/admin/users/{id}/suspend` | — |
+| PATCH | `/api/admin/users/{id}/reactivate` | — |
 | PATCH | `/api/admin/users/{id}/remove` | — |
 | PATCH | `/api/admin/users/{id}/role` | `{"role":"ADMIN"}` |
 | GET | `/api/admin/employer-requests` | — |
@@ -451,6 +454,16 @@ be reviewed again. Both decision endpoints return the updated request.
 
 User responses contain `id`, `email`, `role`, `accountStatus`, `createdAt`,
 and `updatedAt`.
+
+Suspending an employer at `PATCH /api/admin/users/{id}/suspend` atomically
+changes each of the employer's currently published jobs from `ACTIVE` to
+`CLOSED`; existing jobs and applications are retained. Repeating suspension
+does not change already closed or expired jobs. Reactivating through
+`PATCH /api/admin/users/{id}/reactivate` restores only the employer account.
+The jobs remain `CLOSED` and are not returned by public browse/search or detail
+routes. After reactivation, the employer may explicitly republish an owned
+closed job with a future due date using `PATCH /api/jobs/{jobId}/publish`.
+Suspended employer requests are rejected before job creation or publication.
 
 ## Errors
 
