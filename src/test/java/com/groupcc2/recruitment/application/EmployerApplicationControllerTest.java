@@ -69,6 +69,19 @@ class EmployerApplicationControllerTest {
     }
 
     @Test
+    void employerCanViewOnlyTheSubmittedCvThroughTheApplicationRoute() throws Exception {
+        UUID employerId = UUID.randomUUID();
+        UUID applicationId = UUID.randomUUID();
+        when(service.viewApplicationCv(employerId, applicationId)).thenReturn(
+                new com.groupcc2.recruitment.profile.dto.DownloadResponse(
+                        java.net.URI.create("https://files.mikhy.me/signed"), Instant.now().plusSeconds(60)));
+        mvc.perform(get("/api/employer/applications/{id}/cv/view", applicationId).with(employerToken(employerId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.url").value("https://files.mikhy.me/signed"));
+        verify(service).viewApplicationCv(employerId, applicationId);
+    }
+
+    @Test
     void jobSeekersCannotReachEmployerApplicationRoutes() throws Exception {
         UUID seekerId = UUID.randomUUID();
         mvc.perform(get("/api/employer/applications").with(
@@ -76,6 +89,10 @@ class EmployerApplicationControllerTest {
                                 .jwt(token -> token.subject(seekerId.toString()))))
                 .andExpect(status().isForbidden());
         mvc.perform(get("/api/employer/applications/{id}/cv", UUID.randomUUID()).with(
+                        jwt().authorities(new SimpleGrantedAuthority("ROLE_JOB_SEEKER"))
+                                .jwt(token -> token.subject(seekerId.toString()))))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/employer/applications/{id}/cv/view", UUID.randomUUID()).with(
                         jwt().authorities(new SimpleGrantedAuthority("ROLE_JOB_SEEKER"))
                                 .jwt(token -> token.subject(seekerId.toString()))))
                 .andExpect(status().isForbidden());

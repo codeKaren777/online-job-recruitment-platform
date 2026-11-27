@@ -17,6 +17,7 @@ database and private storage integrations.
 | POST | /api/profile/documents | multipart/form-data, part named file | 201, document metadata |
 | GET | /api/profile/documents | None | 200, own document metadata array |
 | GET | /api/profile/documents/{documentId}/download | None | 200, short-lived signed GET URL |
+| GET | /api/profile/documents/{documentId}/view | None | 200, short-lived signed inline viewing URL |
 | DELETE | /api/profile/documents/{documentId} | Document UUID from upload/list | 204, empty body |
 
 ## Postman setup
@@ -112,16 +113,28 @@ seeker's document UUID or a missing document returns 404 after integration.
 Storage failures can return 503 and require an owner retry, as described in
 [the document module](profile-module.md#files-and-consistency).
 
-## 6. Download your own document
+## 6. View or download your own document
 
 ```bash
-curl -i http://localhost:8080/api/profile/documents/<DOCUMENT_ID>/download \
+curl -i http://localhost:8080/api/profile/documents/<DOCUMENT_ID>/view \
   -H 'Authorization: Bearer <TOKEN>'
 ```
 
-The response contains a short-lived signed GET URL and its expiry timestamp.
-The application verifies ownership before issuing the URL; the bucket remains
-private and no permanent object URL is returned.
+Use `/view` for browser inline rendering where the media type supports it, or
+`/download` for attachment behavior. Both return JSON containing `url` and
+`expiresAt`, for example:
+
+```json
+{
+  "url": "https://files.mikhy.me/recruitment-documents/documents/...?...",
+  "expiresAt": "2026-11-27T12:02:00Z"
+}
+```
+
+The application verifies ownership before issuing either URL. The bucket stays
+private; the URL itself is a temporary bearer credential. The frontend should
+use the returned URL exactly as provided, before `expiresAt`, without changing
+its hostname, path, query parameters, HTTP method, or headers.
 
 ## Errors and negative endpoint tests
 
@@ -149,10 +162,27 @@ verifies both the employer's ownership of the job and the application's
 applicant relationship before the profile module signs the stored object.
 Unrelated employers, job seekers, and anonymous callers receive no link.
 The response contains the short-lived URL and `expiresAt`; storage keys are
-never returned. The signed response uses attachment disposition with the
-original filename and content type. `readForEmployer`, `listForEmployer`, and
-`downloadForEmployer` remain service methods behind that application-owned
-route.
+never returned. The `/cv` route uses attachment disposition. Use
+`GET /api/employer/applications/{applicationId}/cv/view` for inline viewing.
+Both signed responses include the original filename and content type.
+`readForEmployer`, `listForEmployer`, and download/view operations remain
+service methods behind the application-owned route.
+
+## Production file domain routing
+
+Production Compose keeps backend-to-MinIO operations on the private Docker
+network at `http://minio:9000`. Presigned URLs are signed directly for
+`PROFILE_STORAGE_PUBLIC_ENDPOINT`, which defaults to `https://files.mikhy.me`;
+the backend does not rewrite a signed URL after signing. Configure the server's
+TLS reverse proxy for `files.mikhy.me` to forward to the MinIO API on
+`http://127.0.0.1:9000`, preserving the request method, original path and query
+string, and the `Host: files.mikhy.me` header. MinIO validates that signed Host
+header. For Nginx, the relevant location should use `proxy_pass
+http://127.0.0.1:9000;` without a URI suffix and `proxy_set_header Host $host;`.
+Retain the server's existing TLS configuration. Do not proxy the MinIO console
+or make the bucket public. The production server's Nginx configuration was not
+available in this repository, so this routing requirement is not verified as
+deployed.
 
 ## What you can test before auth is ready
 

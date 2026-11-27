@@ -164,9 +164,15 @@ The frontend must:
 - never receive or store MinIO credentials.
 
 The URL host is the configured `PROFILE_STORAGE_PUBLIC_ENDPOINT` and must be
-reachable from the user's browser. In production, configure an HTTPS Nginx route
-to the MinIO API and set that public endpoint to the route's origin; the
-backend's internal `http://minio:9000` address is not a download URL.
+reachable from the user's browser. Production defaults this to
+`https://files.mikhy.me`. The `/download` API routes return attachment URLs;
+the corresponding `/view` routes return inline URLs. Open each URL using the
+returned GET URL unchanged, before its `expiresAt`; do not edit the hostname,
+path, query parameters, method, or signed headers. The URL is a temporary
+bearer credential. In production, Nginx must route `files.mikhy.me` to the
+MinIO API while preserving the signed request as described in
+[the deployment setup](deployment/server-setup.md#minio-file-domain-routing).
+The backend's internal `http://minio:9000` address is not a download URL.
 
 ## Browser connectivity
 

@@ -200,7 +200,11 @@ Maximum file size is 5 MiB. Response `201`:
 }
 ```
 
-Open the returned URL before `expiresAt`; do not construct storage URLs.
+`GET /api/profile/documents/{documentId}/view` returns the same response shape
+with inline content disposition. Open the returned `url` before `expiresAt`;
+it is a temporary bearer credential. Use the URL exactly as returned and send
+the signed `GET` without changing its host, path, query string, or signed
+headers. Do not construct storage URLs.
 
 `DELETE /api/profile/documents/{documentId}` — response `204`.
 
@@ -384,6 +388,8 @@ job and is signed against the configured `PROFILE_STORAGE_PUBLIC_ENDPOINT`; it
 must be opened by the recipient before `expiresAt`. The object remains private,
 and the signed response supplies attachment disposition, the original filename,
 and the stored content type.
+Use `GET /api/employer/applications/{applicationId}/cv/view` for inline
+rendering where supported; it has the same ownership rules and response shape.
 
 `PATCH /api/employer/applications/{applicationId}/status`
 

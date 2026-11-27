@@ -81,8 +81,14 @@ public class ProfileService {
  public DownloadResponse downloadForEmployer(UUID jobId,UUID applicant,UUID documentId) {
  return tx.execute(s->{employer(jobId,applicant);return sign(document(documentId,applicant));});
  }
+ public DownloadResponse viewForEmployer(UUID jobId,UUID applicant,UUID documentId) {
+  return tx.execute(s->{employer(jobId,applicant);return signInline(document(documentId,applicant));});
+ }
  public DownloadResponse downloadOwn(UUID documentId) {
  return tx.execute(s->sign(document(documentId,actor(UserRole.JOB_SEEKER))));
+ }
+ public DownloadResponse viewOwn(UUID documentId) {
+  return tx.execute(s->signInline(document(documentId,actor(UserRole.JOB_SEEKER))));
  }
  public Map<UUID,DocumentResponse> applicationCvMetadataForEmployer(Set<UUID> ids) {
   return tx.execute(s->{
@@ -108,6 +114,9 @@ public class ProfileService {
  }
  private DownloadResponse sign(Document d){return new DownloadResponse(
   store().signGet(d.storageKey(),expiry,d.response().originalFilename(),d.response().contentType()),
+  Instant.now().plus(expiry));}
+ private DownloadResponse signInline(Document d){return new DownloadResponse(
+  store().signGetInline(d.storageKey(),expiry,d.response().originalFilename(),d.response().contentType()),
   Instant.now().plus(expiry));}
  private Profile profile(UUID id){return profiles.findById(id).orElseThrow(()->failure(ProfileFailure.Code.NOT_FOUND));}
  private Document document(UUID id,UUID owner){return documents.findByIdAndProfileUserId(id,owner).orElseThrow(()->failure(ProfileFailure.Code.NOT_FOUND));}

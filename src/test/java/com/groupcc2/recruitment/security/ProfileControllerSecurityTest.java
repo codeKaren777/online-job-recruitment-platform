@@ -67,6 +67,8 @@ class ProfileControllerSecurityTest {
         when(profileService.upload(any()))
                 .thenReturn(new DocumentResponse(documentId, "cv.pdf", "application/pdf", 20, now));
         when(profileService.listOwn()).thenReturn(List.of());
+        when(profileService.viewOwn(documentId)).thenReturn(new com.groupcc2.recruitment.profile.dto.DownloadResponse(
+                java.net.URI.create("https://files.mikhy.me/signed"), now.plusSeconds(120)));
 
         RequestPostProcessor token = jwt().jwt(jwt -> jwt
                         .subject(UUID.randomUUID().toString()).claim("role", "JOB_SEEKER"))
@@ -84,6 +86,8 @@ class ProfileControllerSecurityTest {
         mvc.perform(get("/api/profile/documents").with(token)).andExpect(status().isOk());
         mvc.perform(get("/api/profile/documents/{documentId}/download", documentId).with(token))
                 .andExpect(status().isOk());
+        mvc.perform(get("/api/profile/documents/{documentId}/view", documentId).with(token))
+                .andExpect(status().isOk());
         mvc.perform(delete("/api/profile/documents/{documentId}", documentId).with(token))
                 .andExpect(status().isNoContent());
 
@@ -91,6 +95,7 @@ class ProfileControllerSecurityTest {
         verify(profileService).upsert(new ProfileRequest("Name", null, null));
         verify(profileService).upload(any());
         verify(profileService).listOwn();
+        verify(profileService).viewOwn(documentId);
         verify(profileService).deleteOwn(documentId);
     }
 
@@ -104,6 +109,8 @@ class ProfileControllerSecurityTest {
                 .andExpect(expected);
         mvc.perform(withToken(get("/api/profile/documents"), token)).andExpect(expected);
         mvc.perform(withToken(get("/api/profile/documents/{documentId}/download", UUID.randomUUID()), token))
+                .andExpect(expected);
+        mvc.perform(withToken(get("/api/profile/documents/{documentId}/view", UUID.randomUUID()), token))
                 .andExpect(expected);
         mvc.perform(withToken(delete("/api/profile/documents/{documentId}", UUID.randomUUID()), token))
                 .andExpect(expected);

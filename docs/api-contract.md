@@ -65,6 +65,7 @@ Common outcomes include `400` invalid input, `401` missing/invalid/expired token
 | `POST /api/profile/documents` | Job seeker | Upload own PDF using `multipart/form-data` file part `file` (max 5 MiB). |
 | `GET /api/profile/documents` | Job seeker | List own document metadata. |
 | `GET /api/profile/documents/{documentId}/download` | Job seeker | Obtain short-lived private download link. |
+| `GET /api/profile/documents/{documentId}/view` | Job seeker | Obtain short-lived private inline viewing link. |
 | `DELETE /api/profile/documents/{documentId}` | Job seeker | Delete own document (`204`). |
 | `POST /api/applications` | Job seeker | Submit `multipart/form-data` with required `jobId`, `cv` PDF (max 5 MiB), and `coverLetter`. Creates `PENDING` application (`201`); profile required; only one application per job. |
 | `GET /api/applications` | Job seeker | List own applications. |
@@ -74,6 +75,7 @@ Common outcomes include `400` invalid input, `401` missing/invalid/expired token
 | `GET /api/employer/applications?jobId=&status=` | Employer | List applications only for caller-owned jobs. |
 | `GET /api/employer/applications/{applicationId}` | Employer | Read application for caller-owned job. |
 | `GET /api/employer/applications/{applicationId}/cv` | Employer | Get short-lived CV link after job ownership check. |
+| `GET /api/employer/applications/{applicationId}/cv/view` | Employer | Get short-lived inline CV link after job ownership check. |
 | `GET /api/employer/applications/{applicationId}/profile` | Employer | Read applicant profile after job ownership check. |
 | `PATCH /api/employer/applications/{applicationId}/status` | Employer | JSON `{ "status": "SHORTLISTED" }` or `{ "status": "REJECTED" }`; only the job owner may decide. |
 | `GET /api/employer/shortlisted-candidates` | Employer | List retained shortlisted candidates for caller's jobs. |

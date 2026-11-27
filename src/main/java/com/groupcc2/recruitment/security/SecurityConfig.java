@@ -94,7 +94,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST,
                                 "/api/auth/logout", "/api/auth/change-password").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/profile", "/api/profile/documents",
-                                "/api/profile/documents/*/download")
+                                "/api/profile/documents/*/download", "/api/profile/documents/*/view")
                                 .hasRole("JOB_SEEKER")
                         .requestMatchers(HttpMethod.PUT, "/api/profile").hasRole("JOB_SEEKER")
                         .requestMatchers(HttpMethod.POST, "/api/profile/documents").hasRole("JOB_SEEKER")
@@ -104,6 +104,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/applications").hasRole("JOB_SEEKER")
                         .requestMatchers(HttpMethod.GET, "/api/employer/applications",
                                 "/api/employer/applications/*", "/api/employer/applications/*/cv",
+                                "/api/employer/applications/*/cv/view",
                                 "/api/employer/applications/*/profile",
                                 "/api/employer/shortlisted-candidates",
                                 "/api/employer/shortlisted-candidates/*").hasRole("EMPLOYER")

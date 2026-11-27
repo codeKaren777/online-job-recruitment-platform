@@ -62,6 +62,15 @@ public class EmployerApplicationController {
         return service.downloadApplicationCv(userId(jwt), applicationId);
     }
 
+    @org.springframework.web.bind.annotation.GetMapping("/{applicationId}/cv/view")
+    @Operation(summary = "View an application's submitted CV", description = "Returns a short-lived inline viewing link for the private CV of an application belonging to one of the authenticated employer's jobs.")
+    @ApiResponses({@ApiResponse(responseCode="200",description="Returns a short-lived inline link."),@ApiResponse(responseCode="401",description="A valid bearer token is required."),@ApiResponse(responseCode="403",description="The caller is not authorized for this job."),@ApiResponse(responseCode="404",description="Application was not found."),@ApiResponse(responseCode="503",description="Document storage is unavailable.")})
+    public com.groupcc2.recruitment.profile.dto.DownloadResponse applicationCvView(
+            @AuthenticationPrincipal @io.swagger.v3.oas.annotations.Parameter(hidden = true) Jwt jwt,
+            @PathVariable UUID applicationId) {
+        return service.viewApplicationCv(userId(jwt), applicationId);
+    }
+
     @org.springframework.web.bind.annotation.GetMapping("/{applicationId}/profile")
     @Operation(summary = "Get an applicant profile", description = "Returns the profile for an application belonging to one of the authenticated employer's jobs.")
     @Parameter(name="applicationId", description="UUID of the application.", required=true)

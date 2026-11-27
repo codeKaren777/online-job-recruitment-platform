@@ -370,6 +370,17 @@ public class ApplicationService {
     }
 
     @Transactional(readOnly = true)
+    public com.groupcc2.recruitment.profile.dto.DownloadResponse viewApplicationCv(UUID employerId, UUID applicationId) {
+        requireEmployer(employerId);
+        Map<UUID, JobSnapshot> jobs = directory().findAllForEmployer(employerId);
+        Application application = applications.findByIdAndJobIdIn(applicationId, jobs.keySet())
+                .orElseThrow(() -> new ApplicationFailure(ApplicationFailure.Code.NOT_FOUND));
+        if (application.getCvDocumentId() == null || cvDocuments == null)
+            throw new ApplicationFailure(ApplicationFailure.Code.NOT_FOUND);
+        return cvDocuments.viewForEmployer(application.getJobId(), application.getJobSeekerId(), application.getCvDocumentId());
+    }
+
+    @Transactional(readOnly = true)
     public ProfileResponse getApplicantProfile(UUID employerId, UUID applicationId) {
         requireEmployer(employerId);
         Map<UUID, JobSnapshot> jobs = directory().findAllForEmployer(employerId);
