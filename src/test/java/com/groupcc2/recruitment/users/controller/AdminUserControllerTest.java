@@ -137,6 +137,29 @@ class AdminUserControllerTest {
     }
 
     @Test
+    void administratorCanReactivateSuspendedEmployer() throws Exception {
+        UUID administratorId = UUID.randomUUID();
+        UUID employerId = UUID.randomUUID();
+        User employer = new User("employer@example.com", "hash", UserRole.EMPLOYER);
+        when(users.reactivateEmployer(administratorId, employerId)).thenReturn(employer);
+
+        mvc.perform(patch("/api/admin/users/{id}/reactivate", employerId)
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))
+                                .jwt(token -> token.subject(administratorId.toString()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accountStatus").value("ACTIVE"));
+
+        verify(users).reactivateEmployer(administratorId, employerId);
+    }
+
+    @Test
+    void nonAdministratorsCannotReactivateAnEmployer() throws Exception {
+        mvc.perform(patch("/api/admin/users/{id}/reactivate", UUID.randomUUID())
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_EMPLOYER"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void administratorCanPromoteAnExistingUser() throws Exception {
         UUID administratorId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();

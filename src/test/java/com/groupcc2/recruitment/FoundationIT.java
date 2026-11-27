@@ -1228,6 +1228,54 @@ class FoundationIT {
         return userId;
     }
 
+    private String emailFor(UUID userId) throws Exception {
+        try (Connection connection = adminConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT email::text FROM recruitment.users WHERE id = ?")) {
+            statement.setObject(1, userId);
+            try (var result = statement.executeQuery()) {
+                assertThat(result.next()).isTrue();
+                return result.getString(1);
+            }
+        }
+    }
+
+    private String accountStatus(UUID userId) throws Exception {
+        try (Connection connection = adminConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT status::text FROM recruitment.users WHERE id = ?")) {
+            statement.setObject(1, userId);
+            try (var result = statement.executeQuery()) {
+                assertThat(result.next()).isTrue();
+                return result.getString(1);
+            }
+        }
+    }
+
+    private void assertJobStatus(UUID jobId, String expected) throws Exception {
+        try (Connection connection = adminConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT status::text FROM recruitment.jobs WHERE id = ?")) {
+            statement.setObject(1, jobId);
+            try (var result = statement.executeQuery()) {
+                assertThat(result.next()).isTrue();
+                assertThat(result.getString(1)).isEqualTo(expected);
+            }
+        }
+    }
+
+    private long applicationCount(UUID jobId) throws Exception {
+        try (Connection connection = adminConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT count(*) FROM recruitment.applications WHERE job_id = ?")) {
+            statement.setObject(1, jobId);
+            try (var result = statement.executeQuery()) {
+                assertThat(result.next()).isTrue();
+                return result.getLong(1);
+            }
+        }
+    }
+
     private String userRole(UUID userId) throws Exception {
         try (Connection connection = adminConnection();
              PreparedStatement statement = connection.prepareStatement(
@@ -1323,6 +1371,144 @@ class FoundationIT {
             assertThat(result.next()).isTrue();
             assertThat(result.getLong(1)).isZero();
         }
+    }
+
+    @Test
+    void suspendingEmployerClosesPublishedJobsAndReactivationDoesNotRepublishThem() throws Exception {
+        String password = "SuspensionPassword123!";
+        UUID adminId = createAccount("suspension-admin-" + UUID.randomUUID() + "@example.test",
+                password, UserRole.ADMIN);
+        UUID employerId = createAccount("suspension-employer-" + UUID.randomUUID() + "@example.test",
+                password, UserRole.EMPLOYER);
+        UUID otherEmployerId = createAccount("suspension-other-" + UUID.randomUUID() + "@example.test",
+                password, UserRole.EMPLOYER);
+        UUID seekerId = createAccount("suspension-seeker-" + UUID.randomUUID() + "@example.test",
+                password, UserRole.JOB_SEEKER);
+        UUID companyId = UUID.randomUUID();
+        UUID otherCompanyId = UUID.randomUUID();
+        UUID activeJobA = UUID.randomUUID();
+        UUID activeJobB = UUID.randomUUID();
+        UUID alreadyClosedJob = UUID.randomUUID();
+        UUID expiredJob = UUID.randomUUID();
+        UUID otherActiveJob = UUID.randomUUID();
+        UUID applicantCvId = UUID.randomUUID();
+        String marker = "suspension-visibility-" + UUID.randomUUID();
+        try (Connection connection = adminConnection(); Statement statement = connection.createStatement()) {
+            statement.execute("INSERT INTO recruitment.companies (id, employer_id, name) VALUES "
+                    + "('" + companyId + "', '" + employerId + "', 'suspension company'), "
+                    + "('" + otherCompanyId + "', '" + otherEmployerId + "', 'other suspension company')");
+            statement.execute("INSERT INTO recruitment.jobs (id, employer_id, company_id, title, description, due_date, status) VALUES "
+                    + "('" + activeJobA + "', '" + employerId + "', '" + companyId + "', '" + marker + " active A', 'description', CURRENT_DATE + 20, 'ACTIVE'), "
+                    + "('" + activeJobB + "', '" + employerId + "', '" + companyId + "', '" + marker + " active B', 'description', CURRENT_DATE + 30, 'ACTIVE'), "
+                    + "('" + alreadyClosedJob + "', '" + employerId + "', '" + companyId + "', '" + marker + " closed', 'description', CURRENT_DATE + 30, 'CLOSED'), "
+                    + "('" + expiredJob + "', '" + employerId + "', '" + companyId + "', '" + marker + " expired', 'description', CURRENT_DATE - 1, 'EXPIRED'), "
+                    + "('" + otherActiveJob + "', '" + otherEmployerId + "', '" + otherCompanyId + "', '" + marker + " visible', 'description', CURRENT_DATE + 30, 'ACTIVE')");
+            statement.execute("INSERT INTO recruitment.profiles (user_id, display_name, full_name) VALUES ('"
+                    + seekerId + "', 'Suspension test applicant', 'Suspension Test Applicant')");
+            statement.execute("INSERT INTO recruitment.documents (id, profile_user_id, storage_key, original_filename, content_type, byte_size) VALUES ('"
+                    + applicantCvId + "', '" + seekerId + "', 'documents/" + applicantCvId
+                    + "', 'resume.pdf', 'application/pdf', 100)");
+            statement.execute("INSERT INTO recruitment.applications (job_id, job_seeker_id, cv_document_id) VALUES "
+                    + "('" + activeJobA + "', '" + seekerId + "', '" + applicantCvId + "')");
+        }
+
+        // Read the generated email addresses from the inserted accounts for authentication.
+        String employerEmail = emailFor(employerId);
+        String adminEmail = emailFor(adminId);
+        String seekerEmail = emailFor(seekerId);
+        String adminToken = authService.login(new LoginRequest(adminEmail, password)).accessToken();
+        String employerToken = authService.login(new LoginRequest(employerEmail, password)).accessToken();
+        String seekerToken = authService.login(new LoginRequest(seekerEmail, password)).accessToken();
+
+        mvc.perform(patch("/api/admin/users/{id}/suspend", employerId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accountStatus").value("SUSPENDED"));
+
+        assertJobStatus(activeJobA, "CLOSED");
+        assertJobStatus(activeJobB, "CLOSED");
+        assertJobStatus(alreadyClosedJob, "CLOSED");
+        assertJobStatus(expiredJob, "EXPIRED");
+        assertThat(applicationCount(activeJobA)).isEqualTo(1);
+
+        mvc.perform(patch("/api/admin/users/{id}/suspend", employerId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk());
+        assertJobStatus(activeJobA, "CLOSED");
+        assertJobStatus(activeJobB, "CLOSED");
+
+        mvc.perform(patch("/api/jobs/{jobId}/publish", activeJobA)
+                        .header("Authorization", "Bearer " + employerToken))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/jobs").header("Authorization", "Bearer " + employerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"companyId":"%s","title":"Blocked","description":"Blocked",
+                                 "requiredQualifications":"Experience","dueDate":"2099-12-31","location":"Blantyre"}
+                                """.formatted(companyId)))
+                .andExpect(status().isUnauthorized());
+
+        mvc.perform(get("/api/jobs").param("q", marker).header("Authorization", "Bearer " + seekerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[*].id")
+                        .value(org.hamcrest.Matchers.contains(otherActiveJob.toString())));
+        mvc.perform(get("/api/jobs/{jobId}", activeJobA).header("Authorization", "Bearer " + seekerToken))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(patch("/api/admin/users/{id}/reactivate", employerId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accountStatus").value("ACTIVE"));
+        assertJobStatus(activeJobA, "CLOSED");
+        assertJobStatus(activeJobB, "CLOSED");
+
+        String activeEmployerToken = authService.login(new LoginRequest(employerEmail, password)).accessToken();
+        mvc.perform(patch("/api/jobs/{jobId}/publish", activeJobA)
+                        .header("Authorization", "Bearer " + activeEmployerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
+        assertJobStatus(activeJobA, "ACTIVE");
+        assertJobStatus(activeJobB, "CLOSED");
+        assertThat(applicationCount(activeJobA)).isEqualTo(1);
+    }
+
+    @Test
+    void employerSuspensionAndJobUnpublishingRollBackTogether() throws Exception {
+        String password = "RollbackPassword123!";
+        UUID adminId = createAccount("suspension-rollback-admin-" + UUID.randomUUID() + "@example.test",
+                password, UserRole.ADMIN);
+        UUID employerId = createAccount("suspension-rollback-employer-" + UUID.randomUUID() + "@example.test",
+                password, UserRole.EMPLOYER);
+        UUID companyId = UUID.randomUUID();
+        UUID jobId = UUID.randomUUID();
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        String functionName = "reject_suspension_" + suffix;
+        String triggerName = "reject_suspension_" + suffix;
+        try (Connection connection = adminConnection(); Statement statement = connection.createStatement()) {
+            statement.execute("INSERT INTO recruitment.companies (id, employer_id, name) VALUES ('" + companyId
+                    + "', '" + employerId + "', 'rollback suspension company')");
+            statement.execute("INSERT INTO recruitment.jobs (id, employer_id, company_id, title, description, due_date, status) VALUES ('"
+                    + jobId + "', '" + employerId + "', '" + companyId
+                    + "', 'rollback suspension job', 'description', CURRENT_DATE + 20, 'ACTIVE')");
+            statement.execute("CREATE FUNCTION recruitment." + functionName + "() RETURNS trigger LANGUAGE plpgsql AS $$ "
+                    + "BEGIN RAISE EXCEPTION 'test-injected job close failure'; END $$");
+            statement.execute("CREATE TRIGGER " + triggerName + " BEFORE UPDATE OF status ON recruitment.jobs "
+                    + "FOR EACH ROW EXECUTE FUNCTION recruitment." + functionName + "()");
+        }
+
+        try {
+            String adminToken = authService.login(new LoginRequest(emailFor(adminId), password)).accessToken();
+            mvc.perform(patch("/api/admin/users/{id}/suspend", employerId)
+                            .header("Authorization", "Bearer " + adminToken))
+                    .andExpect(status().is5xxServerError());
+        } finally {
+            try (Connection connection = adminConnection(); Statement statement = connection.createStatement()) {
+                statement.execute("DROP TRIGGER IF EXISTS " + triggerName + " ON recruitment.jobs");
+                statement.execute("DROP FUNCTION IF EXISTS recruitment." + functionName + "()");
+            }
+        }
+        assertThat(accountStatus(employerId)).isEqualTo("ACTIVE");
+        assertJobStatus(jobId, "ACTIVE");
     }
 
     @Test

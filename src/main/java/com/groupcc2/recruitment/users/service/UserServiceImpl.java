@@ -23,13 +23,16 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
     private final AdminRoleChangeRepository roleChanges;
     private final RlsTransactionContext rlsTransactionContext;
+    private final EmployerJobSuspender employerJobSuspender;
 
     public UserServiceImpl(UserRepository users, PasswordEncoder passwordEncoder,
-                           AdminRoleChangeRepository roleChanges, RlsTransactionContext rlsTransactionContext) {
+                           AdminRoleChangeRepository roleChanges, RlsTransactionContext rlsTransactionContext,
+                           EmployerJobSuspender employerJobSuspender) {
         this.users = users;
         this.passwordEncoder = passwordEncoder;
         this.roleChanges = roleChanges;
         this.rlsTransactionContext = rlsTransactionContext;
+        this.employerJobSuspender = employerJobSuspender;
     }
 
     @Override
@@ -137,10 +140,44 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
+    public User requireActiveEmployer(UUID employerId) {
+        if (employerId == null) {
+            throw new AuthorizationDeniedException();
+        }
+        rlsTransactionContext.setAuthenticatedUser(employerId, UserRole.EMPLOYER);
+        User employer = users.findByIdForUpdate(employerId).orElseThrow(UserNotFoundException::new);
+        requireActive(employer);
+        if (employer.getRole() != UserRole.EMPLOYER) {
+            throw new AuthorizationDeniedException();
+        }
+        return employer;
+    }
+
+    @Override
+    @Transactional
     public void suspend(UUID administratorId, UUID id) {
         requireAdministrator(administratorId);
-        User user = findById(id);
+        User user = users.findByIdForUpdate(id).orElseThrow(UserNotFoundException::new);
         user.suspend();
+        if (user.getRole() == UserRole.EMPLOYER) {
+            employerJobSuspender.unpublishActiveJobs(id);
+        }
+    }
+
+    @Override
+    @Transactional
+    public User reactivateEmployer(UUID administratorId, UUID id) {
+        requireAdministrator(administratorId);
+        User user = users.findByIdForUpdate(id).orElseThrow(UserNotFoundException::new);
+        if (user.getRole() != UserRole.EMPLOYER) {
+            throw new InvalidRoleChangeException("Only employer accounts can be reactivated through this operation");
+        }
+        try {
+            user.reactivate();
+        } catch (IllegalStateException exception) {
+            throw new InvalidRoleChangeException(exception.getMessage());
+        }
+        return user;
     }
 
     @Override

@@ -86,6 +86,14 @@ public class AdminUserController {
         return UserResponse.from(users.findForAdministrator(userId(principal), id));
     }
 
+    @PatchMapping("/{id}/reactivate")
+    @Operation(summary = "Reactivate a suspended employer", description = "Reactivates a suspended employer account. Jobs closed during suspension remain closed and must be explicitly republished by the employer.")
+    @Parameter(name="id",description="UUID of the employer account.",required=true)
+    @ApiResponses({@ApiResponse(responseCode="200",description="Returns the active employer account."),@ApiResponse(responseCode="400",description="The account is not a suspended employer."),@ApiResponse(responseCode="401",description="A valid bearer token is required."),@ApiResponse(responseCode="403",description="The caller must have the ADMIN role."),@ApiResponse(responseCode="404",description="Employer account was not found.")})
+    public UserResponse reactivate(@AuthenticationPrincipal Jwt principal, @PathVariable UUID id) {
+        return UserResponse.from(users.reactivateEmployer(userId(principal), id));
+    }
+
     @PatchMapping("/{id}/remove")
     @Operation(summary = "Remove a user account", description = "Removes the account identified by id. Requires an ADMIN bearer token.")
     @Parameter(name="id",description="UUID of the user account.",required=true)

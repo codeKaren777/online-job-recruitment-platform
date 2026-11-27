@@ -9,6 +9,7 @@ import com.groupcc2.recruitment.job.repository.JobRepository;
 import com.groupcc2.recruitment.job.repository.JobSpecifications;
 import com.groupcc2.recruitment.security.RlsTransactionContext;
 import com.groupcc2.recruitment.users.entity.UserRole;
+import com.groupcc2.recruitment.users.service.UserService;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -33,26 +34,29 @@ public class JobService {
     private final JobRepository jobRepository;
     private final RlsTransactionContext rlsTransactionContext;
     private final CompanyDirectory companies;
+    private final UserService users;
     private final Clock clock;
 
     @Autowired
     public JobService(JobRepository jobRepository, RlsTransactionContext rlsTransactionContext,
-                      CompanyDirectory companies) {
+                      CompanyDirectory companies, UserService users) {
         // UTC to match the Postgres container's CURRENT_DATE used by the DB rules.
-        this(jobRepository, rlsTransactionContext, companies, Clock.systemUTC());
+        this(jobRepository, rlsTransactionContext, companies, users, Clock.systemUTC());
     }
 
     JobService(JobRepository jobRepository, RlsTransactionContext rlsTransactionContext,
-               CompanyDirectory companies, Clock clock) {
+               CompanyDirectory companies, UserService users, Clock clock) {
         this.jobRepository = jobRepository;
         this.rlsTransactionContext = rlsTransactionContext;
         this.companies = companies;
+        this.users = users;
         this.clock = clock;
     }
 
     @Transactional
     public JobResponse createJob(UUID employerId, UserRole role, JobRequest request) {
         establishContext(employerId, role, UserRole.EMPLOYER);
+        users.requireActiveEmployer(employerId);
         requireDueDateAfterToday(request.dueDate());
         requireOwnedCompany(request.companyId(), employerId);
         Job job = new Job();
@@ -66,6 +70,7 @@ public class JobService {
     @Transactional
     public JobResponse updateJob(UUID employerId, UserRole role, UUID jobId, JobRequest request) {
         establishContext(employerId, role, UserRole.EMPLOYER);
+        users.requireActiveEmployer(employerId);
         requireDueDateAfterToday(request.dueDate());
         requireOwnedCompany(request.companyId(), employerId);
         Job job = findOwnedJob(jobId, employerId);
@@ -77,14 +82,34 @@ public class JobService {
     @Transactional
     public JobResponse closeJob(UUID employerId, UserRole role, UUID jobId) {
         establishContext(employerId, role, UserRole.EMPLOYER);
+        users.requireActiveEmployer(employerId);
         Job job = findOwnedJob(jobId, employerId);
         job.setStatus(JobStatus.CLOSED);
+        return toResponse(job);
+    }
+
+    /** Explicitly republishes a closed job after checking the employer's current account state. */
+    @Transactional
+    public JobResponse publishJob(UUID employerId, UserRole role, UUID jobId) {
+        establishContext(employerId, role, UserRole.EMPLOYER);
+        users.requireActiveEmployer(employerId);
+        Job job = findOwnedJob(jobId, employerId);
+        if (job.getStatus() == JobStatus.ACTIVE) {
+            return toResponse(job);
+        }
+        if (job.getStatus() != JobStatus.CLOSED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Only closed jobs can be republished");
+        }
+        requireDueDateAfterToday(job.getDueDate());
+        requireOwnedCompany(job.getCompanyId(), employerId);
+        job.setStatus(JobStatus.ACTIVE);
         return toResponse(job);
     }
 
     @Transactional
     public void deleteJob(UUID employerId, UserRole role, UUID jobId) {
         establishContext(employerId, role, UserRole.EMPLOYER);
+        users.requireActiveEmployer(employerId);
         Job job = findOwnedJob(jobId, employerId);
         requireOwnedCompany(job.getCompanyId(), employerId);
         try {
@@ -103,6 +128,11 @@ public class JobService {
     public PageResponse<JobResponse> getEmployerJobs(
             UUID employerId, UserRole role, JobStatus status, int page, int size) {
         establishContext(employerId, role, UserRole.EMPLOYER);
+        var employer = users.findById(employerId);
+        users.requireActive(employer);
+        if (employer.getRole() != UserRole.EMPLOYER) {
+            throw forbidden();
+        }
         Specification<Job> spec = JobSpecifications.ownedBy(employerId)
                 .and(JobSpecifications.hasEffectiveStatus(status));
         return PageResponse.from(jobRepository.findAll(spec, pageable(page, size)).map(this::toResponse));
