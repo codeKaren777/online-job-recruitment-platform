@@ -7,6 +7,9 @@ import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.time.Instant;
 import java.util.UUID;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import javax.imageio.ImageIO;
 
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
@@ -798,6 +801,11 @@ class FoundationIT {
                 .andExpect(jsonPath("$.paths['/api/applications'].post.security[0].bearerAuth").exists())
                 .andExpect(jsonPath("$.paths['/api/employer/applications'].get.security[0].bearerAuth").exists())
                 .andExpect(jsonPath("$.paths['/api/profile'].put.security[0].bearerAuth").exists())
+                .andExpect(jsonPath("$.paths['/api/profile/picture'].post.security[0].bearerAuth").exists())
+                .andExpect(jsonPath("$.paths['/api/profile/picture'].get.security[0].bearerAuth").exists())
+                .andExpect(jsonPath("$.paths['/api/profile/picture'].delete.security[0].bearerAuth").exists())
+                .andExpect(jsonPath("$.paths['/api/profile/picture'].post.requestBody.content['multipart/form-data']").exists())
+                .andExpect(jsonPath("$.paths['/api/profile/picture'].post.responses['413']").exists())
                 .andExpect(jsonPath("$.paths['/api/auth/me'].get.security[0].bearerAuth").exists());
 
         mvc.perform(get("/v3/api-docs")
@@ -1240,6 +1248,25 @@ class FoundationIT {
         }
     }
 
+    private String profilePictureKey(UUID userId) throws Exception {
+        try (Connection connection = adminConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT profile_picture_key FROM recruitment.profiles WHERE user_id = ?")) {
+            statement.setObject(1, userId);
+            try (var result = statement.executeQuery()) {
+                assertThat(result.next()).isTrue();
+                return result.getString(1);
+            }
+        }
+    }
+
+    private byte[] pngImage(int width, int height) throws Exception {
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        ImageIO.write(image, "png", bytes);
+        return bytes.toByteArray();
+    }
+
     private String accountStatus(UUID userId) throws Exception {
         try (Connection connection = adminConnection();
              PreparedStatement statement = connection.prepareStatement(
@@ -1509,6 +1536,74 @@ class FoundationIT {
         }
         assertThat(accountStatus(employerId)).isEqualTo("ACTIVE");
         assertJobStatus(jobId, "ACTIVE");
+    }
+
+    @Test
+    void profilePictureUploadRetrievalReplacementAndSelfOnlyAccess() throws Exception {
+        String password = "ProfilePicturePassword123!";
+        String firstEmail = "picture-owner-" + UUID.randomUUID() + "@example.test";
+        UUID ownerId = register(firstEmail, password);
+        String ownerToken = authService.login(new LoginRequest(firstEmail, password)).accessToken();
+        mvc.perform(get("/api/profile/picture").header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.hasPicture").value(false))
+                .andExpect(jsonPath("$.url").value(org.hamcrest.Matchers.nullValue()));
+        mvc.perform(put("/api/profile").header("Authorization", "Bearer " + ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"displayName\":\"Picture Owner\"}"))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/profile/picture").header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.hasPicture").value(false))
+                .andExpect(jsonPath("$.url").value(org.hamcrest.Matchers.nullValue()));
+
+        org.mockito.Mockito.when(privateDocumentStorage.signGetInline(anyString(),
+                        org.mockito.ArgumentMatchers.eq(Duration.ofSeconds(120)), anyString(), anyString()))
+                .thenReturn(URI.create("https://files.mikhy.me/first?X-Amz-Signature=temporary"),
+                        URI.create("https://files.mikhy.me/refreshed?X-Amz-Signature=temporary"),
+                        URI.create("https://files.mikhy.me/replacement?X-Amz-Signature=temporary"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/profile/picture")
+                        .file(new MockMultipartFile("file", "first.png", "image/png", pngImage(20, 18)))
+                        .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.hasPicture").value(true))
+                .andExpect(jsonPath("$.url").value("https://files.mikhy.me/first?X-Amz-Signature=temporary"));
+        String firstKey = profilePictureKey(ownerId);
+        assertThat(firstKey).matches("profile-pictures/[a-f0-9-]{36}\\.png");
+
+        mvc.perform(get("/api/profile/picture").header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.url").value("https://files.mikhy.me/refreshed?X-Amz-Signature=temporary"));
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/profile/picture")
+                        .file(new MockMultipartFile("file", "replacement.png", "image/png", pngImage(12, 14)))
+                        .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.url").value("https://files.mikhy.me/replacement?X-Amz-Signature=temporary"));
+        String replacementKey = profilePictureKey(ownerId);
+        assertThat(replacementKey).isNotEqualTo(firstKey);
+        org.mockito.Mockito.verify(privateDocumentStorage).delete(firstKey);
+
+        String otherEmail = "picture-other-" + UUID.randomUUID() + "@example.test";
+        register(otherEmail, password);
+        String otherToken = authService.login(new LoginRequest(otherEmail, password)).accessToken();
+        mvc.perform(put("/api/profile").header("Authorization", "Bearer " + otherToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"displayName\":\"Other User\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/profile/picture").header("Authorization", "Bearer " + otherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.hasPicture").value(false));
+        mvc.perform(get("/api/profile/picture/{userId}", ownerId)
+                        .header("Authorization", "Bearer " + otherToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/profile/picture")
+                        .file(new MockMultipartFile("file", "bad.svg", "image/svg+xml", "<svg/>".getBytes()))
+                        .header("Authorization", "Bearer " + otherToken))
+                .andExpect(status().isBadRequest());
+        assertThat(profilePictureKey(ownerId)).isEqualTo(replacementKey);
     }
 
     @Test

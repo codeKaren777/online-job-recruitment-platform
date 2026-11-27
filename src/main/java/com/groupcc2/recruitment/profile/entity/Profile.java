@@ -13,6 +13,8 @@ public class Profile {
  @Column(columnDefinition="text") private String phone;
  @Column(columnDefinition="text") private String location;
  @Column(columnDefinition="text") private String biography;
+ @Column(name="profile_picture_key", columnDefinition="text") private String profilePictureKey;
+ @Column(name="profile_picture_content_type", columnDefinition="text") private String profilePictureContentType;
  @Column(name="created_at",nullable=false,updatable=false) private Instant createdAt;
  @Column(name="updated_at",nullable=false) private Instant updatedAt;
  protected Profile() {}
@@ -29,4 +31,14 @@ public class Profile {
  public ProfileResponse response() {return new ProfileResponse(displayName,fullName,dateOfBirth,phone,location,biography,createdAt,updatedAt);}
  public UUID getUserId() {return userId;}
  public String displayName() {return displayName;}
+ public String profilePictureKey() {return profilePictureKey;}
+ public String profilePictureContentType() {return profilePictureContentType;}
+ public void setProfilePicture(String key, String contentType) {
+  if (key == null || !key.startsWith("profile-pictures/") || contentType == null
+   || !(contentType.equals("image/jpeg") || contentType.equals("image/png"))) {
+   throw new IllegalArgumentException("Invalid profile picture metadata");
+  }
+  profilePictureKey=key;profilePictureContentType=contentType;updatedAt=Instant.now();
+ }
+ public void clearProfilePicture() {profilePictureKey=null;profilePictureContentType=null;updatedAt=Instant.now();}
 }

@@ -64,6 +64,9 @@ Common outcomes include `400` invalid input, `401` missing/invalid/expired token
 |---|---|---|
 | `GET /api/profile` | Job seeker | Read own profile. |
 | `PUT /api/profile` | Job seeker | Create/update profile JSON: required `displayName`; optional `fullName`, `dateOfBirth`, `phone`, `location`, `biography`. A profile is required before applying. |
+| `POST /api/profile/picture` | Job seeker | Upload or replace own JPEG/PNG using multipart part `file`; 5 MiB default, decoded dimensions up to 2048 × 2048. Returns a short-lived private inline URL. |
+| `GET /api/profile/picture` | Job seeker | Get or renew a short-lived URL for the caller's own picture; returns `hasPicture: false` when absent. |
+| `DELETE /api/profile/picture` | Job seeker | Remove own picture and its private object (`204`). |
 | `POST /api/profile/documents` | Job seeker | Upload own PDF using `multipart/form-data` file part `file` (max 5 MiB). |
 | `GET /api/profile/documents` | Job seeker | List own document metadata. |
 | `GET /api/profile/documents/{documentId}/download` | Job seeker | Obtain short-lived private download link. |
@@ -108,6 +111,16 @@ curl -i http://localhost:8080/api/auth/login \
 ```
 
 Use the returned access token as `Authorization: Bearer <token>` for protected routes. Do not paste tokens into tickets or logs. For multipart operations, use `curl -F` for each named part; employer request's `application` part must have JSON content type, and `document`/`cv` uploads must be PDFs.
+
+Upload a profile picture using the authenticated user's token:
+
+```sh
+curl -i http://localhost:8080/api/profile/picture \
+  -H 'Authorization: Bearer <access-token>' \
+  -F 'file=@avatar.png;type=image/png'
+```
+
+The response contains `hasPicture`, `url`, and `expiresAt`. Use the returned URL unchanged while it is valid. Call `GET /api/profile/picture` again after expiry to receive a fresh signed URL. When `hasPicture` is false, show the frontend's default avatar. The endpoint accepts no user ID; it always uses the authenticated job seeker's profile.
 
 ## Keeping this contract current
 

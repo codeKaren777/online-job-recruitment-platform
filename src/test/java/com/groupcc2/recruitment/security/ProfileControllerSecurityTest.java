@@ -16,6 +16,7 @@ import com.groupcc2.recruitment.profile.controller.ProfileController;
 import com.groupcc2.recruitment.profile.dto.DocumentResponse;
 import com.groupcc2.recruitment.profile.dto.ProfileRequest;
 import com.groupcc2.recruitment.profile.dto.ProfileResponse;
+import com.groupcc2.recruitment.profile.dto.ProfilePictureResponse;
 import com.groupcc2.recruitment.profile.service.ProfileService;
 import java.time.Instant;
 import java.util.List;
@@ -69,12 +70,17 @@ class ProfileControllerSecurityTest {
         when(profileService.listOwn()).thenReturn(List.of());
         when(profileService.viewOwn(documentId)).thenReturn(new com.groupcc2.recruitment.profile.dto.DownloadResponse(
                 java.net.URI.create("https://files.mikhy.me/signed"), now.plusSeconds(120)));
+        when(profileService.pictureOwn()).thenReturn(new ProfilePictureResponse(
+                true, java.net.URI.create("https://files.mikhy.me/picture"), now.plusSeconds(120)));
+        when(profileService.uploadPicture(any())).thenReturn(new ProfilePictureResponse(
+                true, java.net.URI.create("https://files.mikhy.me/uploaded"), now.plusSeconds(120)));
 
         RequestPostProcessor token = jwt().jwt(jwt -> jwt
                         .subject(UUID.randomUUID().toString()).claim("role", "JOB_SEEKER"))
                 .authorities(new SimpleGrantedAuthority("ROLE_JOB_SEEKER"));
 
         mvc.perform(get("/api/profile").with(token)).andExpect(status().isOk());
+        mvc.perform(get("/api/profile/picture").with(token)).andExpect(status().isOk());
         mvc.perform(put("/api/profile").with(token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"displayName\":\"Name\"}"))
@@ -88,6 +94,13 @@ class ProfileControllerSecurityTest {
                 .andExpect(status().isOk());
         mvc.perform(get("/api/profile/documents/{documentId}/view", documentId).with(token))
                 .andExpect(status().isOk());
+        mvc.perform(multipart("/api/profile/picture")
+                        .file(new MockMultipartFile("file", "avatar.png", "image/png", new byte[]{1, 2}))
+                        .with(token))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.hasPicture").value(true));
+        mvc.perform(get("/api/profile/picture").with(token)).andExpect(status().isOk());
+        mvc.perform(delete("/api/profile/picture").with(token)).andExpect(status().isNoContent());
         mvc.perform(delete("/api/profile/documents/{documentId}", documentId).with(token))
                 .andExpect(status().isNoContent());
 
@@ -96,6 +109,9 @@ class ProfileControllerSecurityTest {
         verify(profileService).upload(any());
         verify(profileService).listOwn();
         verify(profileService).viewOwn(documentId);
+        verify(profileService).uploadPicture(any());
+        verify(profileService, org.mockito.Mockito.times(2)).pictureOwn();
+        verify(profileService).deletePictureOwn();
         verify(profileService).deleteOwn(documentId);
     }
 
@@ -112,6 +128,11 @@ class ProfileControllerSecurityTest {
                 .andExpect(expected);
         mvc.perform(withToken(get("/api/profile/documents/{documentId}/view", UUID.randomUUID()), token))
                 .andExpect(expected);
+        mvc.perform(withToken(get("/api/profile/picture"), token)).andExpect(expected);
+        mvc.perform(withToken(multipart("/api/profile/picture")
+                .file(new MockMultipartFile("file", "avatar.png", "image/png", new byte[]{1})), token))
+                .andExpect(expected);
+        mvc.perform(withToken(delete("/api/profile/picture"), token)).andExpect(expected);
         mvc.perform(withToken(delete("/api/profile/documents/{documentId}", UUID.randomUUID()), token))
                 .andExpect(expected);
     }

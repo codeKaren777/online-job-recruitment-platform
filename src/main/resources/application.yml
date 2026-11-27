@@ -120,6 +120,8 @@ app:
 
   profile:
     download-seconds: ${PROFILE_DOWNLOAD_SECONDS:120}
+    picture:
+      max-bytes: ${PROFILE_PICTURE_MAX_BYTES:5242880}
     storage:
       enabled: ${PROFILE_STORAGE_ENABLED:false}
       endpoint: ${PROFILE_STORAGE_ENDPOINT:http://localhost:9000}

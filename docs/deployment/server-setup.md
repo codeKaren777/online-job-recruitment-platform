@@ -60,6 +60,11 @@ Transfer/copy the contents of `production.env.example` through a trusted method 
 
 Set the actual API/database/MinIO values supported by this repository. `PROFILE_STORAGE_PUBLIC_ENDPOINT` defaults to `https://files.mikhy.me` and must be a real HTTPS endpoint reachable by clients and routed by host Nginx to `127.0.0.1:9000`. MinIO's API and console ports bind only to localhost in Compose. The console should be reached through an SSH tunnel or a deliberate secured Nginx configuration, not opened in UFW/Lightsail firewall. `APP_OPENAPI_ENABLED` and `APP_OPENAPI_PUBLIC` both default to `false`; set both to `true` only when intentionally exposing Swagger for frontend integration. `SPRING_PROFILES_ACTIVE` defaults to `production`, avoiding the development `local` profile.
 
+`PROFILE_PICTURE_MAX_BYTES` controls the profile-picture upload cap (default
+5 MiB; allowed range 1 through 5,242,880 bytes). JPEG and PNG are stored in the
+private document bucket under a separate prefix and returned through the same
+short-lived signed endpoint; this does not change document visibility.
+
 The app connects to PostgreSQL and MinIO by Compose service DNS names. Flyway uses `POSTGRES_USER`; the app uses the restricted `POSTGRES_RUNTIME_USER`. Do not substitute a superuser for the runtime role. Preserve the current `SPRING_FLYWAY_BASELINE_ON_MIGRATE=false` unless a reviewed database recovery procedure requires otherwise.
 
 ## Host Nginx and firewall

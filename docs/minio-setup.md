@@ -152,6 +152,7 @@ and [policy attachment](https://docs.min.io/aistor/reference/cli/admin/mc-admin-
 | PROFILE_STORAGE_PUBLIC_ENDPOINT | http://localhost:9000 locally; production defaults to https://files.mikhy.me and is used as the signed URL origin, not as public bucket access |
 | PROFILE_STORAGE_REGION | us-east-1 |
 | PROFILE_DOWNLOAD_SECONDS | 120; allowed range 30..300 |
+| PROFILE_PICTURE_MAX_BYTES | 5242880 (5 MiB); allowed range 1..5242880 |
 | PROFILE_STORAGE_ENABLED | false until bucket/account setup is complete |
 
 After steps 4–5, set PROFILE_STORAGE_ENABLED=true and recreate the backend:
