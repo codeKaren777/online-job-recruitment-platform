@@ -18,4 +18,12 @@ class CompanyDirectoryAdapter implements CompanyDirectory {
                 (rs, row) -> new CompanyReference(rs.getObject("id", UUID.class),
                         rs.getObject("employer_id", UUID.class)), companyId, employerId).stream().findFirst();
     }
+
+    @Override
+    public java.util.Optional<String> findPublicName(UUID companyId) {
+        return jdbc.query("SELECT recruitment.public_job_company_name(?)",
+                (rs, row) -> rs.getString(1), companyId).stream()
+                .filter(java.util.Objects::nonNull)
+                .findFirst();
+    }
 }
