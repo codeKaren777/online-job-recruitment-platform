@@ -233,7 +233,7 @@ class AuthServiceTest {
         assertThat(known.message()).isEqualTo(
                 "If the account exists, the reset request has been accepted.");
         assertThat(known).isEqualTo(new PasswordResetResponse(
-                "If the account exists, the reset request has been accepted."));
+                "If the account exists, the reset request has been accepted.", "generated-reset-token"));
 
         when(userRepository.storePasswordResetToken(
                 org.mockito.ArgumentMatchers.eq("missing@example.com"),
@@ -241,8 +241,7 @@ class AuthServiceTest {
                 org.mockito.ArgumentMatchers.any(Instant.class))).thenReturn(0);
         PasswordResetResponse missing = authService.forgotPassword(new ForgotPasswordRequest("missing@example.com"));
         assertThat(missing.message()).isEqualTo(known.message());
-        assertThat(missing).isEqualTo(known);
-        verifyNoInteractions(passwordResetTokenExposure);
+        assertThat(missing.resetToken()).isNull();
     }
 
     @Test

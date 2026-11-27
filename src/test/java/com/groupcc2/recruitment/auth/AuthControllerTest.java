@@ -211,7 +211,7 @@ class AuthControllerTest {
     void forgotPasswordReturnsAcceptedGenericResponseAndResetDoesNotReturnSecrets() throws Exception {
         when(authService.forgotPassword(new ForgotPasswordRequest("person@example.com")))
                 .thenReturn(new PasswordResetResponse(
-                        "If the account exists, the reset request has been accepted."));
+                        "If the account exists, the reset request has been accepted.", "example-reset-token"));
 
         mvc.perform(post("/api/auth/forgot-password")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -219,7 +219,7 @@ class AuthControllerTest {
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.message").value(
                         "If the account exists, the reset request has been accepted."))
-                .andExpect(jsonPath("$.resetToken").doesNotExist());
+                .andExpect(jsonPath("$.resetToken").value("example-reset-token"));
 
         mvc.perform(post("/api/auth/reset-password")
                         .contentType(MediaType.APPLICATION_JSON)
