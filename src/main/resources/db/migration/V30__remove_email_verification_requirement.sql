@@ -47,14 +47,14 @@ END
 $function$;
 
 CREATE OR REPLACE FUNCTION recruitment.auth_store_password_reset_token(
-    p_email text, p_hash text, p_expiry timestamptz)
+    p_email text, p_token_hash text, p_expires_at timestamptz)
 RETURNS integer
 LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog
 AS $function$
     WITH changed AS (
         UPDATE recruitment.users
-        SET password_reset_token_hash = p_hash,
-            password_reset_expires_at = p_expiry
+        SET password_reset_token_hash = p_token_hash,
+            password_reset_expires_at = p_expires_at
         WHERE email = p_email::public.citext
           AND status = 'ACTIVE'::recruitment.account_status
         RETURNING 1)
