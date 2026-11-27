@@ -22,6 +22,8 @@ public interface AuthCredentialRepository extends JpaRepository<User, UUID> {
         String getStatus();
 
         int getTokenVersion();
+
+        boolean getEmailVerified();
     }
 
     interface RegistrationResult {
@@ -35,13 +37,13 @@ public interface AuthCredentialRepository extends JpaRepository<User, UUID> {
     }
 
     @Query(value = """
-            SELECT id, password_hash, role, status, token_version AS "tokenVersion"
+            SELECT id, password_hash, role, status, token_version AS "tokenVersion", email_verified AS "emailVerified"
             FROM recruitment.auth_lookup_user(:email)
             """, nativeQuery = true)
     Optional<LoginCredential> findLoginCredentialsByEmail(@Param("email") String email);
 
     @Query(value = """
-            SELECT id, password_hash, role, status, token_version AS "tokenVersion"
+            SELECT id, password_hash, role, status, token_version AS "tokenVersion", email_verified AS "emailVerified"
             FROM recruitment.users
             WHERE id = :id
             """, nativeQuery = true)
@@ -104,6 +106,15 @@ public interface AuthCredentialRepository extends JpaRepository<User, UUID> {
     Integer resetPassword(
             @Param("tokenHash") String tokenHash,
             @Param("newPasswordHash") String newPasswordHash);
+
+    @Transactional
+    @Query(value = "SELECT recruitment.auth_store_email_verification(:email, :tokenHash, :expiresAt)", nativeQuery = true)
+    Integer storeEmailVerificationToken(@Param("email") String email, @Param("tokenHash") String tokenHash,
+                                        @Param("expiresAt") java.time.Instant expiresAt);
+
+    @Transactional
+    @Query(value = "SELECT recruitment.auth_consume_email_verification(:tokenHash)", nativeQuery = true)
+    Integer verifyEmail(@Param("tokenHash") String tokenHash);
 
     @Query("""
             SELECT new com.groupcc2.recruitment.auth.dto.CurrentUserResponse(

@@ -44,11 +44,13 @@ illustrative values only.
 | Method and path | Authentication | Success |
 |---|---|---|
 | `POST /api/auth/register` | None | `201 Created` |
+| `POST /api/auth/verify-email` | None; one-time verification token | `204 No Content` |
 | `POST /api/auth/login` | None | `200 OK` |
 | `GET /api/auth/me` | Bearer JWT | `200 OK` |
 | `POST /api/auth/logout` | Bearer JWT | `204 No Content` |
 | `POST /api/auth/forgot-password` | None | `202 Accepted` |
 | `POST /api/auth/reset-password` | None; one-time reset token | `204 No Content` |
+| `POST /api/auth/verify-email` | None; one-time verification token | `204 No Content` |
 | `POST /api/auth/change-password` | Bearer JWT | `204 No Content` |
 
 ### Register
@@ -79,6 +81,14 @@ optional `role` field is accepted only when omitted or set to `JOB_SEEKER`;
 explicit `EMPLOYER` and `ADMIN` values return `400 Bad Request`. The service
 and database registration function also enforce this rule (migration V13).
 Password hashes are never returned.
+
+New public JOB_SEEKER registrations are unverified and cannot log in until
+email verification succeeds. A verification message is sent with a 24-hour
+single-use token; only the SHA-256 token hash is persisted. Existing accounts
+and accounts created through the administrator bootstrap remain verified.
+Verification request: `POST /api/auth/verify-email` with
+`{"token":"<token-from-email>"}`. Success is `204`; invalid, expired, and
+already-used tokens return the same `400` response.
 
 Employer upgrades use the protected employer-request workflow; an administrator
 must approve a request before the user receives the employer role. Public
@@ -160,30 +170,22 @@ message:
 
 ```json
 {
-  "message": "If the account exists, the reset request has been accepted.",
-  "resetToken": null
+  "message": "If the account exists, the reset request has been accepted."
 }
 ```
 
-No email provider is configured, and the API does not claim that an email was
-sent. Compose runs with the explicit `local` profile. In that profile only,
-the response for an active registered account includes `resetToken`; copy it
-for local/Postman testing. The database stores only its SHA-256 hash. Outside
-the `local` profile the API never returns the raw token. Configure a real
-delivery provider before making password recovery available to users in a
-deployed environment; do not enable the `local` profile there.
+Password reset tokens are single-use, stored as SHA-256 hashes, and expire
+after 15 minutes. Requests for unverified accounts do not issue reset tokens.
+Unknown and verified addresses receive the same generic API response. Configure
+SMTP before making registration and password recovery available. Required
+environment variables are `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT`,
+`SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD`, `APP_MAIL_FROM`,
+`PASSWORD_RESET_URL`, and `EMAIL_VERIFICATION_URL`. The two URL variables must
+be HTTPS frontend routes that accept the token appended to the configured URL.
+Production Compose uses the `prod` profile and enables mail when provider
+configuration is supplied; never enable the `local` profile in production.
 
-Example response for an existing account in local development (`202`):
-
-```json
-{
-  "message": "If the account exists, the reset request has been accepted.",
-  "resetToken": "<one-time token>"
-}
-```
-
-Reset request (`resetToken` is the value from the local response or a future
-configured delivery channel):
+Reset request (`resetToken` is taken from the email link):
 
 ```json
 {
@@ -224,10 +226,13 @@ returns `400`.
    Postman variable such as `accessToken`.
 4. For `GET {{baseUrl}}/api/auth/me`, select Bearer Token authorization and
    use `{{accessToken}}`. Expect `200` and safe identity fields.
-5. Send `POST {{baseUrl}}/api/auth/forgot-password` with the email. In Compose's
-   local profile, copy the returned token for an existing active user. Try an
-   unknown email too; both responses share status/message.
-6. Send reset-password with that token and a new password; expect `204`.
+5. Open the verification link sent after registration. It submits the token to
+   `POST {{baseUrl}}/api/auth/verify-email` as `{"token":"..."}`; expect `204`.
+   An unverified job seeker cannot log in. Verification tokens expire after 24
+   hours and cannot be reused.
+6. Request a reset by sending `POST {{baseUrl}}/api/auth/forgot-password` with
+   the email. Known and unknown addresses receive the same generic response.
+   Use the token from the email link in reset-password; expect `204`.
    Re-submit the token to verify it returns `400`. The old access token should
    now return `401`.
 7. Log in using the reset password. Use this new token to call
@@ -259,7 +264,7 @@ The Compose database volume remains named `postgres_data`. Do not run
 ## Verification
 
 Unit/MVC tests validate request handling, hashing, JWT claims/validation,
-authorization boundaries, service behavior, local token exposure behavior,
+authorization boundaries, service behavior, token exposure protections,
 and conflict/error responses. `FoundationIT` runs PostgreSQL 17 Testcontainers,
 applies migrations to a disposable database, and covers registration, duplicate
 registration, login/account status, `/me`, reset expiry/reuse, password changes,

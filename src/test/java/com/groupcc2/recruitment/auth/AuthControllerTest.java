@@ -165,6 +165,14 @@ class AuthControllerTest {
     }
 
     @Test
+    void emailVerificationConsumesTokenWithoutReturningSensitiveData() throws Exception {
+        mvc.perform(post("/api/auth/verify-email").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"token\":\"valid-verification-token\"}"))
+                .andExpect(status().isNoContent());
+        verify(authService).verifyEmail("valid-verification-token");
+    }
+
+    @Test
     void loginRejectsInvalidInputBeforeCallingService() throws Exception {
         mvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)

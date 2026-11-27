@@ -46,6 +46,18 @@ class NotificationEmailSenderTest {
     }
 
     @Test
+    void sendsVerificationLinkWithoutLoggingOrReturningToken() throws Exception {
+        NotificationEmailSender sender = new NotificationEmailSender(mailSender,
+                "notifications@example.com", "https://example.com/reset?token=",
+                "https://example.com/verify?token=");
+        sender.sendEmailVerification("person@example.com", "secret-token",
+                Instant.parse("2026-10-30T08:00:00Z"));
+        message.saveChanges();
+        assertThat(message.getSubject()).isEqualTo("Verify your email address");
+        verify(mailSender).send(message);
+    }
+
+    @Test
     void sendsEmployerDecisionWithRejectionReason() throws Exception {
         NotificationEmailSender sender =
                 new NotificationEmailSender(mailSender, "notifications@example.com", "");

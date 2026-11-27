@@ -282,6 +282,13 @@ class ProtectedApiE2EIT {
         JsonNode registered = expectJson(request(HttpMethod.POST, "/api/auth/register", null,
                         Map.of("email", account.email(), "password", account.password())),
                 201, "Synthetic job seeker registration");
+        try (Connection connection = DriverManager.getConnection(POSTGRES.getJdbcUrl(),
+                POSTGRES.getUsername(), POSTGRES.getPassword());
+             var statement = connection.prepareStatement(
+                     "UPDATE recruitment.users SET email_verified = TRUE WHERE email = ?")) {
+            statement.setString(1, account.email());
+            statement.executeUpdate();
+        }
         assertThat(registered.path("role").asText()).isEqualTo("JOB_SEEKER");
         return account;
     }
@@ -520,6 +527,12 @@ class ProtectedApiE2EIT {
                         + RUNTIME_USER);
                 statement.execute("GRANT EXECUTE ON FUNCTION recruitment.auth_store_password_reset_token"
                         + "(text, text, timestamptz), recruitment.auth_consume_password_reset_token(text, text) TO "
+                        + RUNTIME_USER);
+                statement.execute("GRANT EXECUTE ON FUNCTION recruitment.auth_store_email_verification"
+                        + "(text, text, timestamptz), recruitment.auth_consume_email_verification(text) TO "
+                        + RUNTIME_USER);
+                statement.execute("GRANT EXECUTE ON FUNCTION recruitment.auth_store_email_verification"
+                        + "(text, text, timestamptz), recruitment.auth_consume_email_verification(text) TO "
                         + RUNTIME_USER);
                 statement.execute("REVOKE ALL ON recruitment.application_notification_outbox FROM " + RUNTIME_USER);
                 statement.execute("GRANT EXECUTE ON FUNCTION recruitment.enqueue_application_notification"

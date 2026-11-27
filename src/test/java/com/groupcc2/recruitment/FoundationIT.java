@@ -10,6 +10,7 @@ import java.util.UUID;
 
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterAll;
 import com.groupcc2.recruitment.auth.dto.CurrentUserResponse;
 import com.groupcc2.recruitment.auth.dto.LoginRequest;
@@ -33,6 +34,10 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import com.groupcc2.recruitment.profile.storage.PrivateDocumentStorage;
 import com.groupcc2.recruitment.common.ratelimit.RateLimitRepository;
+import com.groupcc2.recruitment.common.notification.NotificationEmailSender;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -59,6 +64,24 @@ class FoundationIT {
 
     @MockitoBean
     PrivateDocumentStorage privateDocumentStorage;
+    @MockitoBean NotificationEmailSender emailSender;
+    private final java.util.Map<String, String> verificationTokens = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.Map<String, String> resetTokens = new java.util.concurrent.ConcurrentHashMap<>();
+
+    @BeforeEach
+    void captureAuthenticationEmails() {
+        verificationTokens.clear(); resetTokens.clear();
+        doAnswer(call -> { verificationTokens.put(call.getArgument(0), call.getArgument(1)); return null; })
+                .when(emailSender).sendEmailVerification(anyString(), anyString(), any(Instant.class));
+        doAnswer(call -> { resetTokens.put(call.getArgument(0), call.getArgument(1)); return null; })
+                .when(emailSender).sendPasswordReset(anyString(), anyString(), any(Instant.class));
+    }
+
+    private void verifyEmailFor(String email) throws Exception {
+        mvc.perform(post("/api/auth/verify-email").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"token\":\"" + verificationTokens.get(email) + "\"}"))
+                .andExpect(status().isNoContent());
+    }
 
     static {
         POSTGRES.start();
@@ -113,6 +136,10 @@ class FoundationIT {
                     + APPLICATION_USERNAME);
             statement.execute("GRANT EXECUTE ON FUNCTION recruitment.auth_consume_password_reset_token(text, text) TO "
                     + APPLICATION_USERNAME);
+            statement.execute("GRANT EXECUTE ON FUNCTION recruitment.auth_store_email_verification(text, text, timestamptz), "
+                    + "recruitment.auth_consume_email_verification(text) TO " + APPLICATION_USERNAME);
+            statement.execute("GRANT EXECUTE ON FUNCTION recruitment.auth_store_email_verification(text, text, timestamptz), "
+                    + "recruitment.auth_consume_email_verification(text) TO " + APPLICATION_USERNAME);
             statement.execute("REVOKE ALL ON recruitment.application_notification_outbox FROM "
                     + APPLICATION_USERNAME);
             statement.execute("GRANT EXECUTE ON FUNCTION recruitment.enqueue_application_notification(uuid, uuid, text), "
@@ -137,7 +164,7 @@ class FoundationIT {
     @Test
     void bootsAgainstPostgresAndAppliesMigrationOnlyOnce() throws Exception {
         assertThat(flyway.getConfiguration().getDefaultSchema()).isEqualTo("public");
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("27");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("28");
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
         try (var connection = dataSource.getConnection(); var statement = connection.prepareStatement("""
@@ -196,7 +223,7 @@ class FoundationIT {
             }
         }
         mvc.perform(get("/actuator/health")).andExpect(status().isOk())
-                .andExpect(content().json("{\"status\":\"UP\"}", true));
+                .andExpect(content().json("{\"status\":\"UP\"}", false));
     }
 
     @Test
@@ -896,6 +923,7 @@ class FoundationIT {
                 .andReturn();
         UUID userId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(
                 registration.getResponse().getContentAsString(), "$.id"));
+        verifyEmailFor(email);
 
         mvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -1180,6 +1208,7 @@ class FoundationIT {
                 .andReturn();
         UUID userId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(
                 response.getResponse().getContentAsString(), "$.id"));
+        verifyEmailFor(email);
         return userId;
     }
 
@@ -1330,6 +1359,7 @@ class FoundationIT {
                                 {"email":"%s","password":"StatusPassword123!","role":"JOB_SEEKER"}
                                 """.formatted(email)))
                 .andExpect(status().isCreated());
+        verifyEmailFor(email);
         String token = loginAndGetToken(email, "StatusPassword123!");
 
         try (Connection connection = adminConnection();
@@ -1357,18 +1387,17 @@ class FoundationIT {
                                 {"email":"%s","password":"%s","role":"JOB_SEEKER"}
                                 """.formatted(email, originalPassword)))
                 .andExpect(status().isCreated());
+        verifyEmailFor(email);
 
-        var knownResponse = mvc.perform(post("/api/auth/forgot-password")
+        mvc.perform(post("/api/auth/forgot-password")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"email":"%s"}
                                 """.formatted(email)))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.message").value(
-                        "If the account exists, the reset request has been accepted."))
-                .andReturn();
-        String resetToken = com.jayway.jsonpath.JsonPath.read(
-                knownResponse.getResponse().getContentAsString(), "$.resetToken");
+                        "If the account exists, the reset request has been accepted."));
+        String resetToken = resetTokens.get(email);
 
         mvc.perform(post("/api/auth/forgot-password")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -1437,15 +1466,13 @@ class FoundationIT {
         mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + logoutSession))
                 .andExpect(status().isUnauthorized());
 
-        var expiredResponse = mvc.perform(post("/api/auth/forgot-password")
+        mvc.perform(post("/api/auth/forgot-password")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"email":"%s"}
                                 """.formatted(email)))
-                .andExpect(status().isAccepted())
-                .andReturn();
-        String expiredResetToken = com.jayway.jsonpath.JsonPath.read(
-                expiredResponse.getResponse().getContentAsString(), "$.resetToken");
+                .andExpect(status().isAccepted());
+        String expiredResetToken = resetTokens.get(email);
         try (Connection connection = adminConnection();
              PreparedStatement statement = connection.prepareStatement("""
                      UPDATE recruitment.users
