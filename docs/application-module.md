@@ -15,6 +15,7 @@ Job seeker submission/tracking and employer review of applications for owned job
 | `GET /api/employer/applications?jobId=<uuid>&status=<status>` | 200, applications for one owned job, optionally filtered by `PENDING`, `SHORTLISTED`, or `REJECTED` |
 | `GET /api/employer/applications/{applicationId}` | 200, or 404 if it is not for one of the caller's jobs |
 | `GET /api/employer/applications/{applicationId}/cv` | 200 with a short-lived private download link for that application's CV; only its job owner may request it |
+| `GET /api/employer/applications/{applicationId}/cv/view` | 200 with a short-lived private inline viewing link for that application's CV; only its job owner may request it |
 | `PATCH /api/employer/applications/{applicationId}/status` body `{"status":"SHORTLISTED"}` | 200, shortlist or reject an application for an owned job |
 
 Employers may delete a job only when they own its associated company. Jobs

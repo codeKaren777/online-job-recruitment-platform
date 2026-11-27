@@ -32,6 +32,10 @@ public class ProfileController {
  @Parameter(name="documentId",description="UUID of the document.",required=true)
  @ApiResponses({@ApiResponse(responseCode="200",description="Returns document download details."),@ApiResponse(responseCode="401",description="A valid bearer token is required."),@ApiResponse(responseCode="403",description="The caller is not permitted to download this document."),@ApiResponse(responseCode="404",description="Document was not found."),@ApiResponse(responseCode="503",description="Document storage is unavailable.")})
  public DownloadResponse download(@PathVariable UUID documentId){return service.downloadOwn(documentId);}
+ @GetMapping("/documents/{documentId}/view")
+ @Operation(summary="View a profile document", description="Returns a short-lived inline viewing URL for a document owned by the authenticated JOB_SEEKER.")
+ @ApiResponses({@ApiResponse(responseCode="200",description="Returns a short-lived inline viewing URL."),@ApiResponse(responseCode="401",description="A valid bearer token is required."),@ApiResponse(responseCode="404",description="Document was not found or is not owned by the caller."),@ApiResponse(responseCode="503",description="Document storage is unavailable.")})
+ public DownloadResponse view(@PathVariable UUID documentId){return service.viewOwn(documentId);}
  @DeleteMapping("/documents/{documentId}") @ResponseStatus(HttpStatus.NO_CONTENT)
  @Operation(summary="Delete a profile document", description="Deletes documentId if it belongs to the authenticated JOB_SEEKER. Requires a bearer token.")
  @Parameter(name="documentId",description="UUID of the document.",required=true)

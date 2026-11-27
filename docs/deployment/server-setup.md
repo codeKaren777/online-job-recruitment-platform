@@ -58,13 +58,46 @@ chmod 600 .env
 
 Transfer/copy the contents of `production.env.example` through a trusted method and replace every placeholder before saving. Never run a command that overwrites `.env` on an existing server.
 
-Set the actual API/database/MinIO values supported by this repository. In particular, `PROFILE_STORAGE_PUBLIC_ENDPOINT` must be a real HTTPS endpoint reachable by clients and routed by host Nginx to `127.0.0.1:9000`; no domain was available to put in the sample. MinIO's API and console ports bind only to localhost in Compose. The console should be reached through an SSH tunnel or a deliberate secured Nginx configuration, not opened in UFW/Lightsail firewall. `APP_OPENAPI_ENABLED` and `APP_OPENAPI_PUBLIC` both default to `false`; set both to `true` only when intentionally exposing Swagger for frontend integration. `SPRING_PROFILES_ACTIVE` defaults to `production`, avoiding the development `local` profile.
+Set the actual API/database/MinIO values supported by this repository. `PROFILE_STORAGE_PUBLIC_ENDPOINT` defaults to `https://files.mikhy.me` and must be a real HTTPS endpoint reachable by clients and routed by host Nginx to `127.0.0.1:9000`. MinIO's API and console ports bind only to localhost in Compose. The console should be reached through an SSH tunnel or a deliberate secured Nginx configuration, not opened in UFW/Lightsail firewall. `APP_OPENAPI_ENABLED` and `APP_OPENAPI_PUBLIC` both default to `false`; set both to `true` only when intentionally exposing Swagger for frontend integration. `SPRING_PROFILES_ACTIVE` defaults to `production`, avoiding the development `local` profile.
 
 The app connects to PostgreSQL and MinIO by Compose service DNS names. Flyway uses `POSTGRES_USER`; the app uses the restricted `POSTGRES_RUNTIME_USER`. Do not substitute a superuser for the runtime role. Preserve the current `SPRING_FLYWAY_BASELINE_ON_MIGRATE=false` unless a reviewed database recovery procedure requires otherwise.
 
 ## Host Nginx and firewall
 
 Keep the installed host Nginx. Its API upstream should point to `http://127.0.0.1:8080`. Existing Nginx configuration was not available for inspection, so review it before reloading and retain its TLS, headers, and routing. The backend uses forwarded headers so OpenAPI reflects the public HTTPS host; Nginx must set/overwrite `X-Forwarded-Host` and `X-Forwarded-Proto`, not pass through untrusted client values. If document links are enabled, configure a separate suitable HTTPS MinIO API route and use its externally reachable origin for `PROFILE_STORAGE_PUBLIC_ENDPOINT`; signed URLs require the route to preserve the request path and query. Do not proxy the MinIO console publicly.
+
+### MinIO file domain routing
+
+Production Compose keeps backend storage calls on the internal Docker endpoint
+`http://minio:9000`. Set `PROFILE_STORAGE_PUBLIC_ENDPOINT` to
+`https://files.mikhy.me` (the Compose default) for client URLs. Configure the
+host's TLS server for that domain to proxy only the MinIO API on loopback. The
+existing server configuration is outside this repository and was not inspected
+or changed. The relevant Nginx location should preserve the request method and
+full URI, including the presigned query string, and forward the signed host:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name files.mikhy.me;
+
+    # Keep the existing certificate and TLS directives here.
+    location / {
+        proxy_pass http://127.0.0.1:9000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Connection "";
+        proxy_request_buffering off;
+        proxy_buffering off;
+    }
+}
+```
+
+Do not add a URI suffix to `proxy_pass`, rewrite the request URI, or change the
+upstream Host to `127.0.0.1:9000`: the SigV4 signature covers the Host, path,
+query and HTTP method. Keep the MinIO bucket private and do not proxy its
+console. Install this in the existing server configuration after checking its
+TLS setup; this repository cannot verify the live Nginx route.
 
 Do not open ports 5432, 9000, or 9001 in UFW or the Lightsail firewall. Compose exposes MinIO only on host loopback and does not publish PostgreSQL. The backend is published only on host loopback for Nginx.
 

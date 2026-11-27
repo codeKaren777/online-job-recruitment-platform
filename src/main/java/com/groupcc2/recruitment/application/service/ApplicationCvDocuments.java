@@ -13,6 +13,7 @@ public interface ApplicationCvDocuments {
     DocumentResponse storeForCurrentApplicant(MultipartFile file);
     void removeForCurrentApplicant(UUID documentId);
     DownloadResponse downloadForEmployer(UUID jobId, UUID applicantId, UUID documentId);
+    DownloadResponse viewForEmployer(UUID jobId, UUID applicantId, UUID documentId);
     Map<UUID, DocumentResponse> metadataForEmployer(Set<UUID> documentIds);
     Map<UUID, String> applicantNamesForEmployer(Set<UUID> applicantIds);
     Map<UUID, ProfileResponse> applicantProfilesForEmployer(Set<UUID> applicantIds);

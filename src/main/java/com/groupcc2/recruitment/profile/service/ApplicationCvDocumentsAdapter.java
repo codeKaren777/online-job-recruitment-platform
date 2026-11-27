@@ -25,6 +25,9 @@ class ApplicationCvDocumentsAdapter implements ApplicationCvDocuments {
     @Override public com.groupcc2.recruitment.profile.dto.DownloadResponse downloadForEmployer(UUID jobId, UUID applicantId, UUID documentId) {
         return profiles.downloadForEmployer(jobId, applicantId, documentId);
     }
+    @Override public com.groupcc2.recruitment.profile.dto.DownloadResponse viewForEmployer(UUID jobId, UUID applicantId, UUID documentId) {
+        return profiles.viewForEmployer(jobId, applicantId, documentId);
+    }
     @Override public java.util.Map<UUID, DocumentResponse> metadataForEmployer(java.util.Set<UUID> documentIds) {
         return profiles.applicationCvMetadataForEmployer(documentIds);
     }

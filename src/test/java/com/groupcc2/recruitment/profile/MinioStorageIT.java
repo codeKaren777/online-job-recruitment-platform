@@ -35,9 +35,55 @@ class MinioStorageIT {
   .contains("response-content-disposition")
   .contains("response-content-type");
  assertThat(http.send(HttpRequest.newBuilder(url).GET().build(),HttpResponse.BodyHandlers.ofString()).body()).contains("%PDF-1.7");
+ var response=http.send(HttpRequest.newBuilder(url).GET().build(),HttpResponse.BodyHandlers.discarding());
+ assertThat(response.statusCode()).isEqualTo(200);
+ String signature=url.getRawQuery().replaceFirst(".*X-Amz-Signature=([0-9a-f]+).*", "$1");
+ String replacement=(signature.charAt(0)=='0' ? "1" : "0")+signature.substring(1);
+ String invalidQuery=url.getRawQuery().replace("X-Amz-Signature="+signature,"X-Amz-Signature="+replacement);
+ URI invalidSignature=URI.create(url.toString().replace(url.getRawQuery(),invalidQuery));
+ assertThat(http.send(HttpRequest.newBuilder(invalidSignature).GET().build(),HttpResponse.BodyHandlers.discarding()).statusCode()).isEqualTo(403);
+ var publicSigner=S3Presigner.builder().endpointOverride(URI.create("https://files.mikhy.me"))
+  .credentialsProvider(credentials).region(Region.US_EAST_1).serviceConfiguration(config).build();
+ try(publicSigner) {
+  URI external= new S3DocumentStorage(client,publicSigner,"documents-test")
+   .signGetInline("documents/random-id",Duration.ofSeconds(120),"resume.pdf","application/pdf");
+  assertThat(external.getHost()).isEqualTo("files.mikhy.me");
+  assertThat(external.getRawQuery()).contains("X-Amz-SignedHeaders=host")
+   .contains("response-content-disposition")
+   .contains("inline");
+  // Simulate the upstream request a reverse proxy must send: same GET target
+  // and signed Host header, with TLS terminated before MinIO.
+  ProxyResponse forwarded = proxyForwardedGet(endpoint, external);
+  assertThat(forwarded.status()).isEqualTo(200);
+  assertThat(forwarded.headers()).anyMatch(h -> h.equalsIgnoreCase("content-disposition: inline; filename=\"resume.pdf\""));
+  assertThat(forwarded.headers()).anyMatch(h -> h.equalsIgnoreCase("content-type: application/pdf"));
+ }
+ URI expired=storage.signGet("documents/random-id",Duration.ofSeconds(1),"resume.pdf","application/pdf");
+ Thread.sleep(1500);
+ assertThat(http.send(HttpRequest.newBuilder(expired).GET().build(),HttpResponse.BodyHandlers.discarding()).statusCode()).isEqualTo(403);
  assertThat(http.send(HttpRequest.newBuilder(url).method("PUT",HttpRequest.BodyPublishers.ofString("overwrite")).build(),HttpResponse.BodyHandlers.discarding()).statusCode()).isEqualTo(403);
  storage.delete("documents/random-id");storage.delete("documents/random-id");
  }finally{Files.deleteIfExists(file);}
  }
  }
+
+ private static ProxyResponse proxyForwardedGet(URI minioEndpoint, URI signedUrl) throws Exception {
+  try (Socket socket = new Socket(minioEndpoint.getHost(), minioEndpoint.getPort())) {
+   socket.setSoTimeout(5000);
+   String target = signedUrl.getRawPath() + "?" + signedUrl.getRawQuery();
+   String request = "GET " + target + " HTTP/1.1\r\n"
+    + "Host: " + signedUrl.getHost() + "\r\n"
+    + "Connection: close\r\n\r\n";
+   socket.getOutputStream().write(request.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+   socket.getOutputStream().flush();
+   var reader = new java.io.BufferedReader(new java.io.InputStreamReader(
+    socket.getInputStream(), java.nio.charset.StandardCharsets.US_ASCII));
+   String status = reader.readLine();
+   var headers = new java.util.ArrayList<String>();
+   for (String line; (line = reader.readLine()) != null && !line.isEmpty();) headers.add(line);
+   return new ProxyResponse(Integer.parseInt(status.split(" ")[1]), headers);
+  }
+ }
+
+ private record ProxyResponse(int status, java.util.List<String> headers) {}
 }

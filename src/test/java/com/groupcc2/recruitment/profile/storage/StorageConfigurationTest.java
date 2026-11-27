@@ -12,10 +12,11 @@ class StorageConfigurationTest {
     @Test
     void acceptsCompletePrivateStorageSettings() {
         StorageConfiguration.Settings settings = StorageConfiguration.validateSettings(
-                ENDPOINT, ENDPOINT, "us-east-1", "recruitment-documents",
+                ENDPOINT, "https://files.mikhy.me", "us-east-1", "recruitment-documents",
                 "document-service", "secret-value", true);
 
         assertThat(settings.endpoint().toString()).isEqualTo(ENDPOINT);
+        assertThat(settings.publicEndpoint().toString()).isEqualTo("https://files.mikhy.me");
         assertThat(settings.bucket()).isEqualTo("recruitment-documents");
         assertThat(settings.pathStyle()).isTrue();
     }

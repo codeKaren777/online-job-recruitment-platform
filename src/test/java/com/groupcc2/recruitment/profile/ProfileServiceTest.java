@@ -49,6 +49,27 @@ class ProfileServiceTest {
  when(storage.signGet("generated-key",java.time.Duration.ofSeconds(120),"cv.pdf","application/pdf")).thenReturn(java.net.URI.create("http://example.test/signed"));
  assertThat(service.downloadOwn(id).url().getHost()).isEqualTo("example.test");
  verify(storage).signGet("generated-key",java.time.Duration.ofSeconds(120),"cv.pdf","application/pdf");}
+ @Test void authorizedOwnerCanRequestInlineViewWithoutChangingDownloadBehavior(){UUID id=UUID.randomUUID();when(documents.findByIdAndProfileUserId(id,owner)).thenReturn(Optional.of(new Document(owner,"generated-key","cv.pdf","application/pdf",20)));
+ when(storage.signGetInline("generated-key",java.time.Duration.ofSeconds(120),"cv.pdf","application/pdf")).thenReturn(java.net.URI.create("https://files.mikhy.me/signed"));
+ assertThat(service.viewOwn(id).url().getHost()).isEqualTo("files.mikhy.me");
+ verify(storage).signGetInline("generated-key",java.time.Duration.ofSeconds(120),"cv.pdf","application/pdf");}
+ @Test void foreignDocumentCannotBeViewed(){UUID foreign=UUID.randomUUID();when(documents.findByIdAndProfileUserId(foreign,owner)).thenReturn(Optional.empty());
+ assertThatThrownBy(()->service.viewOwn(foreign)).isInstanceOf(ProfileFailure.class);verifyNoInteractions(storage);}
+ @Test void employerCanViewOnlyTheApplicantsDocumentForAQualifyingApplication(){UUID employer=owner,job=UUID.randomUUID(),applicant=UUID.randomUUID(),documentId=UUID.randomUUID();
+ when(users.findById(owner)).thenReturn(new User("employer@example.test","hash",UserRole.EMPLOYER));
+ when(documents.findByIdAndProfileUserId(documentId,applicant)).thenReturn(Optional.of(new Document(applicant,"generated-key","cv.pdf","application/pdf",20)));
+ when(storage.signGetInline("generated-key",java.time.Duration.ofSeconds(120),"cv.pdf","application/pdf"))
+  .thenReturn(java.net.URI.create("https://files.mikhy.me/signed"));
+ assertThat(service.viewForEmployer(job,applicant,documentId).url().getHost()).isEqualTo("files.mikhy.me");
+ verify(access).requireSubmittedApplication(employer,job,applicant);
+ verify(storage).signGetInline("generated-key",java.time.Duration.ofSeconds(120),"cv.pdf","application/pdf");
+ }
+ @Test void employerCannotViewCvForUnrelatedApplication(){UUID employer=owner,job=UUID.randomUUID(),applicant=UUID.randomUUID(),documentId=UUID.randomUUID();
+ when(users.findById(owner)).thenReturn(new User("employer@example.test","hash",UserRole.EMPLOYER));
+ doThrow(new ProfileFailure(ProfileFailure.Code.FORBIDDEN)).when(access).requireSubmittedApplication(employer,job,applicant);
+ assertThatThrownBy(()->service.viewForEmployer(job,applicant,documentId)).isInstanceOf(ProfileFailure.class);
+ verify(documents,never()).findByIdAndProfileUserId(any(),any());verifyNoInteractions(storage);
+ }
  @Test void uploadReturnsSafeMetadata(){DocumentResponse d=service.upload(file());assertThat(d.originalFilename()).isEqualTo("cv.pdf");
  verify(storage).upload(matches("documents/[a-f0-9-]{36}"),any(),eq("application/pdf"));verify(storage,never()).delete(any());}
  @Test void storageFailureNeverPersists(){doThrow(new IllegalStateException()).when(storage).upload(any(),any(),any());assertThatThrownBy(()->service.upload(file())).isInstanceOf(ProfileFailure.class);verify(documents,never()).saveAndFlush(any());verify(storage).delete(any());}

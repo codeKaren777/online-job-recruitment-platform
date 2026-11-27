@@ -149,7 +149,7 @@ and [policy attachment](https://docs.min.io/aistor/reference/cli/admin/mc-admin-
 |---|---|
 | PROFILE_STORAGE_BUCKET | recruitment-documents |
 | PROFILE_STORAGE_ENDPOINT | http://localhost:9000 for a host JVM; Compose overrides it to http://minio:9000 |
-| PROFILE_STORAGE_PUBLIC_ENDPOINT | http://localhost:9000; hostname used in signed links, not public bucket access |
+| PROFILE_STORAGE_PUBLIC_ENDPOINT | http://localhost:9000 locally; production defaults to https://files.mikhy.me and is used as the signed URL origin, not as public bucket access |
 | PROFILE_STORAGE_REGION | us-east-1 |
 | PROFILE_DOWNLOAD_SECONDS | 120; allowed range 30..300 |
 | PROFILE_STORAGE_ENABLED | false until bucket/account setup is complete |
@@ -165,12 +165,16 @@ This enables the storage adapter and private document HTTP flow. Health UP prove
 backend/database readiness; it does not prove bucket credentials or an
 authenticated upload workflow.
 For a shared server, the signed-link endpoint must be reachable by recipients;
-localhost points to each recipient's own machine. Set
-PROFILE_STORAGE_PUBLIC_ENDPOINT to the shared MinIO hostname (or reverse-proxy
-endpoint) that recipients can reach. Do not rewrite a signed URL. Employer
-downloads use `GET /api/employer/applications/{applicationId}/cv`; the backend
-checks the employer's ownership of the specific job/application before issuing
-the short-lived link.
+localhost points to each recipient's own machine. Production Compose uses the
+internal `http://minio:9000` endpoint for backend operations and
+`https://files.mikhy.me` for signing URLs. Do not rewrite a signed URL. Its
+reverse proxy must preserve method, path, query, and signed Host header; see
+[the Nginx routing instructions](deployment/server-setup.md#minio-file-domain-routing).
+Employer CV viewing/downloading uses `/api/employer/applications/{applicationId}/cv/view`
+or `/cv`; the backend checks job and application ownership before issuing a
+short-lived link. Direct browser navigation to the returned URL does not require
+CORS. A frontend using `fetch` or XHR needs MinIO bucket CORS configured for its
+specific deployed origin; do not use a wildcard origin for private documents.
 
 ## 7. Test while authentication is being developed
 
