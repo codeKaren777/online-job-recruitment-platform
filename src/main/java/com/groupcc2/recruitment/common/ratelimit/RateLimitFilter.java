@@ -87,7 +87,6 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (path.equals("/api/auth/login")) return new PolicyMatch("login", properties.getLogin());
         if (path.equals("/api/auth/register")) return new PolicyMatch("registration", properties.getRegistration());
         if (path.equals("/api/auth/forgot-password")) return new PolicyMatch("recovery", properties.getRecovery());
-        if (path.equals("/api/auth/verify-email")) return new PolicyMatch("verification", properties.getRecovery());
         if (path.equals("/api/auth/reset-password")) return new PolicyMatch("reset", properties.getReset());
         if (path.equals("/api/profile/documents")
                 || path.equals("/api/applications")

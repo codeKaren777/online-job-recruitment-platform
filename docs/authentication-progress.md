@@ -44,13 +44,11 @@ illustrative values only.
 | Method and path | Authentication | Success |
 |---|---|---|
 | `POST /api/auth/register` | None | `201 Created` |
-| `POST /api/auth/verify-email` | None; one-time verification token | `204 No Content` |
 | `POST /api/auth/login` | None | `200 OK` |
 | `GET /api/auth/me` | Bearer JWT | `200 OK` |
 | `POST /api/auth/logout` | Bearer JWT | `204 No Content` |
 | `POST /api/auth/forgot-password` | None | `202 Accepted` |
 | `POST /api/auth/reset-password` | None; one-time reset token | `204 No Content` |
-| `POST /api/auth/verify-email` | None; one-time verification token | `204 No Content` |
 | `POST /api/auth/change-password` | Bearer JWT | `204 No Content` |
 
 ### Register
@@ -82,13 +80,8 @@ explicit `EMPLOYER` and `ADMIN` values return `400 Bad Request`. The service
 and database registration function also enforce this rule (migration V13).
 Password hashes are never returned.
 
-New public JOB_SEEKER registrations are unverified and cannot log in until
-email verification succeeds. A verification message is sent with a 24-hour
-single-use token; only the SHA-256 token hash is persisted. Existing accounts
-and accounts created through the administrator bootstrap remain verified.
-Verification request: `POST /api/auth/verify-email` with
-`{"token":"<token-from-email>"}`. Success is `204`; invalid, expired, and
-already-used tokens return the same `400` response.
+New public JOB_SEEKER registrations are active and can log in immediately.
+Email verification is not required by the current account workflow.
 
 Employer upgrades use the protected employer-request workflow; an administrator
 must approve a request before the user receives the employer role. Public
@@ -175,15 +168,15 @@ message:
 ```
 
 Password reset tokens are single-use, stored as SHA-256 hashes, and expire
-after 15 minutes. Requests for unverified accounts do not issue reset tokens.
-Unknown and verified addresses receive the same generic API response. Configure
-SMTP before making registration and password recovery available. Required
-environment variables are `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT`,
-`SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD`, `APP_MAIL_FROM`,
-`PASSWORD_RESET_URL`, and `EMAIL_VERIFICATION_URL`. The two URL variables must
-be HTTPS frontend routes that accept the token appended to the configured URL.
-Production Compose uses the `prod` profile and enables mail when provider
-configuration is supplied; never enable the `local` profile in production.
+after 15 minutes. Active accounts receive the reset token in email; the API
+response remains generic for both known and unknown addresses. The frontend
+submits the emailed token to the reset-password endpoint. Configure SMTP before
+making password recovery available. Required environment variables are
+`SPRING_MAIL_HOST`, `SPRING_MAIL_PORT`, `SPRING_MAIL_USERNAME`,
+`SPRING_MAIL_PASSWORD`, `APP_MAIL_FROM`, and `PASSWORD_RESET_URL` (optional if
+the email should contain the token without a link). Production Compose uses
+the `prod` profile and enables mail when provider configuration is supplied;
+never enable the `local` profile in production.
 
 Reset request (`resetToken` is taken from the email link):
 
@@ -226,19 +219,15 @@ returns `400`.
    Postman variable such as `accessToken`.
 4. For `GET {{baseUrl}}/api/auth/me`, select Bearer Token authorization and
    use `{{accessToken}}`. Expect `200` and safe identity fields.
-5. Open the verification link sent after registration. It submits the token to
-   `POST {{baseUrl}}/api/auth/verify-email` as `{"token":"..."}`; expect `204`.
-   An unverified job seeker cannot log in. Verification tokens expire after 24
-   hours and cannot be reused.
-6. Request a reset by sending `POST {{baseUrl}}/api/auth/forgot-password` with
+5. Request a reset by sending `POST {{baseUrl}}/api/auth/forgot-password` with
    the email. Known and unknown addresses receive the same generic response.
    Use the token from the email link in reset-password; expect `204`.
    Re-submit the token to verify it returns `400`. The old access token should
    now return `401`.
-7. Log in using the reset password. Use this new token to call
+6. Log in using the reset password. Use this new token to call
    `POST {{baseUrl}}/api/auth/change-password` with current/new passwords;
    expect `204`, then verify the old token returns `401`.
-8. Log in again, call `POST {{baseUrl}}/api/auth/logout` with the new bearer
+7. Log in again, call `POST {{baseUrl}}/api/auth/logout` with the new bearer
    token; expect `204`, then verify `/me` rejects that token with `401`.
 
 ## Database and local environment

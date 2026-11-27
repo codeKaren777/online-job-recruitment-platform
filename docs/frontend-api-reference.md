@@ -129,6 +129,11 @@ Response `204`.
 }
 ```
 
+The endpoint returns the same accepted response for existing and unknown
+accounts. For an active account, the one-time token is delivered to the account
+email. The client should collect that token and submit it to reset-password;
+the API response never contains it.
+
 `POST /api/auth/reset-password`
 
 ```json

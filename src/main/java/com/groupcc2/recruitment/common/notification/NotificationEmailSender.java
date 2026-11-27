@@ -10,7 +10,6 @@ import jakarta.mail.internet.AddressException;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -25,31 +24,14 @@ public class NotificationEmailSender {
     private final JavaMailSender mailSender;
     private final String from;
     private final String resetUrl;
-    private final String verificationUrl;
 
-    public NotificationEmailSender(JavaMailSender mailSender, String from, String resetUrl) {
-        this(mailSender, from, resetUrl, "");
-    }
-
-    @Autowired
     public NotificationEmailSender(
             JavaMailSender mailSender,
             @Value("${app.mail.from:}") String from,
-            @Value("${app.auth.password-reset-url:}") String resetUrl,
-            @Value("${app.auth.email-verification-url:}") String verificationUrl) {
+            @Value("${app.auth.password-reset-url:}") String resetUrl) {
         this.mailSender = mailSender;
         this.from = validateAddress(from, "APP_MAIL_FROM");
         this.resetUrl = resetUrl == null ? "" : resetUrl.trim();
-        this.verificationUrl = verificationUrl == null ? "" : verificationUrl.trim();
-    }
-
-    public void sendEmailVerification(String recipient, String rawToken, Instant expiresAt) {
-        String safeRecipient = validateAddress(recipient, "email verification recipient");
-        String link = verificationUrl.isBlank() ? rawToken : verificationUrl + rawToken;
-        String text = "Verify your email before " + DATE_FORMAT.format(expiresAt) + ":\n" + link;
-        String html = "<p>Verify your email before " + escape(DATE_FORMAT.format(expiresAt))
-                + ".</p><p><a href=\"" + escape(link) + "\">Verify email</a></p>";
-        send(safeRecipient, "Verify your email address", text, html);
     }
 
     public void sendPasswordReset(String recipient, String rawToken, Instant expiresAt) {
