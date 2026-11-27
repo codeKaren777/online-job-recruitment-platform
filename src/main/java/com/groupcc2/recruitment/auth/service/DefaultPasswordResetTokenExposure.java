@@ -10,6 +10,6 @@ import org.springframework.stereotype.Component;
 public class DefaultPasswordResetTokenExposure implements PasswordResetTokenExposure {
     @Override
     public Optional<String> exposeForLocalDevelopment(String rawToken) {
-        return Optional.empty();
+        return Optional.of(rawToken);
     }
 }

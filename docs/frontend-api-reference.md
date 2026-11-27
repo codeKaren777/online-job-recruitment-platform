@@ -129,10 +129,10 @@ Response `204`.
 }
 ```
 
-The endpoint returns the same accepted response for existing and unknown
-accounts. For an active account, the one-time token is delivered to the account
-email. The client should collect that token and submit it to reset-password;
-the API response never contains it.
+The endpoint returns the same accepted message for existing and unknown
+accounts. For an active account, the response also contains `resetToken`; the
+token is emailed when mail delivery is configured. Submit the token to
+`/api/auth/reset-password`. It expires after 15 minutes and can be used once.
 
 `POST /api/auth/reset-password`
 

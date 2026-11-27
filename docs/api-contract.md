@@ -17,7 +17,7 @@ Common outcomes include `400` invalid input, `401` missing/invalid/expired token
 | `GET /api/auth/me` | Any authenticated user | Returns caller identity and role. |
 | `POST /api/auth/logout` | Any authenticated user | Invalidates the caller's current token version (`204`). |
 | `POST /api/auth/change-password` | Any authenticated user | JSON `{ "currentPassword", "newPassword" }`; invalidates old sessions (`204`). |
-| `POST /api/auth/forgot-password` | Public | JSON `{ "email" }`; returns generic accepted message (`202`). For an active account, a one-time reset token is sent to its email; the token is not included in the API response. |
+| `POST /api/auth/forgot-password` | Public | JSON `{ "email" }`; returns generic accepted message and, for an active account, the one-time `resetToken` (`202`). Token is also sent by email when configured; expires after 15 minutes. |
 | `POST /api/auth/reset-password` | Public | JSON `{ "resetToken", "newPassword" }`; provide the token received by email. It is one-time and expires after 15 minutes (`204`). |
 
 ## User and employer verification

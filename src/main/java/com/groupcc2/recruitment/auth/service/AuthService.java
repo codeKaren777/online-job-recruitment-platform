@@ -144,11 +144,10 @@ public class AuthService {
                 log.warn("Password reset delivery failed; account reference redacted");
             }
         }
-        if (updated == 1 && emailSender == null) {
-            // Never disclose reset credentials through an API response. Operational delivery must
-            // be configured independently; the generic response avoids account enumeration.
-        }
-        return new PasswordResetResponse(RESET_MESSAGE);
+        String exposedToken = updated == 1
+                ? passwordResetTokenExposure.exposeForLocalDevelopment(rawToken).orElse(null)
+                : null;
+        return new PasswordResetResponse(RESET_MESSAGE, exposedToken);
     }
 
     @Transactional
