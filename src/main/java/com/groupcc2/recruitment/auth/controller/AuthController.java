@@ -7,7 +7,6 @@ import com.groupcc2.recruitment.auth.dto.LoginRequest;
 import com.groupcc2.recruitment.auth.dto.LoginResponse;
 import com.groupcc2.recruitment.auth.dto.PasswordResetRequest;
 import com.groupcc2.recruitment.auth.dto.PasswordResetResponse;
-import com.groupcc2.recruitment.auth.dto.EmailVerificationRequest;
 import com.groupcc2.recruitment.auth.dto.RegisterRequest;
 import com.groupcc2.recruitment.auth.dto.RegisterResponse;
 import com.groupcc2.recruitment.auth.service.AuthService;
@@ -94,15 +93,6 @@ public class AuthController {
     @ApiResponses({@ApiResponse(responseCode="204", description="Password reset completed."), @ApiResponse(responseCode="400", description="Request body is malformed, fails validation, or the reset token is invalid."), @ApiResponse(responseCode="500", description="Unexpected server error.")})
     public ResponseEntity<Void> resetPassword(@Valid @RequestBody PasswordResetRequest request) {
         authService.resetPassword(request);
-        return ResponseEntity.noContent().build();
-    }
-
-    @PostMapping("/verify-email")
-    @Operation(summary = "Verify email address", description = "Consumes a single-use verification token emailed after registration.")
-    @ApiResponses({@ApiResponse(responseCode="204", description="Email verified."),
-            @ApiResponse(responseCode="400", description="Token is invalid, expired, or already used.")})
-    public ResponseEntity<Void> verifyEmail(@Valid @RequestBody EmailVerificationRequest request) {
-        authService.verifyEmail(request.token());
         return ResponseEntity.noContent().build();
     }
 

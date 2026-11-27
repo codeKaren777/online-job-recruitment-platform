@@ -32,7 +32,6 @@ public class AuthService {
     private static final String RESET_MESSAGE =
             "If the account exists, the reset request has been accepted.";
     private static final long RESET_TOKEN_LIFETIME_SECONDS = 900;
-    private static final long VERIFICATION_TOKEN_LIFETIME_SECONDS = 86_400;
 
     private final AuthCredentialRepository userRepository;
     private final PasswordHashingService passwordHashingService;
@@ -74,20 +73,6 @@ public class AuthService {
         AuthCredentialRepository.RegistrationResult user = userRepository.registerUser(
                 request.email(), passwordHash, UserRole.JOB_SEEKER.name())
                 .orElseThrow(EmailAlreadyRegisteredException::new);
-        String token = passwordResetTokenService.generateToken();
-        Instant expiry = Instant.now().plusSeconds(VERIFICATION_TOKEN_LIFETIME_SECONDS);
-        if (userRepository.storeEmailVerificationToken(user.getEmail(),
-                passwordResetTokenService.hashToken(token), expiry) != 1) {
-            throw new IllegalStateException("Email verification token could not be stored");
-        }
-        NotificationEmailSender sender = notificationEmails == null ? null : notificationEmails.getIfAvailable();
-        if (sender != null) {
-            try { sender.sendEmailVerification(user.getEmail(), token, expiry); }
-            catch (RuntimeException failure) {
-                log.warn("Email verification delivery failed; account reference redacted");
-                throw new IllegalStateException("Email verification delivery is unavailable");
-            }
-        }
         return new RegisterResponse(user.getId(), user.getEmail(),
                 UserRole.valueOf(user.getRole()), AccountStatus.valueOf(user.getStatus()));
     }
@@ -103,8 +88,7 @@ public class AuthService {
 
         UserRole role = UserRole.valueOf(credentials.getRole());
         if (!passwordHashingService.matches(request.password(), credentials.getPasswordHash())
-                || !AccountStatus.ACTIVE.name().equals(credentials.getStatus())
-                || (role == UserRole.JOB_SEEKER && !credentials.getEmailVerified())) {
+                || !AccountStatus.ACTIVE.name().equals(credentials.getStatus())) {
             throw new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE);
         }
 
@@ -174,12 +158,6 @@ public class AuthService {
         if (userRepository.resetPassword(tokenHash, passwordHash) != 1) {
             throw new InvalidPasswordResetTokenException();
         }
-    }
-
-    @Transactional
-    public void verifyEmail(String rawToken) {
-        String tokenHash = passwordResetTokenService.hashToken(rawToken);
-        if (userRepository.verifyEmail(tokenHash) != 1) throw new InvalidEmailVerificationTokenException();
     }
 
     @Transactional(readOnly = true)

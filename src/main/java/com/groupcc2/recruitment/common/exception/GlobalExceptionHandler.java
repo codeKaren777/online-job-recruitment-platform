@@ -3,7 +3,6 @@ package com.groupcc2.recruitment.common.exception;
 import com.groupcc2.recruitment.application.service.ApplicationFailure;
 import com.groupcc2.recruitment.auth.service.EmailAlreadyRegisteredException;
 import com.groupcc2.recruitment.auth.service.InvalidPasswordResetTokenException;
-import com.groupcc2.recruitment.auth.service.InvalidEmailVerificationTokenException;
 import com.groupcc2.recruitment.profile.service.ProfileFailure;
 import com.groupcc2.recruitment.users.service.AuthorizationDeniedException;
 import com.groupcc2.recruitment.users.service.DuplicateEmailException;
@@ -67,7 +66,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class,
             IllegalArgumentException.class, RoleRegistrationNotAllowedException.class,
-            InvalidPasswordResetTokenException.class, InvalidEmailVerificationTokenException.class,
+            InvalidPasswordResetTokenException.class,
             org.springframework.web.multipart.support.MissingServletRequestPartException.class})
     ResponseEntity<ApiErrorResponse> badRequest(Exception exception, HttpServletRequest request) {
         return response(request, HttpStatus.BAD_REQUEST, "BAD_REQUEST", "The request is invalid.", null);

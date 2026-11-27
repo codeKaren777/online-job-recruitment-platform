@@ -4,7 +4,7 @@ This guide describes the HTTP API implemented by the Spring controllers. Swagger
 
 ## Authentication and common responses
 
-Public registration creates only `JOB_SEEKER` accounts. Log in to receive a bearer token; use it in Swagger's **Authorize** dialog or send it as a Bearer header. Roles are `JOB_SEEKER`, `EMPLOYER`, and `ADMIN`. The server derives the caller identity from the token; do not send a user ID to act as another user.
+Public registration creates active `JOB_SEEKER` accounts; email verification is not required. Log in to receive a bearer token; use it in Swagger's **Authorize** dialog or send it as a Bearer header. Roles are `JOB_SEEKER`, `EMPLOYER`, and `ADMIN`. The server derives the caller identity from the token; do not send a user ID to act as another user.
 
 Common outcomes include `400` invalid input, `401` missing/invalid/expired token, `403` insufficient role or ownership, `404` missing or invisible resource, `409` conflicting state (duplicate application, closed job, or invalid transition), `413` oversized upload, `429` rate limit, and `503` unavailable dependency. Error responses use the shared API error shape and include `X-Correlation-ID`. Password-reset initiation deliberately gives the same response whether or not the account exists.
 
@@ -17,8 +17,8 @@ Common outcomes include `400` invalid input, `401` missing/invalid/expired token
 | `GET /api/auth/me` | Any authenticated user | Returns caller identity and role. |
 | `POST /api/auth/logout` | Any authenticated user | Invalidates the caller's current token version (`204`). |
 | `POST /api/auth/change-password` | Any authenticated user | JSON `{ "currentPassword", "newPassword" }`; invalidates old sessions (`204`). |
-| `POST /api/auth/forgot-password` | Public | JSON `{ "email" }`; returns generic accepted message (`202`), never a reset token. |
-| `POST /api/auth/reset-password` | Public | JSON `{ "resetToken", "newPassword" }`; valid one-time token required (`204`). |
+| `POST /api/auth/forgot-password` | Public | JSON `{ "email" }`; returns generic accepted message (`202`). For an active account, a one-time reset token is sent to its email; the token is not included in the API response. |
+| `POST /api/auth/reset-password` | Public | JSON `{ "resetToken", "newPassword" }`; provide the token received by email. It is one-time and expires after 15 minutes (`204`). |
 
 ## User and employer verification
 

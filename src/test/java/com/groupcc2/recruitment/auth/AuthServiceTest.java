@@ -21,7 +21,6 @@ import com.groupcc2.recruitment.common.notification.NotificationEmailSender;
 import com.groupcc2.recruitment.auth.service.EmailAlreadyRegisteredException;
 import com.groupcc2.recruitment.auth.service.JwtTokenService;
 import com.groupcc2.recruitment.auth.service.InvalidPasswordResetTokenException;
-import com.groupcc2.recruitment.auth.service.InvalidEmailVerificationTokenException;
 import com.groupcc2.recruitment.auth.service.PasswordHashingService;
 import com.groupcc2.recruitment.auth.service.PasswordResetTokenExposure;
 import com.groupcc2.recruitment.auth.service.PasswordResetTokenService;
@@ -69,20 +68,12 @@ class AuthServiceTest {
         when(passwordHashingService.hash(RAW_PASSWORD)).thenReturn(PASSWORD_HASH);
         when(userRepository.registerUser("person@example.com", PASSWORD_HASH, "JOB_SEEKER"))
                 .thenReturn(Optional.of(stored));
-        when(passwordResetTokenService.generateToken()).thenReturn("verification-token");
-        when(passwordResetTokenService.hashToken("verification-token")).thenReturn("verification-hash");
-        when(userRepository.storeEmailVerificationToken(org.mockito.ArgumentMatchers.eq("person@example.com"),
-                org.mockito.ArgumentMatchers.eq("verification-hash"), org.mockito.ArgumentMatchers.any(Instant.class)))
-                .thenReturn(1);
-        when(notificationEmails.getIfAvailable()).thenReturn(notificationEmailSender);
-
         RegisterResponse response = authService.register(new RegisterRequest("person@example.com", RAW_PASSWORD));
 
         assertThat(response).isEqualTo(new RegisterResponse(
                 userId, "person@example.com", UserRole.JOB_SEEKER, AccountStatus.ACTIVE));
         verify(userRepository).registerUser("person@example.com", PASSWORD_HASH, "JOB_SEEKER");
-        verify(notificationEmailSender).sendEmailVerification(org.mockito.ArgumentMatchers.eq("person@example.com"),
-                org.mockito.ArgumentMatchers.eq("verification-token"), org.mockito.ArgumentMatchers.any(Instant.class));
+        verifyNoInteractions(passwordResetTokenService, notificationEmails);
     }
 
     @Test
@@ -270,32 +261,15 @@ class AuthServiceTest {
     }
 
     @Test
-    void unverifiedJobSeekerCannotLoginButVerificationTokenIsConsumedOnce() {
+    void jobSeekerCanLoginWithoutEmailVerification() {
         UUID id = UUID.randomUUID();
         when(userRepository.findLoginCredentialsByEmail("person@example.com"))
-                .thenReturn(Optional.of(new TestLoginCredential(id, PASSWORD_HASH, "JOB_SEEKER", "ACTIVE", 0, false)));
+                .thenReturn(Optional.of(new TestLoginCredential(id, PASSWORD_HASH, "JOB_SEEKER", "ACTIVE", 0)));
         when(passwordHashingService.matches(RAW_PASSWORD, PASSWORD_HASH)).thenReturn(true);
-        assertThatThrownBy(() -> authService.login(new LoginRequest("person@example.com", RAW_PASSWORD)))
-                .isInstanceOf(BadCredentialsException.class);
-        verify(jwtTokenService, never()).generateAccessToken(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        when(jwtTokenService.generateAccessToken(id, UserRole.JOB_SEEKER, 0)).thenReturn("access-token");
 
-        when(passwordResetTokenService.hashToken("valid-verification-token")).thenReturn("token-hash");
-        when(userRepository.verifyEmail("token-hash")).thenReturn(1, 0);
-        authService.verifyEmail("valid-verification-token");
-        assertThatThrownBy(() -> authService.verifyEmail("valid-verification-token"))
-                .isInstanceOf(InvalidEmailVerificationTokenException.class);
-    }
-
-    @Test
-    void invalidAndExpiredVerificationTokensAreRejected() {
-        when(passwordResetTokenService.hashToken("invalid-token")).thenReturn("invalid-hash");
-        when(passwordResetTokenService.hashToken("expired-token")).thenReturn("expired-hash");
-        when(userRepository.verifyEmail("invalid-hash")).thenReturn(0);
-        when(userRepository.verifyEmail("expired-hash")).thenReturn(0);
-        assertThatThrownBy(() -> authService.verifyEmail("invalid-token"))
-                .isInstanceOf(InvalidEmailVerificationTokenException.class);
-        assertThatThrownBy(() -> authService.verifyEmail("expired-token"))
-                .isInstanceOf(InvalidEmailVerificationTokenException.class);
+        assertThat(authService.login(new LoginRequest("person@example.com", RAW_PASSWORD)).accessToken())
+                .isEqualTo("access-token");
     }
 
     @Test
@@ -333,20 +307,12 @@ class AuthServiceTest {
         private final String role;
         private final String status;
         private final int tokenVersion;
-        private final boolean emailVerified;
-
         private TestLoginCredential(UUID id, String passwordHash, String role, String status, int tokenVersion) {
-            this(id, passwordHash, role, status, tokenVersion, true);
-        }
-
-        private TestLoginCredential(UUID id, String passwordHash, String role, String status, int tokenVersion,
-                                    boolean emailVerified) {
             this.id = id;
             this.passwordHash = passwordHash;
             this.role = role;
             this.status = status;
             this.tokenVersion = tokenVersion;
-            this.emailVerified = emailVerified;
         }
 
         @Override
@@ -373,7 +339,5 @@ class AuthServiceTest {
         public int getTokenVersion() {
             return tokenVersion;
         }
-
-        @Override public boolean getEmailVerified() { return emailVerified; }
     }
 }

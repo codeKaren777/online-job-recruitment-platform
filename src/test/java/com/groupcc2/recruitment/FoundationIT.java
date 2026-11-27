@@ -65,22 +65,13 @@ class FoundationIT {
     @MockitoBean
     PrivateDocumentStorage privateDocumentStorage;
     @MockitoBean NotificationEmailSender emailSender;
-    private final java.util.Map<String, String> verificationTokens = new java.util.concurrent.ConcurrentHashMap<>();
     private final java.util.Map<String, String> resetTokens = new java.util.concurrent.ConcurrentHashMap<>();
 
     @BeforeEach
     void captureAuthenticationEmails() {
-        verificationTokens.clear(); resetTokens.clear();
-        doAnswer(call -> { verificationTokens.put(call.getArgument(0), call.getArgument(1)); return null; })
-                .when(emailSender).sendEmailVerification(anyString(), anyString(), any(Instant.class));
+        resetTokens.clear();
         doAnswer(call -> { resetTokens.put(call.getArgument(0), call.getArgument(1)); return null; })
                 .when(emailSender).sendPasswordReset(anyString(), anyString(), any(Instant.class));
-    }
-
-    private void verifyEmailFor(String email) throws Exception {
-        mvc.perform(post("/api/auth/verify-email").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"token\":\"" + verificationTokens.get(email) + "\"}"))
-                .andExpect(status().isNoContent());
     }
 
     static {
@@ -136,10 +127,6 @@ class FoundationIT {
                     + APPLICATION_USERNAME);
             statement.execute("GRANT EXECUTE ON FUNCTION recruitment.auth_consume_password_reset_token(text, text) TO "
                     + APPLICATION_USERNAME);
-            statement.execute("GRANT EXECUTE ON FUNCTION recruitment.auth_store_email_verification(text, text, timestamptz), "
-                    + "recruitment.auth_consume_email_verification(text) TO " + APPLICATION_USERNAME);
-            statement.execute("GRANT EXECUTE ON FUNCTION recruitment.auth_store_email_verification(text, text, timestamptz), "
-                    + "recruitment.auth_consume_email_verification(text) TO " + APPLICATION_USERNAME);
             statement.execute("REVOKE ALL ON recruitment.application_notification_outbox FROM "
                     + APPLICATION_USERNAME);
             statement.execute("GRANT EXECUTE ON FUNCTION recruitment.enqueue_application_notification(uuid, uuid, text), "
@@ -923,7 +910,6 @@ class FoundationIT {
                 .andReturn();
         UUID userId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(
                 registration.getResponse().getContentAsString(), "$.id"));
-        verifyEmailFor(email);
 
         mvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -1208,7 +1194,6 @@ class FoundationIT {
                 .andReturn();
         UUID userId = UUID.fromString(com.jayway.jsonpath.JsonPath.read(
                 response.getResponse().getContentAsString(), "$.id"));
-        verifyEmailFor(email);
         return userId;
     }
 
@@ -1359,7 +1344,6 @@ class FoundationIT {
                                 {"email":"%s","password":"StatusPassword123!","role":"JOB_SEEKER"}
                                 """.formatted(email)))
                 .andExpect(status().isCreated());
-        verifyEmailFor(email);
         String token = loginAndGetToken(email, "StatusPassword123!");
 
         try (Connection connection = adminConnection();
@@ -1387,7 +1371,6 @@ class FoundationIT {
                                 {"email":"%s","password":"%s","role":"JOB_SEEKER"}
                                 """.formatted(email, originalPassword)))
                 .andExpect(status().isCreated());
-        verifyEmailFor(email);
 
         mvc.perform(post("/api/auth/forgot-password")
                         .contentType(MediaType.APPLICATION_JSON)
