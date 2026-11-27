@@ -76,7 +76,7 @@ public class SecurityConfig {
                     authorize
                         .requestMatchers(HttpMethod.POST,
                                 "/api/auth/register", "/api/auth/login",
-                                "/api/auth/forgot-password", "/api/auth/reset-password").permitAll()
+                                "/api/auth/forgot-password", "/api/auth/reset-password", "/api/auth/verify-email").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/users/me").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/employer-requests", "/api/employer-requests/**")
