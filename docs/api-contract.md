@@ -50,8 +50,8 @@ Common outcomes include `400` invalid input, `401` missing/invalid/expired token
 | `GET /api/companies/{companyId}` | Employer | Read owned company. |
 | `PUT /api/companies/{companyId}` | Employer | Replace company details. |
 | `POST /api/jobs` | Employer | JSON `JobRequest`: `companyId`, `title`, `description`, `requiredQualifications`, future `dueDate` (`YYYY-MM-DD`), `location`. Company must belong to caller. Returns `201` and `Location`. |
-| `GET /api/jobs?location=&q=&page=0&size=20` | Job seeker | Browse active jobs; page size maximum 100. |
-| `GET /api/jobs/{jobId}` | Job seeker or employer | Read a visible job. |
+| `GET /api/jobs?location=&q=&page=0&size=20` | Job seeker | Browse active jobs; page size maximum 100. Responses include `companyId` and the company display `companyName`. |
+| `GET /api/jobs/{jobId}` | Job seeker or employer | Read a visible job, including `companyId` and the company display `companyName`. |
 | `GET /api/employer/jobs?status=&page=0&size=20` | Employer | List caller-owned jobs. |
 | `PUT /api/jobs/{jobId}` | Employer | Replace job details using `JobRequest`; caller must own its company/job. |
 | `PATCH /api/jobs/{jobId}/close` | Employer | Close an owned job. |

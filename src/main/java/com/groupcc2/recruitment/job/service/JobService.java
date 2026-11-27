@@ -189,7 +189,8 @@ public class JobService {
 
     private JobResponse toResponse(Job job) {
         boolean pastDue = job.getStatus() == JobStatus.ACTIVE && !job.getDueDate().isAfter(today());
-        return JobResponse.from(job, pastDue ? JobStatus.EXPIRED : job.getStatus());
+        String companyName = companies.findPublicName(job.getCompanyId()).orElse(null);
+        return JobResponse.from(job, pastDue ? JobStatus.EXPIRED : job.getStatus(), companyName);
     }
 
     private void requireDueDateAfterToday(LocalDate dueDate) {

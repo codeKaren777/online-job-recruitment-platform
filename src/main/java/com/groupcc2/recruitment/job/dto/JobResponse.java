@@ -10,6 +10,7 @@ public record JobResponse(
         UUID id,
         UUID employerId,
         UUID companyId,
+        String companyName,
         String title,
         String description,
         String requiredQualifications,
@@ -20,10 +21,10 @@ public record JobResponse(
         Instant updatedAt) {
 
     /** effectiveStatus reports ACTIVE jobs past their due date as EXPIRED (same rule as the DB view). */
-    public static JobResponse from(Job job, JobStatus effectiveStatus) {
+    public static JobResponse from(Job job, JobStatus effectiveStatus, String companyName) {
         return new JobResponse(
                 job.getId(),
-                job.getEmployerId(), job.getCompanyId(),
+                job.getEmployerId(), job.getCompanyId(), companyName,
                 job.getTitle(),
                 job.getDescription(),
                 job.getRequiredQualifications(),

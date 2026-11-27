@@ -75,7 +75,8 @@ WITH function_signatures(signature) AS (
         ('enqueue_application_notification(uuid, uuid, text)'),
         ('claim_application_notifications(integer)'),
         ('mark_application_notification_sent(uuid, uuid)'),
-        ('record_application_notification_failure(uuid, uuid, text, boolean)')
+        ('record_application_notification_failure(uuid, uuid, text, boolean)'),
+        ('public_job_company_name(uuid)')
 )
 SELECT format(
     'GRANT EXECUTE ON FUNCTION recruitment.%s TO %I',

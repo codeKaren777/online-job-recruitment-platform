@@ -271,6 +271,7 @@ and `updatedAt`. It does not expose the private storage key.
 `location`, `q`, `page` (default `0`), and `size` (default `20`, maximum `100`).
 
 `GET /api/jobs/{jobId}` — read a job.
+Both endpoints return `companyName` for displaying the employer's company name; `companyId` remains available for reference.
 
 Job fields:
 
@@ -279,6 +280,7 @@ Job fields:
   "id": "33333333-3333-4333-8333-333333333333",
   "employerId": "44444444-4444-4444-8444-444444444444",
   "companyId": "55555555-5555-4555-8555-555555555555",
+  "companyName": "Acme Technologies",
   "title": "Senior Java Developer",
   "description": "Build recruitment platform services.",
   "requiredQualifications": "Java 21, Spring Boot, PostgreSQL",
