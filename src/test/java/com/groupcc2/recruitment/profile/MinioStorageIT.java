@@ -3,6 +3,9 @@ import java.net.*;
 import java.net.http.*;
 import java.nio.file.*;
 import java.time.Duration;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.*;
@@ -42,6 +45,18 @@ class MinioStorageIT {
  String invalidQuery=url.getRawQuery().replace("X-Amz-Signature="+signature,"X-Amz-Signature="+replacement);
  URI invalidSignature=URI.create(url.toString().replace(url.getRawQuery(),invalidQuery));
  assertThat(http.send(HttpRequest.newBuilder(invalidSignature).GET().build(),HttpResponse.BodyHandlers.discarding()).statusCode()).isEqualTo(403);
+ ByteArrayOutputStream png=new ByteArrayOutputStream();ImageIO.write(new BufferedImage(8,8,BufferedImage.TYPE_INT_RGB),"png",png);
+ Path picture=Files.createTempFile("minio-picture-",".png");try {
+  Files.write(picture,png.toByteArray());storage.upload("profile-pictures/opaque-id.png",picture,"image/png");
+  assertThat(http.send(HttpRequest.newBuilder(endpoint.resolve("/documents-test/profile-pictures/opaque-id.png"))
+   .GET().build(),HttpResponse.BodyHandlers.discarding()).statusCode()).isEqualTo(403);
+  URI pictureUrl=storage.signGetInline("profile-pictures/opaque-id.png",Duration.ofSeconds(120),"profile-picture.png","image/png");
+  assertThat(pictureUrl.getRawQuery()).contains("X-Amz-Expires=120").contains("response-content-disposition").contains("inline");
+  var pictureResponse=http.send(HttpRequest.newBuilder(pictureUrl).GET().build(),HttpResponse.BodyHandlers.ofByteArray());
+  assertThat(pictureResponse.statusCode()).isEqualTo(200);
+  assertThat(pictureResponse.headers().firstValue("content-type").orElse("")).startsWith("image/png");
+  storage.delete("profile-pictures/opaque-id.png");
+ } finally {Files.deleteIfExists(picture);}
  var publicSigner=S3Presigner.builder().endpointOverride(URI.create("https://files.mikhy.me"))
   .credentialsProvider(credentials).region(Region.US_EAST_1).serviceConfiguration(config).build();
  try(publicSigner) {

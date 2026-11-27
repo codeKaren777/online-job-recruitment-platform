@@ -23,13 +23,14 @@ public class ProfileService {
  private final UserService users;private final ProfileRls rls;
  private final ProfileRepository profiles;private final DocumentRepository documents;
  private final DocumentValidator files;private final Validator validator;private final TransactionTemplate tx;
+ private final ProfilePictureValidator pictureFiles;
  private final Duration expiry;
  public ProfileService(ObjectProvider<ProfileIdentity> identities,ObjectProvider<EmployerApplicationAccess> employerAccess,
  ObjectProvider<PrivateDocumentStorage> storage,UserService users,ProfileRls rls,ProfileRepository profiles,
- DocumentRepository documents,DocumentValidator files,Validator validator,PlatformTransactionManager manager,
+ DocumentRepository documents,DocumentValidator files,ProfilePictureValidator pictureFiles,Validator validator,PlatformTransactionManager manager,
  @org.springframework.beans.factory.annotation.Value("${app.profile.download-seconds:120}") long seconds) {
  this.identities=identities;this.employerAccess=employerAccess;this.storage=storage;this.users=users;this.rls=rls;
- this.profiles=profiles;this.documents=documents;this.files=files;this.validator=validator;tx=new TransactionTemplate(manager);
+ this.profiles=profiles;this.documents=documents;this.files=files;this.pictureFiles=pictureFiles;this.validator=validator;tx=new TransactionTemplate(manager);
  // Each operation owns its commit, including compensations. Never silently join caller transactions.
  tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
  if(seconds<30||seconds>300)throw new IllegalArgumentException("Download expiry must be 30..300 seconds");expiry=Duration.ofSeconds(seconds);
@@ -48,6 +49,42 @@ public class ProfileService {
  p.update(request);return profiles.saveAndFlush(p).response();});
  }
  public List<DocumentResponse> listOwn() {return tx.execute(s->list(actor(UserRole.JOB_SEEKER)));}
+ public ProfilePictureResponse pictureOwn() {
+  return tx.execute(s->{UUID id=actor(UserRole.JOB_SEEKER);
+   return profiles.findById(id).map(owner->pictureResponse(owner,owner.profilePictureKey()==null?null:store()))
+    .orElseGet(ProfilePictureResponse::absent);});
+ }
+ public ProfilePictureResponse uploadPicture(MultipartFile file) {
+  return tx.execute(s->{UUID id=actor(UserRole.JOB_SEEKER);Profile owner=profile(id);PrivateDocumentStorage store=store();
+   try(var validated=pictureFiles.validate(file)) {
+    String key="profile-pictures/"+UUID.randomUUID()+"."+validated.extension();
+    String previousKey=owner.profilePictureKey();String operation=UUID.randomUUID().toString();
+    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization(){
+     @Override public void afterCompletion(int status) {
+      if(status==STATUS_ROLLED_BACK)cleanup(store,key,operation);
+      else if(status==STATUS_COMMITTED && previousKey!=null)cleanup(store,previousKey,operation);
+      else if(status==STATUS_UNKNOWN)log.error("Profile picture commit outcome unknown; reconciliation operation {}",operation);
+     }
+    });
+    try{store.upload(key,validated.path(),validated.contentType());}
+    catch(RuntimeException failure){throw ProfileService.this.failure(ProfileFailure.Code.STORAGE_UNAVAILABLE);}
+    owner.setProfilePicture(key,validated.contentType());profiles.saveAndFlush(owner);
+    return pictureResponse(owner,store);
+   }catch(java.io.IOException problem){throw failure(ProfileFailure.Code.STORAGE_UNAVAILABLE);}
+  });
+ }
+ public void deletePictureOwn() {
+  tx.executeWithoutResult(s->{Profile owner=profile(actor(UserRole.JOB_SEEKER));String key=owner.profilePictureKey();
+   if(key==null)return;
+   String operation=UUID.randomUUID().toString();PrivateDocumentStorage store=store();owner.clearProfilePicture();profiles.saveAndFlush(owner);
+   TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization(){
+    @Override public void afterCompletion(int status) {
+     if(status==STATUS_COMMITTED)cleanup(store,key,operation);
+     else if(status==STATUS_UNKNOWN)log.error("Profile picture deletion commit outcome unknown; reconciliation operation {}",operation);
+    }
+   });
+  });
+ }
  public DocumentResponse upload(MultipartFile file) {
  // Authorize before consuming/uploading content. Entire DB commit is inside this boundary.
  return tx.execute(s->{UUID id=actor(UserRole.JOB_SEEKER);profile(id);PrivateDocumentStorage store=store();
@@ -118,12 +155,21 @@ public class ProfileService {
  private DownloadResponse signInline(Document d){return new DownloadResponse(
   store().signGetInline(d.storageKey(),expiry,d.response().originalFilename(),d.response().contentType()),
   Instant.now().plus(expiry));}
+ private ProfilePictureResponse pictureResponse(Profile owner,PrivateDocumentStorage store) {
+  String key=owner.profilePictureKey();if(key==null)return ProfilePictureResponse.absent();
+  if(store==null)throw failure(ProfileFailure.Code.INTEGRATION_UNAVAILABLE);
+  try {
+   String type=owner.profilePictureContentType();
+   String extension="image/png".equals(type)?"png":"jpg";
+   return new ProfilePictureResponse(true,store.signGetInline(key,expiry,"profile-picture."+extension,type),Instant.now().plus(expiry));
+  } catch(RuntimeException problem) {throw failure(ProfileFailure.Code.STORAGE_UNAVAILABLE);}
+ }
  private Profile profile(UUID id){return profiles.findById(id).orElseThrow(()->failure(ProfileFailure.Code.NOT_FOUND));}
  private Document document(UUID id,UUID owner){return documents.findByIdAndProfileUserId(id,owner).orElseThrow(()->failure(ProfileFailure.Code.NOT_FOUND));}
  private List<DocumentResponse> list(UUID id){profile(id);return documents.findAllByProfileUserIdOrderByCreatedAtDesc(id).stream().map(Document::response).toList();}
  private PrivateDocumentStorage store(){PrivateDocumentStorage s=storage.getIfAvailable();if(s==null)throw failure(ProfileFailure.Code.INTEGRATION_UNAVAILABLE);return s;}
  private void cleanup(PrivateDocumentStorage store,String key,String operation){try{store.delete(key);}catch(RuntimeException e){
  // No SDK exception: it may include credentials/URLs. Operation UUID allows restricted operator reconciliation.
- log.error("Profile upload rollback cleanup failed; reconciliation operation {}",operation);}}
+ log.error("Profile storage cleanup failed; reconciliation operation {}",operation);}}
  private ProfileFailure failure(ProfileFailure.Code code){return new ProfileFailure(code);}
 }

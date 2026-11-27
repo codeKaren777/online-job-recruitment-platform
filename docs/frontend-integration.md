@@ -174,6 +174,43 @@ MinIO API while preserving the signed request as described in
 [the deployment setup](deployment/server-setup.md#minio-file-domain-routing).
 The backend's internal `http://minio:9000` address is not a download URL.
 
+### Profile pictures
+
+Profile pictures are stored in the same private MinIO bucket as documents, under
+a separate `profile-pictures/` object prefix. They remain private and use the
+same configured signed URL endpoint and expiry. They do not make CVs or other
+documents public.
+
+Create the job seeker's profile with `PUT /api/profile` before uploading its
+picture. Send `POST /api/profile/picture` with the user's bearer token and a
+`multipart/form-data` part named `file`. JPEG and PNG are supported; the
+default maximum is 5 MiB and each decoded image may be at most 2048 × 2048
+pixels. WebP and other formats are rejected. The backend checks the declared
+MIME type, extension, image decoder format, and actual decodability.
+
+Upload and retrieval return a JSON object shaped like:
+
+```json
+{
+  "hasPicture": true,
+  "url": "https://files.mikhy.me/recruitment-documents/profile-pictures/<opaque-key>?<signature>",
+  "expiresAt": "2026-11-27T12:02:00Z"
+}
+```
+
+Use the URL as an image source without modifying its host, path, query, or
+method. When it expires, request `GET /api/profile/picture` again with the
+bearer token to receive a fresh URL. If `hasPicture` is false, `url` and
+`expiresAt` are null; show the frontend's default avatar. `DELETE
+/api/profile/picture` removes the current image. These API endpoints only
+operate on the authenticated user's profile and never accept a target user ID.
+The signed URL is a temporary bearer credential; do not log or persist it
+beyond its expiry.
+
+Set `PROFILE_PICTURE_MAX_BYTES` to a value from 1 through 5,242,880 to choose a
+smaller upload cap; the default is 5,242,880 bytes. Storage credentials and
+the internal MinIO address remain backend-only.
+
 ## Browser connectivity
 
 The API enables browser CORS for arbitrary origins by default using origin
